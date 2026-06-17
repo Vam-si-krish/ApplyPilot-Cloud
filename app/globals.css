@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ported from ApplyPilot-Lite/ui/src/index.css — keep the look identical. */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #070711;
+  color: #e2e8f0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #0c0c1c;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e1e38;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2a50;
+}
+
+.font-mono {
+  font-family: 'Fira Code', monospace;
+}
+.font-display {
+  font-family: 'Syne', sans-serif;
+}
+
+/* Glow effects */
+.glow-sky {
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.18);
+}
+.glow-emerald {
+  box-shadow: 0 0 24px rgba(52, 211, 153, 0.18);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+.animate-slide-up {
+  animation: slideUp 0.25s ease-out;
+}

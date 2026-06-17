@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Lite/src/applypilot/web/**)",
+      "Read(//Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Lite/**)"
+    ]
+  }
+}
