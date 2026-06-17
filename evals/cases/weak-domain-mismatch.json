@@ -1,0 +1,12 @@
+{
+  "name": "weak-domain-mismatch",
+  "description": "Frontend engineer resume vs a senior mechanical engineering role — should score low.",
+  "resume": "Jane Doe — Senior Frontend Engineer. 7 years building React + TypeScript web apps, design systems, and CI/CD. No engineering hardware, CAD, or manufacturing experience.",
+  "job": {
+    "title": "Senior Mechanical Engineer",
+    "company": "TurbineWorks",
+    "location": "Houston, TX",
+    "full_description": "Seeking a Senior Mechanical Engineer with 8+ years designing rotating machinery. Expertise in SolidWorks/CAD, finite element analysis, GD&T, thermodynamics, and manufacturing tolerances required. PE license preferred. You will lead turbine component design reviews and supplier qualification."
+  },
+  "expect": { "minScore": 1, "maxScore": 4 }
+}

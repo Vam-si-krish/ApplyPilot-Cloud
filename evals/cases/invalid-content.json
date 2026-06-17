@@ -1,0 +1,12 @@
+{
+  "name": "invalid-content",
+  "description": "Navigation/footer junk instead of a job description — PHASE 1 must force SCORE 0.",
+  "resume": "Jane Doe — Senior Frontend Engineer with 7 years of React experience.",
+  "job": {
+    "title": "Sign in",
+    "company": "LinkedIn",
+    "location": "",
+    "full_description": "Skip to main content. Sign in. Join now. Cookie Policy. Accessibility statement. By clicking Continue you agree to the User Agreement and Privacy Policy. Footer navigation: About, Careers, Help Center."
+  },
+  "expect": { "minScore": 0, "maxScore": 0 }
+}

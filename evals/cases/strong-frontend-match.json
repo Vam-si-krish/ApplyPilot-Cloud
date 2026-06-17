@@ -1,0 +1,12 @@
+{
+  "name": "strong-frontend-match",
+  "description": "Senior React engineer resume vs a senior frontend role — should score high.",
+  "resume": "Jane Doe — Senior Frontend Engineer. 7 years building production React + TypeScript single-page apps. Led a team of 4 migrating a legacy Angular dashboard to React, cut bundle size 40%. Deep experience with Next.js, Redux, React Query, Tailwind, Jest/Playwright testing, and CI/CD on Vercel. Mentored junior engineers, owned the design-system component library.",
+  "job": {
+    "title": "Senior Frontend Engineer",
+    "company": "Acme Corp",
+    "location": "Remote (US)",
+    "full_description": "We are hiring a Senior Frontend Engineer to lead development of our customer-facing React/TypeScript application. You will own complex UI features, drive our component library, mentor junior engineers, and partner with design. Requirements: 5+ years React, strong TypeScript, experience with Next.js, state management, and automated testing. Nice to have: design systems, performance optimization."
+  },
+  "expect": { "minScore": 7, "maxScore": 10 }
+}
