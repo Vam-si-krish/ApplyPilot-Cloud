@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Read(//Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Lite/src/applypilot/web/**)",
-      "Read(//Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Lite/**)"
+      "Read(//Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Lite/**)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)"
     ]
   }
 }
