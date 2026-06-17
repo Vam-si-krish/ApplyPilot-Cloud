@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2 } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import type { Job } from '@/lib/types';
 
@@ -41,7 +41,8 @@ export default function JobsPage() {
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+  const [showRunsDropdown, setShowRunsDropdown] = useState(false);
 
   // Manual scoring re-trigger (recovers a stalled auto-loop).
   const [unscoredCount, setUnscoredCount] = useState(0);
@@ -87,12 +88,12 @@ export default function JobsPage() {
     else if (status !== 'all') p.set('status', status);
     if (easyApply === true) p.set('easyApply', 'true');
     if (easyApply === false) p.set('easyApply', 'false');
-    if (selectedRunId) p.set('runId', selectedRunId);
+    if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
     setJobs(d.jobs ?? []);
     setTotal(d.total ?? 0);
     setLoading(false);
-  }, [search, minScore, status, easyApply, selectedRunId]);
+  }, [search, minScore, status, easyApply, selectedRunIds]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -102,7 +103,7 @@ export default function JobsPage() {
   // Drop the selection whenever the filter set changes (the ids on screen change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, status, minScore, easyApply, selectedRunId]);
+  }, [search, status, minScore, easyApply, selectedRunIds]);
 
   // Detect when user returns to the tab after clicking an external job link.
   useEffect(() => {
@@ -123,6 +124,13 @@ export default function JobsPage() {
       body: JSON.stringify(body),
     });
     load();
+  }
+
+  async function deleteJob(id: string) {
+    if (!confirm('Are you sure you want to delete this job permanently?')) return;
+    await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+    load();
+    refreshStats();
   }
 
   function openJobLink(job: Job) {
@@ -210,6 +218,32 @@ export default function JobsPage() {
     }
   }
 
+  async function deleteSelected() {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    if (!confirm(`Are you sure you want to delete the ${ids.length} selected jobs permanently?`)) return;
+    setBulkBusy(true);
+    setBulkMsg('Deleting…');
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/jobs/${id}`, {
+            method: 'DELETE',
+          }),
+        ),
+      );
+      setBulkMsg(`Deleted ${ids.length} jobs.`);
+      setSelected(new Set());
+      load();
+      refreshStats();
+    } catch {
+      setBulkMsg('Delete failed.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 5000);
+    }
+  }
+
   async function markApplied(job: Job) {
     setApplyDialog(null);
     await patch(job.id, { applied_at: new Date().toISOString() });
@@ -238,10 +272,6 @@ export default function JobsPage() {
     }
   }
 
-  const runLabel = selectedRunId
-    ? (runs.find((r) => r.id === selectedRunId) ? formatRunLabel(runs.find((r) => r.id === selectedRunId)!) : 'Selected run')
-    : null;
-
   return (
     <div className="p-7 animate-slide-up">
       <div className="flex items-start justify-between mb-6">
@@ -265,24 +295,83 @@ export default function JobsPage() {
       </div>
 
       {/* Run selector */}
-      <div className="flex items-center gap-3 mb-4">
-        <select
-          value={selectedRunId ?? ''}
-          onChange={(e) => setSelectedRunId(e.target.value || null)}
-          className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40 max-w-xs"
-        >
-          <option value="">All runs</option>
-          {runs.map((run) => (
-            <option key={run.id} value={run.id}>
-              {formatRunLabel(run)}
-            </option>
-          ))}
-        </select>
-        {selectedRunId && (
-          <span className="flex items-center gap-1.5 text-[12px] text-sky bg-sky/10 border border-sky/20 px-2.5 py-1 rounded-md">
-            Showing: {runLabel}
-            <button onClick={() => setSelectedRunId(null)} className="text-sky/50 hover:text-rose transition-colors ml-1 leading-none">×</button>
-          </span>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowRunsDropdown(!showRunsDropdown)}
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40 flex items-center gap-2 hover:bg-raised transition-colors"
+          >
+            Filter by Runs ({selectedRunIds.length === 0 ? 'All runs' : `${selectedRunIds.length} selected`})
+            <ChevronDown size={13} />
+          </button>
+          {showRunsDropdown && (
+            <div className="absolute left-0 mt-1.5 z-50 bg-card border border-ink rounded-lg shadow-xl py-2 w-72 max-h-64 overflow-y-auto glow-sky">
+              <div className="px-3 pb-2 mb-1 border-b border-ink/45 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRunIds([])}
+                  className="text-[10px] text-slate-muted hover:text-sky underline"
+                >
+                  Clear all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRunsDropdown(false)}
+                  className="text-[10px] text-slate-muted hover:text-sky font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+              {runs.length === 0 ? (
+                <div className="px-3 py-2 text-slate-muted text-[11px]">No runs found</div>
+              ) : (
+                runs.map((run) => {
+                  const checked = selectedRunIds.includes(run.id);
+                  return (
+                    <label
+                      key={run.id}
+                      className="flex items-center gap-2 px-3 py-1.5 hover:bg-raised cursor-pointer select-none text-[11px] text-slate-text"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSelectedRunIds((prev) =>
+                            checked ? prev.filter((id) => id !== run.id) : [...prev, run.id]
+                          );
+                        }}
+                        className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 cursor-pointer"
+                      />
+                      <span className="truncate">{formatRunLabel(run)}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+        {selectedRunIds.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {selectedRunIds.map((id) => {
+              const run = runs.find((r) => r.id === id);
+              if (!run) return null;
+              return (
+                <span
+                  key={id}
+                  className="flex items-center gap-1.5 text-[11px] text-sky bg-sky/10 border border-sky/20 px-2.5 py-1 rounded-md"
+                >
+                  {formatRunLabel(run)}
+                  <button
+                    onClick={() => setSelectedRunIds((prev) => prev.filter((rid) => rid !== id))}
+                    className="text-sky/50 hover:text-rose transition-colors ml-1 leading-none"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -381,6 +470,14 @@ export default function JobsPage() {
               >
                 <Archive size={13} /> Archive selected
               </button>
+              <button
+                onClick={deleteSelected}
+                disabled={bulkBusy}
+                title="Delete the selected jobs permanently"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 rounded-md transition-all"
+              >
+                <Trash2 size={13} /> Delete selected
+              </button>
               <button onClick={() => setSelected(new Set())} className="text-[12px] text-slate-muted hover:text-slate-text underline">
                 Clear
               </button>
@@ -467,6 +564,13 @@ export default function JobsPage() {
                         <Archive size={15} />
                       </button>
                     )}
+                    <button
+                      onClick={() => deleteJob(job.id)}
+                      title="Delete permanently"
+                      className="text-slate-muted hover:text-rose"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
 
                   {open && (
@@ -503,9 +607,10 @@ export default function JobsPage() {
                       {job.full_description && (
                         <div>
                           <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Description</p>
-                          <p className="text-slate-muted text-[12px] leading-relaxed whitespace-pre-wrap line-clamp-[12]">
-                            {job.full_description}
-                          </p>
+                          <div
+                            className="text-slate-muted text-[12px] leading-relaxed job-description-html"
+                            dangerouslySetInnerHTML={{ __html: job.full_description }}
+                          />
                         </div>
                       )}
                     </div>

@@ -2,7 +2,7 @@
  * Job fit scoring — LLM-powered evaluation of candidate-job match quality.
  *
  * Direct port of ../ApplyPilot-Lite/src/applypilot/scoring/scorer.py. The
- * SCORE_PROMPT, user-message construction (description truncated to 6000 chars),
+ * SCORE_PROMPT, user-message construction (description truncated to 15000 chars),
  * temperature/max_tokens, and the SCORE/KEYWORDS/NOTE/REASONING parser are kept
  * byte-for-byte faithful — this is the project invariant (see CLAUDE.md).
  */
@@ -72,9 +72,9 @@ export function parseScoreResponse(response: string): ScoreResult {
   return { score, keywords, note, reasoning };
 }
 
-/** Build the exact user message scorer.py sends (description truncated to 6000 chars). */
+/** Build the exact user message scorer.py sends (description truncated to 15000 chars). */
 export function buildScoreMessages(resumeText: string, job: ScorableJob): ChatMessage[] {
-  const description = (job.full_description || job.description || '').slice(0, 6000);
+  const description = (job.full_description || job.description || '').slice(0, 15000);
   const jobText =
     `TITLE: ${job.title ?? ''}\n` +
     `COMPANY: ${job.company ?? ''}\n` +

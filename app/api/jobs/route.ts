@@ -31,7 +31,13 @@ export async function GET(req: Request) {
   if (easyApply === 'true') q = q.eq('easy_apply', true);
   if (easyApply === 'false') q = q.eq('easy_apply', false);
   if (applied === 'true') q = q.not('applied_at', 'is', null);
-  if (runId) q = q.eq('run_id', runId);
+  if (runId) {
+    if (runId.includes(',')) {
+      q = q.in('run_id', runId.split(','));
+    } else {
+      q = q.eq('run_id', runId);
+    }
+  }
 
   q = q
     .order('fit_score', { ascending: false, nullsFirst: false })

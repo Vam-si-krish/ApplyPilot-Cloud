@@ -8,7 +8,7 @@ against the user's resume (via an LLM), and shows a sorted shortlist. It does
 
 ## The one rule that matters
 **Scoring behaviour is copied, not reinvented.** The `SCORE_PROMPT`, the user-message
-construction (resume + job, description truncated to 6000 chars), `temperature: 0.2`,
+construction (resume + job, description truncated to 15000 chars), `temperature: 0.2`,
 `max_tokens: 512`, and the `SCORE/KEYWORDS/NOTE/REASONING` parser must stay byte-for-byte
 faithful to `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`. Exactly one LLM call
 per job; the model scores, the threshold/sort decides; a parse failure or LLM error

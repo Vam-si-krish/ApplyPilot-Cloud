@@ -77,3 +77,27 @@ body {
 .animate-slide-up {
   animation: slideUp 0.25s ease-out;
 }
+
+/* Job description HTML rendering fixes */
+.job-description-html ul {
+  list-style-type: disc !important;
+  margin-left: 1.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.job-description-html ol {
+  list-style-type: decimal !important;
+  margin-left: 1.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.job-description-html li {
+  margin-bottom: 0.25rem !important;
+}
+.job-description-html strong, .job-description-html b {
+  font-weight: 700 !important;
+  color: #ffffff !important;
+}
+.job-description-html p {
+  margin-bottom: 0.75rem !important;
+}
