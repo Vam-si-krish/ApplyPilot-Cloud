@@ -266,6 +266,16 @@ export class LLMClient {
   }
 }
 
+/**
+ * Build a client from an explicit provider + model + key (the API-key-vault path,
+ * ADR 0006). baseUrl comes from PROVIDER_TABLE; an unknown provider falls back to
+ * the OpenAI-compat base. Used by the scoring path once the active key is resolved.
+ */
+export function makeClient(provider: string, model: string, apiKey: string): LLMClient {
+  const cfg = PROVIDER_TABLE[provider.trim().toLowerCase()] ?? PROVIDER_TABLE.openai;
+  return new LLMClient(cfg.baseUrl, (model || '').trim() || cfg.defaultModel, apiKey);
+}
+
 let _instance: LLMClient | null = null;
 
 /** Return (or create) the module-level LLMClient singleton. */

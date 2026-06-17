@@ -7,7 +7,7 @@
  * byte-for-byte faithful — this is the project invariant (see CLAUDE.md).
  */
 
-import { getClient, ChatMessage } from './llm';
+import { getClient, ChatMessage, LLMClient } from './llm';
 import type { ScorableJob, ScoreResult } from './types';
 
 // ── Scoring Prompt (copied verbatim from scorer.py) ──────────────────────────
@@ -91,12 +91,15 @@ export function buildScoreMessages(resumeText: string, job: ScorableJob): ChatMe
  * Score a single job against the resume. One LLM call (temperature 0.2,
  * max_tokens 512). On any LLM error returns score 0 (visible failure, never a
  * fabricated score) — same as scorer.py.
+ *
+ * `client` lets the caller pass a client built from the active vault key (ADR
+ * 0006); when omitted it falls back to the env-detected singleton (getClient).
  */
-export async function scoreJob(resumeText: string, job: ScorableJob): Promise<ScoreResult> {
+export async function scoreJob(resumeText: string, job: ScorableJob, client?: LLMClient): Promise<ScoreResult> {
   const messages = buildScoreMessages(resumeText, job);
   try {
-    const client = getClient();
-    const response = await client.chat(messages, { maxTokens: 512, temperature: 0.2 });
+    const llm = client ?? getClient();
+    const response = await llm.chat(messages, { maxTokens: 512, temperature: 0.2 });
     return parseScoreResponse(response);
   } catch (e) {
     return { score: 0, keywords: '', note: '', reasoning: `LLM error: ${e instanceof Error ? e.message : String(e)}` };
