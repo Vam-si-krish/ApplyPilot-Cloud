@@ -9,8 +9,11 @@
 import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { scoreJob } from '@/lib/scoring';
+import { makeClient } from '@/lib/llm';
+import { getActiveApiKey, isApiKeyProvider } from '@/lib/credentials';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
+  getSettings,
   getResumeText,
   getUnscoredBatch,
   countUnscored,
@@ -37,16 +40,31 @@ export async function POST(req: Request) {
   }
 
   const resume = await getResumeText();
+
+  // Build the LLM client from the active vault key for the configured provider
+  // (ADR 0006). If no key resolves (vault empty + no env var), fall back to the
+  // env-detected singleton inside scoreJob by leaving `client` undefined.
+  const settings = await getSettings();
+  let client = undefined;
+  if (isApiKeyProvider(settings.llm_provider)) {
+    const key = await getActiveApiKey(settings.llm_provider);
+    if (key) client = makeClient(settings.llm_provider, settings.llm_model, key);
+  }
+
   let scored = 0;
   let errors = 0;
 
   for (const job of batch) {
-    const result = await scoreJob(resume, {
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      full_description: job.full_description,
-    });
+    const result = await scoreJob(
+      resume,
+      {
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        full_description: job.full_description,
+      },
+      client,
+    );
     if (result.score === 0) errors++;
 
     const { error } = await supabaseAdmin()

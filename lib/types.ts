@@ -75,6 +75,29 @@ export interface Settings {
   updated_at: string;
 }
 
+/** Providers that can have keys stored in the api_keys vault (ADR 0006). */
+export type ApiKeyProvider = 'gemini' | 'openai' | 'deepseek' | 'anthropic' | 'apify';
+
+/** Server-side row in the api_keys table. Holds the raw secret — never send to the browser. */
+export interface ApiKey {
+  id: string;
+  provider: ApiKeyProvider;
+  label: string;
+  key_value: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** Browser-safe view of an api_keys row: the secret is replaced by a masked preview. */
+export interface ApiKeyMasked {
+  id: string;
+  provider: ApiKeyProvider;
+  label: string;
+  key_preview: string; // e.g. '••••••1234'
+  is_active: boolean;
+  created_at: string;
+}
+
 export type RunStatus = 'running' | 'succeeded' | 'failed';
 
 export interface Run {

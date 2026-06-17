@@ -6,10 +6,15 @@
  */
 import { ApifyClient } from 'apify-client';
 import type { Settings } from './types';
+import { getActiveApiKey } from './credentials';
 
-function client(): ApifyClient {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) throw new Error('Missing required environment variable: APIFY_TOKEN');
+/**
+ * Apify client authed with the active vault token (ADR 0006), falling back to the
+ * APIFY_TOKEN env var. Async because resolving the active key reads the DB.
+ */
+async function client(): Promise<ApifyClient> {
+  const token = await getActiveApiKey('apify');
+  if (!token) throw new Error('No Apify token configured. Add one in Settings → API Keys, or set APIFY_TOKEN.');
   return new ApifyClient({ token });
 }
 
@@ -116,7 +121,7 @@ export async function startAllPortalRuns(settings: Settings, webhookUrl: string)
       const config = PORTAL_CONFIG[portal];
       if (!config) return null;
       const actorId = portal === 'linkedin' ? settings.apify_actor_id : config.actorId;
-      const run = await client()
+      const run = await (await client())
         .actor(actorId)
         .start(config.buildInput(settings), {
           webhooks: [
@@ -134,7 +139,7 @@ export async function startAllPortalRuns(settings: Settings, webhookUrl: string)
 
 /** @deprecated Use startAllPortalRuns. Left for tests that import it directly. */
 export async function startActorRun(settings: Settings, webhookUrl: string): Promise<StartedRun> {
-  const run = await client()
+  const run = await (await client())
     .actor(settings.apify_actor_id)
     .start(buildActorInput(settings), {
       webhooks: [
@@ -150,12 +155,12 @@ export async function startActorRun(settings: Settings, webhookUrl: string): Pro
 // ── Dataset helpers ───────────────────────────────────────────────────────
 
 export async function fetchDatasetItems(datasetId: string): Promise<Record<string, unknown>[]> {
-  const { items } = await client().dataset(datasetId).listItems();
+  const { items } = await (await client()).dataset(datasetId).listItems();
   return items as Record<string, unknown>[];
 }
 
 export async function getRunDatasetId(runId: string): Promise<string | null> {
-  const run = await client().run(runId).get();
+  const run = await (await client()).run(runId).get();
   return run?.defaultDatasetId ?? null;
 }
 
