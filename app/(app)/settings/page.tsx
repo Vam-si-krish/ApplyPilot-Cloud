@@ -1,0 +1,214 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Save, CheckCircle } from 'lucide-react';
+import type { Settings } from '@/lib/types';
+
+const PROVIDERS = [
+  { id: 'gemini', label: 'Google Gemini', model: 'gemini-2.0-flash' },
+  { id: 'openai', label: 'OpenAI', model: 'gpt-4o-mini' },
+  { id: 'deepseek', label: 'DeepSeek', model: 'deepseek-chat' },
+  { id: 'anthropic', label: 'Anthropic Claude', model: 'claude-haiku-4-5-20251001' },
+];
+
+export default function SettingsPage() {
+  const [s, setS] = useState<Settings | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setS(d))
+      .catch(() => {});
+  }, []);
+
+  function patch(p: Partial<Settings>) {
+    setS((prev) => (prev ? { ...prev, ...p } : prev));
+  }
+
+  async function save() {
+    if (!s) return;
+    setSaving(true);
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(s),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!s) {
+    return (
+      <div className="p-7">
+        <div className="h-8 w-40 bg-raised rounded animate-pulse mb-6" />
+        <div className="h-40 bg-card border border-ink rounded-xl animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-7 animate-slide-up max-w-3xl">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Settings</h1>
+          <p className="text-slate-muted text-[13px] mt-0.5">Schedule, search criteria, and providers</p>
+        </div>
+        {saved && (
+          <div className="flex items-center gap-1.5 text-[13px] text-emerald animate-fade-in">
+            <CheckCircle size={14} /> Saved
+          </div>
+        )}
+      </div>
+
+      {/* Schedule */}
+      <Section title="Daily Schedule">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Run time (HH:MM)" value={s.schedule_time} onChange={(v) => patch({ schedule_time: v })} placeholder="06:00" />
+          <Field label="Timezone (IANA)" value={s.timezone} onChange={(v) => patch({ timezone: v })} placeholder="America/New_York" />
+        </div>
+        <p className="text-slate-muted text-[11px] mt-3">
+          Vercel Cron triggers <span className="font-mono text-sky">/api/run</span> on a UTC schedule. Update{' '}
+          <span className="font-mono text-sky">vercel.json</span> to match this time in UTC (see the README).
+        </p>
+      </Section>
+
+      {/* Search */}
+      <Section title="Search Criteria">
+        <TagField label="Keywords" tags={s.keywords} onChange={(v) => patch({ keywords: v })} />
+        <TagField label="Locations" tags={s.locations} onChange={(v) => patch({ locations: v })} />
+        <div className="grid grid-cols-2 gap-4 mt-2">
+          <Field label="Hours old (lookback window)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
+          <Field label="Results per query" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
+        </div>
+      </Section>
+
+      {/* LLM */}
+      <Section title="Scoring Provider">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Provider</p>
+            <select
+              value={s.llm_provider}
+              onChange={(e) => {
+                const prov = PROVIDERS.find((p) => p.id === e.target.value);
+                patch({ llm_provider: e.target.value, llm_model: prov?.model ?? s.llm_model });
+              }}
+              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Field label="Model" value={s.llm_model} onChange={(v) => patch({ llm_model: v })} />
+        </div>
+        <p className="text-slate-muted text-[11px] mt-3">
+          API keys are read from environment variables (e.g. <span className="font-mono text-sky">GEMINI_API_KEY</span>) — set them in
+          Vercel, not here, so secrets never touch the database.
+        </p>
+      </Section>
+
+      {/* Apify */}
+      <Section title="Job Fetching (Apify)">
+        <Field label="Actor ID" value={s.apify_actor_id} onChange={(v) => patch({ apify_actor_id: v })} placeholder="bebity~linkedin-jobs-scraper" />
+        <p className="text-slate-muted text-[11px] mt-3">
+          The <span className="font-mono text-sky">APIFY_TOKEN</span> is an environment variable. Swapping actors may require adjusting the
+          input mapping in <span className="font-mono text-sky">lib/apify.ts</span>.
+        </p>
+      </Section>
+
+      <SaveBtn onClick={save} loading={saving} />
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card border border-ink rounded-xl p-5 mb-5">
+      <p className="text-[12px] font-semibold text-slate-muted uppercase tracking-wider font-display mb-4">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">{label}</p>
+      <input
+        value={(value as string) ?? ''}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted transition-colors"
+      />
+    </div>
+  );
+}
+
+function TagField({ label, tags, onChange }: { label: string; tags: string[]; onChange: (v: string[]) => void }) {
+  const [input, setInput] = useState('');
+  function add() {
+    const v = input.trim();
+    if (v && !tags.includes(v)) {
+      onChange([...tags, v]);
+      setInput('');
+    }
+  }
+  return (
+    <div className="mb-2">
+      <p className="text-[11px] text-slate-muted mb-2 font-medium uppercase tracking-wider">{label}</p>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {tags.map((t) => (
+          <span key={t} className="flex items-center gap-1.5 px-2.5 py-1 bg-sky/10 border border-sky/20 text-sky text-[12px] rounded-md">
+            {t}
+            <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-sky/50 hover:text-rose transition-colors leading-none">
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="Add…"
+          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text"
+        />
+        <button onClick={add} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all">
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SaveBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="flex items-center gap-2 px-5 py-2.5 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
+    >
+      <Save size={14} /> {loading ? 'Saving…' : 'Save Changes'}
+    </button>
+  );
+}
