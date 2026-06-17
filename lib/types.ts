@@ -64,6 +64,7 @@ export interface Settings {
   llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic'
   llm_model: string;
   apify_actor_id: string;
+  auto_scrape_enabled: boolean;
   updated_at: string;
 }
 

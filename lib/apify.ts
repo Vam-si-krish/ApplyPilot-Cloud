@@ -42,6 +42,7 @@ export function buildActorInput(settings: Settings): Record<string, unknown> {
     maxItems: settings.results_per_query * Math.max(1, combos.length),
     publishedAt: `r${Math.max(1, Math.round(settings.hours_old * 3600))}`,
     urls: combos.map((c) => buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old)),
+    startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })),
     proxy: { useApifyProxy: true },
   };
 }

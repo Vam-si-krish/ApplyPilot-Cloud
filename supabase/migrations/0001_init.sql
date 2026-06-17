@@ -58,6 +58,7 @@ create table if not exists settings (
   llm_provider       text not null default 'gemini',
   llm_model          text not null default 'gemini-2.0-flash',
   apify_actor_id     text not null default 'bebity~linkedin-jobs-scraper',
+  auto_scrape_enabled boolean not null default true,
   updated_at         timestamptz not null default now()
 );
 insert into settings (id) values (1) on conflict (id) do nothing;

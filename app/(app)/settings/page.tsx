@@ -11,6 +11,12 @@ const PROVIDERS = [
   { id: 'anthropic', label: 'Anthropic Claude', model: 'claude-haiku-4-5-20251001' },
 ];
 
+const ACTORS = [
+  { id: 'bebity~linkedin-jobs-scraper', label: 'Standard (bebity)' },
+  { id: 'cheap_scraper~linkedin-jobs-scraper', label: 'Cheapest (cheap_scraper)' },
+  { id: 'fascinating_lentil~linkedin-jobs-scraper', label: 'Alternative (fascinating_lentil)' },
+];
+
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
@@ -72,9 +78,19 @@ export default function SettingsPage() {
           <Field label="Run time (HH:MM)" value={s.schedule_time} onChange={(v) => patch({ schedule_time: v })} placeholder="06:00" />
           <Field label="Timezone (IANA)" value={s.timezone} onChange={(v) => patch({ timezone: v })} placeholder="America/New_York" />
         </div>
+        <div className="mt-5 flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="auto_scrape_enabled"
+            checked={s.auto_scrape_enabled ?? true}
+            onChange={(e) => patch({ auto_scrape_enabled: e.target.checked })}
+            className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+          />
+          <label htmlFor="auto_scrape_enabled" className="text-[13px] text-slate-text">Enable automated daily runs</label>
+        </div>
         <p className="text-slate-muted text-[11px] mt-3">
           Vercel Cron triggers <span className="font-mono text-sky">/api/run</span> on a UTC schedule. Update{' '}
-          <span className="font-mono text-sky">vercel.json</span> to match this time in UTC (see the README).
+          <span className="font-mono text-sky">vercel.json</span> to match this time in UTC (see the README). Unchecking the box above will pause automated scrapes.
         </p>
       </Section>
 
@@ -118,7 +134,26 @@ export default function SettingsPage() {
 
       {/* Apify */}
       <Section title="Job Fetching (Apify)">
-        <Field label="Actor ID" value={s.apify_actor_id} onChange={(v) => patch({ apify_actor_id: v })} placeholder="bebity~linkedin-jobs-scraper" />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Actor Preset</p>
+            <select
+              value={ACTORS.find((a) => a.id === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
+              onChange={(e) => {
+                if (e.target.value !== 'custom') patch({ apify_actor_id: e.target.value });
+              }}
+              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+            >
+              {ACTORS.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+              <option value="custom">Custom...</option>
+            </select>
+          </div>
+          <Field label="Actor ID" value={s.apify_actor_id} onChange={(v) => patch({ apify_actor_id: v.replace(/\//g, '~') })} placeholder="bebity~linkedin-jobs-scraper" />
+        </div>
         <p className="text-slate-muted text-[11px] mt-3">
           The <span className="font-mono text-sky">APIFY_TOKEN</span> is an environment variable. Swapping actors may require adjusting the
           input mapping in <span className="font-mono text-sky">lib/apify.ts</span>.

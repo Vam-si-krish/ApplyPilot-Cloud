@@ -31,6 +31,12 @@ async function handle(req: Request) {
 
   try {
     const settings = await getSettings();
+
+    // If triggered by cron and auto_scrape is disabled, skip running
+    if (checkCronAuth(req) && settings.auto_scrape_enabled === false) {
+      return NextResponse.json({ ok: true, skipped: true, reason: 'auto_scrape_enabled is false' });
+    }
+
     const webhookUrl = `${appBaseUrl()}/api/apify-webhook?secret=${encodeURIComponent(secret)}`;
     const { runId } = await startActorRun(settings, webhookUrl);
     await createRun(runId);
