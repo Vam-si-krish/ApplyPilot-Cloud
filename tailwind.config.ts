@@ -4,6 +4,18 @@ import type { Config } from 'tailwindcss';
 // Cloud UI matches the existing dark "void/sky" look and feel (ADR 0002).
 const config: Config = {
   content: ['./app/**/*.{js,ts,jsx,tsx}', './components/**/*.{js,ts,jsx,tsx}'],
+  // Accent classes are built at runtime (`text-${color}`), so Tailwind can't see
+  // them in source — safelist the variants used by stat cards / charts.
+  safelist: [
+    'text-sky',
+    'text-amber',
+    'text-emerald',
+    'text-rose',
+    'bg-sky',
+    'bg-amber',
+    'bg-emerald',
+    'bg-rose',
+  ],
   theme: {
     extend: {
       fontFamily: {
