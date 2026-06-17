@@ -107,6 +107,48 @@ export async function activateApiKey(id: string): Promise<void> {
   if (onErr) throw new Error(`Failed to activate api key: ${onErr.message}`);
 }
 
+/**
+ * The round-robin target: the index after the current active one, wrapping. Pure
+ * (no DB) so it's unit-testable. Returns -1 for an empty set; 0 when nothing is
+ * active yet.
+ */
+export function nextRotationIndex(count: number, currentActiveIndex: number): number {
+  if (count <= 0) return -1;
+  if (currentActiveIndex < 0) return 0;
+  return (currentActiveIndex + 1) % count;
+}
+
+/**
+ * Advance a provider's active key to the next stored one (round-robin by
+ * created_at). No-op when the provider has fewer than 2 keys. Used by the run
+ * path when auto-rotate is on (ADR 0007).
+ */
+export async function rotateActiveKey(provider: ApiKeyProvider): Promise<void> {
+  const { data, error } = await supabaseAdmin()
+    .from('api_keys')
+    .select('id, is_active')
+    .eq('provider', provider)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`Failed to load ${provider} keys for rotation: ${error.message}`);
+
+  const rows = (data ?? []) as { id: string; is_active: boolean }[];
+  if (rows.length < 2) return; // nothing to rotate
+
+  const currIdx = rows.findIndex((r) => r.is_active);
+  const nextId = rows[nextRotationIndex(rows.length, currIdx)].id;
+  if (rows[currIdx]?.id === nextId) return; // already on the target
+
+  const { error: offErr } = await supabaseAdmin().from('api_keys').update({ is_active: false }).eq('provider', provider);
+  if (offErr) throw new Error(`Failed to deactivate ${provider} keys: ${offErr.message}`);
+  const { error: onErr } = await supabaseAdmin().from('api_keys').update({ is_active: true }).eq('id', nextId);
+  if (onErr) throw new Error(`Failed to activate next ${provider} key: ${onErr.message}`);
+}
+
+/** Rotate every provider (each is a no-op with <2 keys). Called once per run. */
+export async function rotateAllActiveKeys(): Promise<void> {
+  for (const p of API_KEY_PROVIDERS) await rotateActiveKey(p);
+}
+
 /** Delete a key. If it was the active one, promote the newest remaining of its provider. */
 export async function deleteApiKey(id: string): Promise<void> {
   const { data: row, error: getErr } = await supabaseAdmin()

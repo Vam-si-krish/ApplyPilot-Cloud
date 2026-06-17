@@ -2,7 +2,7 @@
 // supabase/migrations/0001_init.sql, which in turn derives from the
 // ApplyPilot-Lite /api/jobs column contract (see docs/ARCHITECTURE.md).
 
-export type JobStatus = 'unscored' | 'scored' | 'archived';
+export type JobStatus = 'unscored' | 'scored' | 'archived' | 'filtered';
 
 export interface Job {
   id: string;
@@ -17,6 +17,8 @@ export interface Job {
   easy_apply: boolean | null;
   /** 0–10; null = unscored. 0 = invalid content / not a real job description. */
   fit_score: number | null;
+  /** 0–100 cheap résumé↔job match (ADR 0008); null = not computed. Gates LLM scoring when the filter is on. */
+  prefilter_score: number | null;
   score_note: string | null;
   score_keywords: string | null;
   score_reasoning: string | null;
@@ -72,6 +74,12 @@ export interface Settings {
   apify_actor_id: string; // LinkedIn actor variant (others use PORTAL_CONFIG defaults)
   job_portals: string[]; // e.g. ['linkedin', 'indeed', 'glassdoor']
   auto_scrape_enabled: boolean;
+  /** When true, each run advances every provider's active key to the next stored one (ADR 0007). */
+  auto_rotate_keys: boolean;
+  /** When true, only jobs scoring >= prefilter_threshold on the cheap match gate reach the LLM (ADR 0008). */
+  prefilter_enabled: boolean;
+  /** Match-percentage cut-off (0–100) for the pre-scoring filter. */
+  prefilter_threshold: number;
   updated_at: string;
 }
 

@@ -10,6 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { startAllPortalRuns } from '@/lib/apify';
+import { rotateAllActiveKeys } from '@/lib/credentials';
 import { getSettings, createRun } from '@/lib/db';
 import { checkCronAuth, verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
 import { appBaseUrl } from '@/lib/pipeline';
@@ -36,6 +37,10 @@ async function handle(req: Request) {
     if (checkCronAuth(req) && settings.auto_scrape_enabled === false) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'auto_scrape_enabled is false' });
     }
+
+    // Auto-rotate (ADR 0007): advance each provider's active key once, before the
+    // run reads the Apify token (here) or the LLM key (later, in /api/score-batch).
+    if (settings.auto_rotate_keys) await rotateAllActiveKeys();
 
     const webhookUrl = `${appBaseUrl()}/api/apify-webhook?secret=${encodeURIComponent(secret)}`;
     // Start one actor per enabled portal in parallel; create a run row per actor.

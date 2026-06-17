@@ -9,7 +9,8 @@ import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
-import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId } from '@/lib/db';
+import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getResumeText } from '@/lib/db';
+import { prefilterScores } from '@/lib/prefilter';
 import { triggerScoreBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
@@ -57,10 +58,25 @@ export async function POST(req: Request) {
     const internalRun = runId ? await getRunByApifyId(runId).catch(() => null) : null;
     const internalRunId = internalRun?.id ?? null;
 
-    const rows = items
+    const mapped = items
       .map((it) => mapDatasetItemToJob(it, source))
-      .filter((r): r is NonNullable<typeof r> => r !== null)
-      .map((r) => ({ ...r, status: 'unscored' as const, run_id: internalRunId }));
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    // Cheap, local résumé↔job match score (ADR 0008), computed once over this
+    // batch. Stored on every row (even when the filter is off) for transparency;
+    // /api/score-batch uses it to gate the LLM. Keyed by url since rows are new.
+    const resume = await getResumeText().catch(() => '');
+    const scores = prefilterScores(
+      resume,
+      mapped.map((r) => ({ id: r.url, text: `${r.title ?? ''}\n${r.full_description ?? ''}` })),
+    );
+
+    const rows = mapped.map((r) => ({
+      ...r,
+      status: 'unscored' as const,
+      run_id: internalRunId,
+      prefilter_score: scores.get(r.url) ?? null,
+    }));
 
     let inserted = 0;
     if (rows.length) {

@@ -13,7 +13,7 @@ vi.mock('./supabase', () => {
   return { supabaseAdmin: () => builder };
 });
 
-import { maskKey, getActiveApiKey, isApiKeyProvider } from './credentials';
+import { maskKey, getActiveApiKey, isApiKeyProvider, nextRotationIndex } from './credentials';
 
 describe('maskKey', () => {
   it('keeps the last 4 chars and dots the rest', () => {
@@ -30,6 +30,23 @@ describe('isApiKeyProvider', () => {
     expect(isApiKeyProvider('gemini')).toBe(true);
     expect(isApiKeyProvider('cohere')).toBe(false);
     expect(isApiKeyProvider(123)).toBe(false);
+  });
+});
+
+describe('nextRotationIndex', () => {
+  it('advances to the next index, wrapping at the end', () => {
+    expect(nextRotationIndex(3, 0)).toBe(1);
+    expect(nextRotationIndex(3, 1)).toBe(2);
+    expect(nextRotationIndex(3, 2)).toBe(0); // wrap
+  });
+  it('starts at 0 when nothing is active', () => {
+    expect(nextRotationIndex(3, -1)).toBe(0);
+  });
+  it('returns -1 for an empty set', () => {
+    expect(nextRotationIndex(0, -1)).toBe(-1);
+  });
+  it('stays at 0 for a single key', () => {
+    expect(nextRotationIndex(1, 0)).toBe(0);
   });
 });
 

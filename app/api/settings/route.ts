@@ -40,6 +40,11 @@ export async function PUT(req: Request) {
     if (valid.length > 0) patch.job_portals = valid;
   }
   if (typeof body.auto_scrape_enabled === 'boolean') patch.auto_scrape_enabled = body.auto_scrape_enabled;
+  if (typeof body.auto_rotate_keys === 'boolean') patch.auto_rotate_keys = body.auto_rotate_keys;
+  if (typeof body.prefilter_enabled === 'boolean') patch.prefilter_enabled = body.prefilter_enabled;
+  if (Number.isFinite(Number(body.prefilter_threshold))) {
+    patch.prefilter_threshold = Math.max(0, Math.min(100, Math.round(Number(body.prefilter_threshold))));
+  }
 
   const { error } = await supabaseAdmin().from('settings').update(patch).eq('id', 1);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

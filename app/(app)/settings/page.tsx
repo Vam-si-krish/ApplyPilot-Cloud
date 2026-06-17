@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, Trash2, Plus } from 'lucide-react';
+import { Save, CheckCircle, Trash2, Plus, X } from 'lucide-react';
 import type { Settings, ApiKeyMasked, ApiKeyProvider } from '@/lib/types';
 
 const PROVIDERS = [
@@ -31,6 +31,17 @@ export default function SettingsPage() {
 
   function patch(p: Partial<Settings>) {
     setS((prev) => (prev ? { ...prev, ...p } : prev));
+  }
+
+  // Auto-rotate is persisted immediately (like the per-key active toggle), not via
+  // the Save button — the PUT handler updates only the fields it's given.
+  async function setAutoRotate(v: boolean) {
+    patch({ auto_rotate_keys: v });
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auto_rotate_keys: v }),
+    });
   }
 
   async function save() {
@@ -132,8 +143,54 @@ export default function SettingsPage() {
         </p>
       </Section>
 
+      {/* Pre-scoring filter */}
+      <Section title="Pre-scoring Filter">
+        <p className="text-slate-muted text-[12px] mb-4">
+          Before spending an LLM call on each job, a cheap local check rates your résumé against the posting
+          (IDF-weighted keyword coverage — what share of the job&apos;s meaningful terms your résumé covers). Jobs below the
+          threshold are marked <span className="text-amber-400">Filtered</span> and skipped, saving tokens. Turn it off to score
+          every job.
+        </p>
+        <div className="flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3 mb-4">
+          <button
+            role="switch"
+            aria-checked={s.prefilter_enabled ?? false}
+            onClick={() => patch({ prefilter_enabled: !(s.prefilter_enabled ?? false) })}
+            className={`mt-0.5 shrink-0 w-9 h-5 rounded-full transition-colors relative ${s.prefilter_enabled ? 'bg-emerald/80' : 'bg-ink'}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${s.prefilter_enabled ? 'left-[18px]' : 'left-0.5'}`} />
+          </button>
+          <div>
+            <p className="text-[13px] font-medium text-slate-text">Filter jobs before LLM scoring</p>
+            <p className="text-[11px] text-slate-muted mt-0.5">Only jobs at or above the match threshold get an LLM score.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Match threshold (%)</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={s.prefilter_threshold ?? 30}
+                onChange={(e) => patch({ prefilter_threshold: Number(e.target.value) })}
+                disabled={!s.prefilter_enabled}
+                className="flex-1 accent-sky disabled:opacity-40"
+              />
+              <span className="w-12 text-right text-[13px] text-slate-text font-mono">{s.prefilter_threshold ?? 30}%</span>
+            </div>
+          </div>
+        </div>
+        <p className="text-slate-muted text-[11px] mt-3">
+          The match % is computed when jobs are fetched and shown on each job, so you can tune the threshold against real numbers.
+          Filtered jobs stay visible under the <span className="text-amber-400">Filtered</span> tab on the Jobs page.
+        </p>
+      </Section>
+
       {/* API Keys vault */}
-      <ApiKeysSection />
+      <ApiKeysSection autoRotate={s.auto_rotate_keys ?? false} onAutoRotate={setAutoRotate} />
 
       {/* Portals */}
       <Section title="Job Portals">
@@ -218,7 +275,7 @@ const KEY_PROVIDERS: { id: ApiKeyProvider; label: string; placeholder: string }[
  * /api/keys, independent of the Settings blob since keys are their own table.
  * The browser only ever sees masked previews.
  */
-function ApiKeysSection() {
+function ApiKeysSection({ autoRotate, onAutoRotate }: { autoRotate: boolean; onAutoRotate: (v: boolean) => void }) {
   const [keys, setKeys] = useState<ApiKeyMasked[] | null>(null);
 
   async function reload() {
@@ -233,13 +290,18 @@ function ApiKeysSection() {
     reload();
   }, []);
 
-  async function add(provider: ApiKeyProvider, label: string, value: string) {
-    const r = await fetch('/api/keys', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, label, value }),
-    });
-    if (r.ok) await reload();
+  // Create one or more keys for a provider. Sequential so auto-activation is
+  // deterministic: the first created key becomes active when the provider had none.
+  async function addMany(provider: ApiKeyProvider, entries: { label: string; value: string }[]) {
+    for (const e of entries) {
+      if (!e.value.trim()) continue;
+      await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, label: e.label.trim(), value: e.value.trim() }),
+      });
+    }
+    await reload();
   }
   async function activate(id: string) {
     const r = await fetch(`/api/keys/${id}`, {
@@ -261,6 +323,26 @@ function ApiKeysSection() {
         <span className="text-emerald">active</span>. The active key is used for daily runs and scoring; environment
         variables are only a fallback when a provider has no key here. Keys are shown masked — re-enter to replace.
       </p>
+
+      {/* Auto-rotate toggle (ADR 0007) */}
+      <div className="flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3 mb-5">
+        <button
+          role="switch"
+          aria-checked={autoRotate}
+          onClick={() => onAutoRotate(!autoRotate)}
+          className={`mt-0.5 shrink-0 w-9 h-5 rounded-full transition-colors relative ${autoRotate ? 'bg-emerald/80' : 'bg-ink'}`}
+        >
+          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${autoRotate ? 'left-[18px]' : 'left-0.5'}`} />
+        </button>
+        <div>
+          <p className="text-[13px] font-medium text-slate-text">Auto-rotate keys each run</p>
+          <p className="text-[11px] text-slate-muted mt-0.5">
+            When on, every run advances each provider that has 2+ keys to its next stored key (round-robin), spreading usage
+            across accounts. The active badge always shows the current key.
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col divide-y divide-ink">
         {KEY_PROVIDERS.map((p) => (
           <ProviderKeys
@@ -268,7 +350,7 @@ function ApiKeysSection() {
             meta={p}
             keys={(keys ?? []).filter((k) => k.provider === p.id)}
             loading={keys === null}
-            onAdd={add}
+            onAddMany={addMany}
             onActivate={activate}
             onRemove={remove}
           />
@@ -282,39 +364,40 @@ function ProviderKeys({
   meta,
   keys,
   loading,
-  onAdd,
+  onAddMany,
   onActivate,
   onRemove,
 }: {
   meta: { id: ApiKeyProvider; label: string; placeholder: string };
   keys: ApiKeyMasked[];
   loading: boolean;
-  onAdd: (provider: ApiKeyProvider, label: string, value: string) => Promise<void>;
+  onAddMany: (provider: ApiKeyProvider, entries: { label: string; value: string }[]) => Promise<void>;
   onActivate: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
 }) {
-  const [label, setLabel] = useState('');
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!value.trim() || busy) return;
-    setBusy(true);
-    try {
-      await onAdd(meta.id, label.trim(), value.trim());
-      setLabel('');
-      setValue('');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="py-4 first:pt-0 last:pb-0">
-      <p className="text-[13px] font-medium text-slate-text mb-2.5">{meta.label}</p>
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-[13px] font-medium text-slate-text">
+          {meta.label}
+          {keys.length > 0 && (
+            <span className="ml-2 text-[11px] text-slate-muted font-normal">
+              {keys.length} key{keys.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </p>
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all"
+        >
+          <Plus size={13} /> Add {meta.label} key
+        </button>
+      </div>
 
-      {keys.length > 0 && (
-        <div className="flex flex-col gap-2 mb-3">
+      {keys.length > 0 ? (
+        <div className="flex flex-col gap-2">
           {keys.map((k) => (
             <div key={k.id} className="flex items-center gap-3 bg-raised border border-ink rounded-lg px-3 py-2">
               <button
@@ -336,33 +419,141 @@ function ProviderKeys({
             </div>
           ))}
         </div>
+      ) : (
+        !loading && <p className="text-[12px] text-slate-muted">No keys stored — using env fallback if set.</p>
       )}
 
-      {keys.length === 0 && !loading && <p className="text-[12px] text-slate-muted mb-3">No keys stored — using env fallback if set.</p>}
+      {open && (
+        <AddKeyModal
+          meta={meta}
+          onClose={() => setOpen(false)}
+          onSave={async (entries) => {
+            await onAddMany(meta.id, entries);
+            setOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
-      <div className="flex gap-2">
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Label (e.g. Personal)"
-          className="w-40 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
-        />
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          placeholder={meta.placeholder}
-          type="password"
-          autoComplete="off"
-          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
-        />
-        <button
-          onClick={submit}
-          disabled={!value.trim() || busy}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 disabled:opacity-40 rounded-lg transition-all"
-        >
-          <Plus size={13} /> Add
+/**
+ * Modal to add one or many keys for a provider in a single pass. Rows can be
+ * added/removed; on save, every non-empty row is created (the first becomes
+ * active if the provider had no keys yet — switch active later from the list).
+ */
+function AddKeyModal({
+  meta,
+  onClose,
+  onSave,
+}: {
+  meta: { id: ApiKeyProvider; label: string; placeholder: string };
+  onClose: () => void;
+  onSave: (entries: { label: string; value: string }[]) => Promise<void>;
+}) {
+  const [rows, setRows] = useState<{ label: string; value: string }[]>([{ label: '', value: '' }]);
+  const [busy, setBusy] = useState(false);
+
+  const filled = rows.filter((r) => r.value.trim());
+
+  function update(i: number, field: 'label' | 'value', v: string) {
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [field]: v } : r)));
+  }
+  function addRow() {
+    setRows((rs) => [...rs, { label: '', value: '' }]);
+  }
+  function removeRow(i: number) {
+    setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs));
+  }
+
+  async function save() {
+    if (filled.length === 0 || busy) return;
+    setBusy(true);
+    try {
+      await onSave(filled);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Close on Escape.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg bg-card border border-ink rounded-xl p-5 shadow-2xl animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-display text-[15px] font-semibold text-slate-text">
+            Add {meta.label} key{rows.length > 1 ? 's' : ''}
+          </h3>
+          <button onClick={onClose} className="text-slate-muted hover:text-slate-text transition-colors" title="Close">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-[12px] text-slate-muted mb-4">
+          Add one or more keys (e.g. several {meta.label} accounts). The first becomes <span className="text-emerald">active</span> if
+          this provider has none yet; switch the active key anytime from the list.
+        </p>
+
+        <div className="flex flex-col gap-2 mb-3 max-h-[42vh] overflow-y-auto pr-0.5">
+          {rows.map((r, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                value={r.label}
+                onChange={(e) => update(i, 'label', e.target.value)}
+                placeholder="Label"
+                className="w-32 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
+              />
+              <input
+                value={r.value}
+                onChange={(e) => update(i, 'value', e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && save()}
+                placeholder={meta.placeholder}
+                type="password"
+                autoComplete="off"
+                autoFocus={i === 0}
+                className="flex-1 min-w-0 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
+              />
+              <button
+                onClick={() => removeRow(i)}
+                disabled={rows.length === 1}
+                title="Remove row"
+                className="shrink-0 text-slate-muted hover:text-rose disabled:opacity-30 disabled:hover:text-slate-muted transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={addRow} className="flex items-center gap-1.5 text-[12px] text-sky hover:text-sky/80 mb-5 transition-colors">
+          <Plus size={13} /> Add another
         </button>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-[13px] text-slate-muted border border-ink hover:text-slate-text rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={filled.length === 0 || busy}
+            className="flex items-center gap-2 px-4 py-2 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
+          >
+            <Save size={14} /> {busy ? 'Saving…' : filled.length > 1 ? `Save ${filled.length} keys` : 'Save key'}
+          </button>
+        </div>
       </div>
     </div>
   );

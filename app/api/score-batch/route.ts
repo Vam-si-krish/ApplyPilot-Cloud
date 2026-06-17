@@ -53,8 +53,26 @@ export async function POST(req: Request) {
 
   let scored = 0;
   let errors = 0;
+  let filtered = 0;
 
   for (const job of batch) {
+    // Pre-scoring gate (ADR 0008): when on, skip the LLM for jobs whose cheap
+    // match score is below the threshold — mark them 'filtered' so they leave the
+    // queue without burning a token. A null prefilter_score (legacy/empty résumé)
+    // always passes.
+    if (
+      settings.prefilter_enabled &&
+      job.prefilter_score != null &&
+      job.prefilter_score < settings.prefilter_threshold
+    ) {
+      await supabaseAdmin()
+        .from('jobs')
+        .update({ status: 'filtered', scored_at: new Date().toISOString() })
+        .eq('id', job.id);
+      filtered++;
+      continue;
+    }
+
     const result = await scoreJob(
       resume,
       {
@@ -86,9 +104,9 @@ export async function POST(req: Request) {
   const remaining = await countUnscored();
   if (remaining > 0) {
     triggerScoreBatch();
-    return NextResponse.json({ ok: true, scored, remaining });
+    return NextResponse.json({ ok: true, scored, filtered, remaining });
   }
 
   if (running) await finalizeRun(running.id, 'succeeded');
-  return NextResponse.json({ ok: true, scored, remaining: 0, done: true });
+  return NextResponse.json({ ok: true, scored, filtered, remaining: 0, done: true });
 }

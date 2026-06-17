@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2 } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import type { Job } from '@/lib/types';
 
-const STATUSES = ['all', 'scored', 'unscored', 'shortlisted', 'applied', 'archived'] as const;
+const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'shortlisted', 'applied', 'archived'] as const;
 type StatusFilter = (typeof STATUSES)[number];
 
 interface RunSummary {
@@ -43,6 +43,11 @@ export default function JobsPage() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
+  // Manual scoring re-trigger (recovers a stalled auto-loop).
+  const [unscoredCount, setUnscoredCount] = useState(0);
+  const [scoring, setScoring] = useState(false);
+  const [scoreMsg, setScoreMsg] = useState<string | null>(null);
+
   // Apply tracking: when user clicks an external link we wait for them to return.
   const pendingApplyJob = useRef<Job | null>(null);
   const [applyDialog, setApplyDialog] = useState<Job | null>(null);
@@ -54,6 +59,18 @@ export default function JobsPage() {
       .then((d) => setRuns(d.runs ?? []))
       .catch(() => {});
   }, []);
+
+  const refreshStats = useCallback(async () => {
+    try {
+      const d = await fetch('/api/stats').then((r) => r.json());
+      setUnscoredCount(d.unscored ?? 0);
+    } catch {
+      /* keep last value */
+    }
+  }, []);
+  useEffect(() => {
+    refreshStats();
+  }, [refreshStats]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,6 +125,29 @@ export default function JobsPage() {
     await patch(job.id, { applied_at: new Date().toISOString() });
   }
 
+  // Kick the chunked scorer for any jobs still unscored (recovers a stalled loop).
+  async function scoreUnscored() {
+    setScoring(true);
+    setScoreMsg(null);
+    try {
+      const d = await fetch('/api/score-start', { method: 'POST' }).then((r) => r.json());
+      if (d.started) {
+        setScoreMsg(`Scoring ${d.unscored} job${d.unscored === 1 ? '' : 's'}… runs in the background.`);
+        setTimeout(() => {
+          load();
+          refreshStats();
+        }, 4000);
+      } else {
+        setScoreMsg('No unscored jobs to score.');
+      }
+    } catch {
+      setScoreMsg('Could not start scoring.');
+    } finally {
+      setScoring(false);
+      setTimeout(() => setScoreMsg(null), 8000);
+    }
+  }
+
   const runLabel = selectedRunId
     ? (runs.find((r) => r.id === selectedRunId) ? formatRunLabel(runs.find((r) => r.id === selectedRunId)!) : 'Selected run')
     : null;
@@ -119,6 +159,19 @@ export default function JobsPage() {
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Jobs</h1>
           <p className="text-slate-muted text-[13px] mt-1">{total} matching · sorted by fit score</p>
         </div>
+        {unscoredCount > 0 && (
+          <div className="flex items-center gap-3">
+            {scoreMsg && <span className="text-[12px] text-slate-muted animate-fade-in">{scoreMsg}</span>}
+            <button
+              onClick={scoreUnscored}
+              disabled={scoring}
+              title="Score every job still waiting (resumes a stalled run)"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
+            >
+              <Sparkles size={14} /> {scoring ? 'Starting…' : `Score unscored (${unscoredCount})`}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Run selector */}
@@ -229,6 +282,7 @@ export default function JobsPage() {
                       <p className="text-slate-muted text-[11px] truncate">
                         {job.company} · {job.location || 'Unknown'}
                         {job.salary ? ` · ${job.salary}` : ''}
+                        {job.prefilter_score != null ? ` · ${job.prefilter_score}% match` : ''}
                       </p>
                     </div>
 
@@ -281,6 +335,11 @@ export default function JobsPage() {
 
                   {open && (
                     <div className="px-14 pb-5 pt-1 space-y-3 bg-base/40">
+                      {job.status === 'filtered' && (
+                        <div className="text-[12px] text-amber-400">
+                          Pre-filtered — {job.prefilter_score}% résumé match (below your threshold), so it skipped LLM scoring.
+                        </div>
+                      )}
                       {job.applied_at && (
                         <div className="flex items-center gap-2 text-emerald text-[12px]">
                           <CheckCircle2 size={13} />

@@ -20,7 +20,8 @@ export async function GET(req: Request) {
 
   let q = supabaseAdmin().from('jobs').select('*', { count: 'exact' });
 
-  if (status === 'all') q = q.neq('status', 'archived');
+  // Default 'all' view hides archived and pre-filtered jobs; pick them explicitly to see them.
+  if (status === 'all') q = q.neq('status', 'archived').neq('status', 'filtered');
   else q = q.eq('status', status);
 
   if (search) q = q.or(`title.ilike.%${search}%,company.ilike.%${search}%,location.ilike.%${search}%`);
