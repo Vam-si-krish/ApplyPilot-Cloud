@@ -37,7 +37,7 @@ export function buildActorInput(settings: Settings): Record<string, unknown> {
 
   return {
     title: keywords[0] ?? '',
-    keyword: keywords[0] ?? '',
+    keyword: keywords,
     keywords: keywords, // Plural array as expected by some actors
     searchKeyword: keywords[0] ?? '',
     location: locations[0] ?? '',
