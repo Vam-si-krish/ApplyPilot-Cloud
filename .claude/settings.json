@@ -7,7 +7,15 @@
       "Bash(npm run *)",
       "Bash(git add *)",
       "Bash(git commit -q -m ' *)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(host db.ftrakpebzcabztwyunum.supabase.co)",
+      "Bash(nslookup db.ftrakpebzcabztwyunum.supabase.co)",
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' PGCONNECT_TIMEOUT=5 psql -h db.ftrakpebzcabztwyunum.supabase.co -p 5432 -U postgres -d postgres -c 'select 1 as ok;')",
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' PGCONNECT_TIMEOUT=10 psql -h db.ftrakpebzcabztwyunum.supabase.co -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql)",
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -tAc \"select tablename from pg_tables where schemaname='public' order by tablename;\")",
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -tAc \"select 'settings='||count\\(*\\) from settings; select 'profile='||count\\(*\\) from profile;\")",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill)"
     ]
   }
 }
