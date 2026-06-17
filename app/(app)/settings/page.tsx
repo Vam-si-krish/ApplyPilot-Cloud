@@ -132,31 +132,68 @@ export default function SettingsPage() {
         </p>
       </Section>
 
-      {/* Apify */}
-      <Section title="Job Fetching (Apify)">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Actor Preset</p>
-            <select
-              value={ACTORS.find((a) => a.id === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
-              onChange={(e) => {
-                if (e.target.value !== 'custom') patch({ apify_actor_id: e.target.value });
-              }}
-              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
-            >
-              {ACTORS.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
-              <option value="custom">Custom...</option>
-            </select>
-          </div>
-          <Field label="Actor ID" value={s.apify_actor_id} onChange={(v) => patch({ apify_actor_id: v.replace(/\//g, '~') })} placeholder="bebity~linkedin-jobs-scraper" />
+      {/* Portals */}
+      <Section title="Job Portals">
+        <p className="text-slate-muted text-[12px] mb-4">
+          Select which job boards to search. Each uses a separate Apify actor and runs in parallel.
+        </p>
+        <div className="flex flex-col gap-3 mb-5">
+          {[
+            { key: 'linkedin',  label: 'LinkedIn',  actor: 'bebity~linkedin-jobs-scraper (configurable below)' },
+            { key: 'indeed',    label: 'Indeed',    actor: 'misceres~indeed-scraper' },
+            { key: 'glassdoor', label: 'Glassdoor', actor: 'bebity~glassdoor-jobs-scraper' },
+          ].map(({ key, label, actor }) => {
+            const portals = s.job_portals ?? ['linkedin'];
+            const checked = portals.includes(key);
+            return (
+              <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? [...portals, key]
+                      : portals.filter((p) => p !== key);
+                    patch({ job_portals: next.length ? next : ['linkedin'] });
+                  }}
+                  className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+                />
+                <span className="text-[13px] text-slate-text font-medium w-24">{label}</span>
+                <span className="text-[11px] text-slate-muted font-mono">{actor}</span>
+              </label>
+            );
+          })}
         </div>
-        <p className="text-slate-muted text-[11px] mt-3">
-          The <span className="font-mono text-sky">APIFY_TOKEN</span> is an environment variable. Swapping actors may require adjusting the
-          input mapping in <span className="font-mono text-sky">lib/apify.ts</span>.
+
+        {/* LinkedIn actor variant — only shown when LinkedIn is selected */}
+        {(s.job_portals ?? ['linkedin']).includes('linkedin') && (
+          <div className="pt-4 border-t border-ink">
+            <p className="text-[11px] text-slate-muted mb-3 font-medium uppercase tracking-wider">LinkedIn Actor Variant</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <select
+                  value={ACTORS.find((a) => a.id === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
+                  onChange={(e) => { if (e.target.value !== 'custom') patch({ apify_actor_id: e.target.value }); }}
+                  className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+                >
+                  {ACTORS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+              <Field
+                label="Actor ID"
+                value={s.apify_actor_id}
+                onChange={(v) => patch({ apify_actor_id: v.replace(/\//g, '~') })}
+                placeholder="bebity~linkedin-jobs-scraper"
+              />
+            </div>
+          </div>
+        )}
+
+        <p className="text-slate-muted text-[11px] mt-4">
+          Set <span className="font-mono text-sky">APIFY_TOKEN</span> as an env variable (Vercel/Netlify → Environment Variables).
+          Indeed and Glassdoor actor IDs are defaults — verify on{' '}
+          <span className="font-mono text-sky">console.apify.com</span> before first use.
         </p>
       </Section>
 

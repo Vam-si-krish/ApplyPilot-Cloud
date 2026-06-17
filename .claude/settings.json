@@ -15,7 +15,8 @@
       "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -tAc \"select tablename from pg_tables where schemaname='public' order by tablename;\")",
       "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -tAc \"select 'settings='||count\\(*\\) from settings; select 'profile='||count\\(*\\) from profile;\")",
       "Bash(lsof -ti:3000)",
-      "Bash(xargs kill)"
+      "Bash(xargs kill)",
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -f /Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Cloud/supabase/migrations/0002_add_portals_easy_apply.sql)"
     ]
   }
 }

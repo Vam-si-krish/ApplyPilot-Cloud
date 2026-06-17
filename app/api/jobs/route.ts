@@ -12,6 +12,9 @@ export async function GET(req: Request) {
   const minScore = url.searchParams.get('minScore');
   const maxScore = url.searchParams.get('maxScore');
   const shortlisted = url.searchParams.get('shortlisted');
+  const easyApply = url.searchParams.get('easyApply');
+  const applied = url.searchParams.get('applied');
+  const runId = url.searchParams.get('runId');
   const limit = Math.min(Number(url.searchParams.get('limit')) || 200, 1000);
   const offset = Number(url.searchParams.get('offset')) || 0;
 
@@ -24,6 +27,10 @@ export async function GET(req: Request) {
   if (minScore !== null && minScore !== '') q = q.gte('fit_score', Number(minScore));
   if (maxScore !== null && maxScore !== '') q = q.lte('fit_score', Number(maxScore));
   if (shortlisted === 'true') q = q.eq('is_shortlisted', true);
+  if (easyApply === 'true') q = q.eq('easy_apply', true);
+  if (easyApply === 'false') q = q.eq('easy_apply', false);
+  if (applied === 'true') q = q.not('applied_at', 'is', null);
+  if (runId) q = q.eq('run_id', runId);
 
   q = q
     .order('fit_score', { ascending: false, nullsFirst: false })

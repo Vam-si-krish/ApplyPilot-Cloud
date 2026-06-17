@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
-import { updateRunByApifyId, finalizeRun, getLatestRunningRun } from '@/lib/db';
+import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId } from '@/lib/db';
 import { triggerScoreBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
@@ -49,11 +49,18 @@ export async function POST(req: Request) {
     }
 
     const items = await fetchDatasetItems(datasetId);
-    const source = 'apify:linkedin';
+    // ?portal= is set by startAllPortalRuns; defaults to 'linkedin' for backward compat.
+    const portal = new URL(req.url).searchParams.get('portal') || 'linkedin';
+    const source = `apify:${portal}`;
+
+    // Resolve the internal run UUID so jobs can be grouped by run in the UI.
+    const internalRun = runId ? await getRunByApifyId(runId).catch(() => null) : null;
+    const internalRunId = internalRun?.id ?? null;
+
     const rows = items
       .map((it) => mapDatasetItemToJob(it, source))
       .filter((r): r is NonNullable<typeof r> => r !== null)
-      .map((r) => ({ ...r, status: 'unscored' as const }));
+      .map((r) => ({ ...r, status: 'unscored' as const, run_id: internalRunId }));
 
     let inserted = 0;
     if (rows.length) {

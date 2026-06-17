@@ -35,6 +35,17 @@ export async function updateRunByApifyId(apifyRunId: string, patch: Partial<Run>
   if (error) throw new Error(`Failed to update run: ${error.message}`);
 }
 
+/** Return the internal run UUID for a given Apify run ID, or null if not found. */
+export async function getRunByApifyId(apifyRunId: string): Promise<Run | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('runs')
+    .select('*')
+    .eq('apify_run_id', apifyRunId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to look up run: ${error.message}`);
+  return (data as Run) ?? null;
+}
+
 /** Count jobs still awaiting a score. */
 export async function countUnscored(): Promise<number> {
   const { count, error } = await supabaseAdmin()

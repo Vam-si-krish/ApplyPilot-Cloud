@@ -13,6 +13,8 @@ export interface Job {
   salary: string | null;
   full_description: string | null;
   application_url: string | null;
+  /** true = LinkedIn Easy Apply (one-click); false = external application; null = unknown */
+  easy_apply: boolean | null;
   /** 0–10; null = unscored. 0 = invalid content / not a real job description. */
   fit_score: number | null;
   score_note: string | null;
@@ -20,6 +22,10 @@ export interface Job {
   score_reasoning: string | null;
   status: JobStatus;
   is_shortlisted: boolean;
+  /** UUID of the Run that discovered this job. Null for jobs before migration 0003. */
+  run_id: string | null;
+  /** Timestamp when the user marked themselves as having applied. Null = not applied. */
+  applied_at: string | null;
   discovered_at: string;
   scored_at: string | null;
   source: string | null;
@@ -63,7 +69,8 @@ export interface Settings {
   results_per_query: number;
   llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic'
   llm_model: string;
-  apify_actor_id: string;
+  apify_actor_id: string; // LinkedIn actor variant (others use PORTAL_CONFIG defaults)
+  job_portals: string[]; // e.g. ['linkedin', 'indeed', 'glassdoor']
   auto_scrape_enabled: boolean;
   updated_at: string;
 }

@@ -9,7 +9,7 @@
  * - POST is the manual "Run now" button (authorized by the session cookie).
  */
 import { NextResponse } from 'next/server';
-import { startActorRun } from '@/lib/apify';
+import { startAllPortalRuns } from '@/lib/apify';
 import { getSettings, createRun } from '@/lib/db';
 import { checkCronAuth, verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
 import { appBaseUrl } from '@/lib/pipeline';
@@ -38,9 +38,10 @@ async function handle(req: Request) {
     }
 
     const webhookUrl = `${appBaseUrl()}/api/apify-webhook?secret=${encodeURIComponent(secret)}`;
-    const { runId } = await startActorRun(settings, webhookUrl);
-    await createRun(runId);
-    return NextResponse.json({ ok: true, apify_run_id: runId });
+    // Start one actor per enabled portal in parallel; create a run row per actor.
+    const runs = await startAllPortalRuns(settings, webhookUrl);
+    await Promise.all(runs.map((r) => createRun(r.runId)));
+    return NextResponse.json({ ok: true, apify_run_ids: runs.map((r) => r.runId) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 500 });

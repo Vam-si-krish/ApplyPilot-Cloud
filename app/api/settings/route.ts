@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSettings } from '@/lib/db';
+import { SUPPORTED_PORTALS } from '@/lib/apify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,10 @@ export async function PUT(req: Request) {
   if (typeof body.llm_provider === 'string' && body.llm_provider) patch.llm_provider = body.llm_provider;
   if (typeof body.llm_model === 'string' && body.llm_model) patch.llm_model = body.llm_model;
   if (typeof body.apify_actor_id === 'string' && body.apify_actor_id) patch.apify_actor_id = body.apify_actor_id.replace(/\//g, '~');
+  if (Array.isArray(body.job_portals)) {
+    const valid = (body.job_portals as unknown[]).map(String).filter((p) => SUPPORTED_PORTALS.includes(p));
+    if (valid.length > 0) patch.job_portals = valid;
+  }
   if (typeof body.auto_scrape_enabled === 'boolean') patch.auto_scrape_enabled = body.auto_scrape_enabled;
 
   const { error } = await supabaseAdmin().from('settings').update(patch).eq('id', 1);
