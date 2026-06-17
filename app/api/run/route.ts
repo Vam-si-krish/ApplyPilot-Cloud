@@ -1,9 +1,12 @@
 /**
- * POST /api/run — start a daily (or manual) discovery run.
+ * /api/run — start a daily (or manual) discovery run.
  *
  * Starts the Apify actor ASYNC and registers a webhook; never blocks on the
- * scrape (ADR 0004). Authorized by either the cron secret (Vercel Cron) or a
- * valid session cookie (manual "Run now" from the UI).
+ * scrape (ADR 0004).
+ *
+ * - GET  is how Vercel Cron triggers it (cron sends Authorization: Bearer
+ *   CRON_SECRET automatically when CRON_SECRET is set).
+ * - POST is the manual "Run now" button (authorized by the session cookie).
  */
 import { NextResponse } from 'next/server';
 import { startActorRun } from '@/lib/apify';
@@ -15,8 +18,8 @@ import { cookies } from 'next/headers';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-export async function POST(req: Request) {
-  const sessionOk = verifySessionToken(cookies().get(SESSION_COOKIE)?.value);
+async function handle(req: Request) {
+  const sessionOk = await verifySessionToken(cookies().get(SESSION_COOKIE)?.value);
   if (!checkCronAuth(req) && !sessionOk) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -37,3 +40,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+export const GET = handle;
+export const POST = handle;

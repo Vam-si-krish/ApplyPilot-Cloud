@@ -4,11 +4,13 @@
  * Login verifies APP_PASSWORD and issues a signed session token (HMAC-SHA256
  * over an expiry timestamp, keyed by AUTH_SECRET). middleware.ts checks it on
  * every request. No user table, no email provider.
+ *
+ * Uses the Web Crypto API (globalThis.crypto.subtle) rather than node:crypto so
+ * the same functions run in both the Edge middleware and Node route handlers.
  */
-import crypto from 'node:crypto';
 
 export const SESSION_COOKIE = 'ap_session';
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 function secret(): string {
   const s = process.env.AUTH_SECRET;
@@ -16,16 +18,30 @@ function secret(): string {
   return s;
 }
 
-function sign(value: string): string {
-  return crypto.createHmac('sha256', secret()).update(value).digest('hex');
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-/** Constant-time string compare. */
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ab, bb);
+async function sign(value: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret()),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value));
+  return toHex(mac);
+}
+
+/** Constant-time string compare (no early return on length mismatch beyond padding). */
+export function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 /** True if the submitted password matches APP_PASSWORD. */
@@ -36,24 +52,22 @@ export function checkPassword(submitted: string): boolean {
 }
 
 /** Create a signed session token: "<expiryMs>.<hmac>". */
-export function createSessionToken(now: number = Date.now()): string {
+export async function createSessionToken(now: number = Date.now()): Promise<string> {
   const expiry = String(now + SESSION_TTL_MS);
-  return `${expiry}.${sign(expiry)}`;
+  return `${expiry}.${await sign(expiry)}`;
 }
 
 /** Verify a session token's signature and expiry. */
-export function verifySessionToken(token: string | undefined | null): boolean {
+export async function verifySessionToken(token: string | undefined | null): Promise<boolean> {
   if (!token) return false;
   const dot = token.lastIndexOf('.');
   if (dot < 0) return false;
   const expiry = token.slice(0, dot);
   const mac = token.slice(dot + 1);
-  if (!safeEqual(mac, sign(expiry))) return false;
+  if (!safeEqual(mac, await sign(expiry))) return false;
   const expiryMs = Number(expiry);
   return Number.isFinite(expiryMs) && expiryMs > Date.now();
 }
-
-export { SESSION_TTL_MS };
 
 /**
  * Authorize a server-to-server call (cron, score-batch self-retrigger).
