@@ -48,6 +48,11 @@ export default function JobsPage() {
   const [scoring, setScoring] = useState(false);
   const [scoreMsg, setScoreMsg] = useState<string | null>(null);
 
+  // Bulk selection: pick specific jobs and score/archive just those.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+
   // Apply tracking: when user clicks an external link we wait for them to return.
   const pendingApplyJob = useRef<Job | null>(null);
   const [applyDialog, setApplyDialog] = useState<Job | null>(null);
@@ -94,6 +99,11 @@ export default function JobsPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Drop the selection whenever the filter set changes (the ids on screen change).
+  useEffect(() => {
+    setSelected(new Set());
+  }, [search, status, minScore, easyApply, selectedRunId]);
+
   // Detect when user returns to the tab after clicking an external job link.
   useEffect(() => {
     function onVisible() {
@@ -118,6 +128,86 @@ export default function JobsPage() {
   function openJobLink(job: Job) {
     pendingApplyJob.current = job;
     window.open(job.application_url || job.url, '_blank', 'noopener,noreferrer');
+  }
+
+  // ── Bulk selection ─────────────────────────────────────────────────────────
+  const allSelected = jobs.length > 0 && jobs.every((j) => selected.has(j.id));
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(jobs.map((j) => j.id)));
+  }
+  /** Selected ids that are still on screen (the actionable set). */
+  function selectedVisibleIds(): string[] {
+    return jobs.filter((j) => selected.has(j.id)).map((j) => j.id);
+  }
+
+  // AI-score exactly the picked jobs (chunked to stay under the serverless timeout).
+  async function scoreSelected() {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkMsg('Scoring…');
+    let scored = 0;
+    let filtered = 0;
+    let done = 0;
+    try {
+      for (let i = 0; i < ids.length; i += 5) {
+        const chunk = ids.slice(i, i + 5);
+        const d = await fetch('/api/score-selected', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: chunk }),
+        }).then((r) => r.json());
+        scored += d.scored ?? 0;
+        filtered += d.filtered ?? 0;
+        done += chunk.length;
+        setBulkMsg(`Scored ${done}/${ids.length}…`);
+      }
+      setBulkMsg(`Done — ${scored} scored${filtered ? `, ${filtered} filtered` : ''}.`);
+      setSelected(new Set());
+      load();
+      refreshStats();
+    } catch {
+      setBulkMsg('Scoring failed.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 6000);
+    }
+  }
+
+  async function archiveSelected() {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkMsg('Archiving…');
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'archived' }),
+          }),
+        ),
+      );
+      setBulkMsg(`Archived ${ids.length}.`);
+      setSelected(new Set());
+      load();
+      refreshStats();
+    } catch {
+      setBulkMsg('Archive failed.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 5000);
+    }
   }
 
   async function markApplied(job: Job) {
@@ -261,6 +351,45 @@ export default function JobsPage() {
         </div>
       </div>
 
+      {/* Selection toolbar — pick specific jobs and act on just those */}
+      {!loading && jobs.length > 0 && (
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <label className="flex items-center gap-2 text-[12px] text-slate-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+            />
+            {selected.size > 0 ? `${selected.size} selected` : `Select all (${jobs.length})`}
+          </label>
+          {selected.size > 0 && (
+            <>
+              <button
+                onClick={scoreSelected}
+                disabled={bulkBusy}
+                title="AI-score just the selected jobs (skips the auto pre-filter)"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+              >
+                <Sparkles size={13} /> Score selected ({selected.size})
+              </button>
+              <button
+                onClick={archiveSelected}
+                disabled={bulkBusy}
+                title="Archive the selected jobs"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 rounded-md transition-all"
+              >
+                <Archive size={13} /> Archive selected
+              </button>
+              <button onClick={() => setSelected(new Set())} className="text-[12px] text-slate-muted hover:text-slate-text underline">
+                Clear
+              </button>
+            </>
+          )}
+          {bulkMsg && <span className="text-[12px] text-slate-muted animate-fade-in">{bulkMsg}</span>}
+        </div>
+      )}
+
       <div className="bg-card border border-ink rounded-xl overflow-hidden">
         {loading ? (
           <div className="px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
@@ -272,7 +401,14 @@ export default function JobsPage() {
               const open = expanded === job.id;
               return (
                 <div key={job.id}>
-                  <div className="flex items-center gap-4 px-5 py-3 hover:bg-raised transition-colors">
+                  <div className={`flex items-center gap-4 px-5 py-3 transition-colors ${selected.has(job.id) ? 'bg-sky/5' : 'hover:bg-raised'}`}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(job.id)}
+                      onChange={() => toggleOne(job.id)}
+                      title="Select"
+                      className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0"
+                    />
                     <button onClick={() => setExpanded(open ? null : job.id)} className="text-slate-muted hover:text-sky">
                       {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </button>

@@ -8,10 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
-import { scoreJob } from '@/lib/scoring';
-import { makeClient } from '@/lib/llm';
-import { getActiveApiKey, isApiKeyProvider } from '@/lib/credentials';
-import { supabaseAdmin } from '@/lib/supabase';
+import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import {
   getSettings,
   getResumeText,
@@ -40,64 +37,14 @@ export async function POST(req: Request) {
   }
 
   const resume = await getResumeText();
-
-  // Build the LLM client from the active vault key for the configured provider
-  // (ADR 0006). If no key resolves (vault empty + no env var), fall back to the
-  // env-detected singleton inside scoreJob by leaving `client` undefined.
   const settings = await getSettings();
-  let client = undefined;
-  if (isApiKeyProvider(settings.llm_provider)) {
-    const key = await getActiveApiKey(settings.llm_provider);
-    if (key) client = makeClient(settings.llm_provider, settings.llm_model, key);
-  }
+  const client = await buildScoringClient(settings);
 
-  let scored = 0;
-  let errors = 0;
-  let filtered = 0;
-
-  for (const job of batch) {
-    // Pre-scoring gate (ADR 0008): when on, skip the LLM for jobs whose cheap
-    // match score is below the threshold — mark them 'filtered' so they leave the
-    // queue without burning a token. A null prefilter_score (legacy/empty résumé)
-    // always passes.
-    if (
-      settings.prefilter_enabled &&
-      job.prefilter_score != null &&
-      job.prefilter_score < settings.prefilter_threshold
-    ) {
-      await supabaseAdmin()
-        .from('jobs')
-        .update({ status: 'filtered', scored_at: new Date().toISOString() })
-        .eq('id', job.id);
-      filtered++;
-      continue;
-    }
-
-    const result = await scoreJob(
-      resume,
-      {
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        full_description: job.full_description,
-      },
-      client,
-    );
-    if (result.score === 0) errors++;
-
-    const { error } = await supabaseAdmin()
-      .from('jobs')
-      .update({
-        fit_score: result.score,
-        score_note: result.note,
-        score_keywords: result.keywords,
-        score_reasoning: result.reasoning,
-        scored_at: new Date().toISOString(),
-        status: 'scored',
-      })
-      .eq('id', job.id);
-    if (!error) scored++;
-  }
+  const { scored, filtered, errors } = await scoreJobRows(batch, {
+    resume,
+    client,
+    prefilterThreshold: settings.prefilter_enabled ? settings.prefilter_threshold : null,
+  });
 
   if (running) await bumpRunScored(running.id, scored, errors);
 

@@ -56,6 +56,14 @@ export async function countUnscored(): Promise<number> {
   return count ?? 0;
 }
 
+/** Fetch specific jobs by id (used by manual "score selected"). Order not guaranteed. */
+export async function getJobsByIds(ids: string[]): Promise<Job[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabaseAdmin().from('jobs').select('*').in('id', ids);
+  if (error) throw new Error(`Failed to load jobs by id: ${error.message}`);
+  return (data ?? []) as Job[];
+}
+
 /** Fetch a batch of unscored jobs to score. */
 export async function getUnscoredBatch(limit: number): Promise<Job[]> {
   const { data, error } = await supabaseAdmin()
