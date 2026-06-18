@@ -125,6 +125,44 @@ export interface ApiKeyMasked {
   created_at: string;
 }
 
+// ── Gmail inbox (ADR 0012) ───────────────────────────────────────────────────
+export type MailCategory = 'applied' | 'shortlisted' | 'action_needed' | 'assessment' | 'rejection' | 'other';
+
+export interface MailMessage {
+  id: string;
+  gmail_id: string;
+  thread_id: string | null;
+  received_at: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  subject: string | null;
+  snippet: string | null;
+  category: MailCategory;
+  summary: string | null;
+  created_at: string;
+}
+
+/** Single-row Gmail connection (OAuth app creds + the authorized account). */
+export interface GmailConnection {
+  id: number;
+  client_id: string | null;
+  client_secret: string | null;
+  refresh_token: string | null;
+  email: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Browser-safe connection status (no secrets). */
+export interface GmailStatus {
+  has_client_id: boolean;
+  has_client_secret: boolean;
+  connected: boolean;
+  email: string | null;
+  last_synced_at: string | null;
+}
+
 export type RunStatus = 'running' | 'succeeded' | 'failed';
 
 export interface Run {

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, Trash2, Plus, X } from 'lucide-react';
-import type { Settings, ApiKeyMasked, ApiKeyProvider } from '@/lib/types';
+import { Save, CheckCircle, Trash2, Plus, X, Mail } from 'lucide-react';
+import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/types';
 
 const PROVIDERS = [
   { id: 'gemini', label: 'Google Gemini', model: 'gemini-2.0-flash' },
@@ -222,6 +222,9 @@ export default function SettingsPage() {
 
       {/* API Keys vault */}
       <ApiKeysSection autoRotate={s.auto_rotate_keys ?? false} onAutoRotate={setAutoRotate} />
+
+      {/* Gmail inbox connection */}
+      <GmailSection />
 
       {/* Portals */}
       <Section title="Job Portals">
@@ -587,6 +590,152 @@ function AddKeyModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Gmail connection (ADR 0012). The Google OAuth app credentials are entered here
+ * (vault-style); "Connect Gmail" runs the OAuth flow. Read-only Gmail access.
+ */
+function GmailSection() {
+  const [status, setStatus] = useState<GmailStatus | null>(null);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [redirectUri, setRedirectUri] = useState('');
+
+  async function reload() {
+    try {
+      const r = await fetch('/api/gmail/creds');
+      if (r.ok) setStatus(await r.json());
+    } catch {
+      /* ignore */
+    }
+  }
+  useEffect(() => {
+    setRedirectUri(`${window.location.origin}/api/gmail/callback`);
+    reload();
+    const code = new URLSearchParams(window.location.search).get('gmail');
+    if (code) {
+      const m: Record<string, string> = {
+        connected: 'Gmail connected ✓',
+        denied: 'Access was denied — try connecting again.',
+        auth_failed: 'Could not verify the sign-in. Please try again.',
+        missing_creds: 'Add your Client ID and Secret first.',
+        error: 'Connection error — check your credentials and try again.',
+      };
+      setMsg(m[code] ?? null);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  async function saveCreds() {
+    if (busy || (!clientId.trim() && !clientSecret.trim())) return;
+    setBusy(true);
+    try {
+      const r = await fetch('/api/gmail/creds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId.trim(), client_secret: clientSecret.trim() }),
+      });
+      setMsg(r.ok ? 'Credentials saved.' : 'Could not save credentials.');
+      if (r.ok) {
+        setClientId('');
+        setClientSecret('');
+        await reload();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function disconnect() {
+    setBusy(true);
+    try {
+      await fetch('/api/gmail/disconnect', { method: 'POST' });
+      setMsg('Disconnected.');
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasCreds = status?.has_client_id && status?.has_client_secret;
+
+  return (
+    <Section title="Gmail Inbox (AI)">
+      <p className="text-slate-muted text-[12px] mb-4">
+        Connect Gmail to auto-classify incoming job mail (applied · shortlisted · action needed · assessment · rejection) and
+        track a daily history. Read-only access. Results show under the <span className="text-sky">Inbox</span> tab.
+      </p>
+
+      {msg && <div className="mb-4 text-[12px] text-sky bg-sky/10 border border-sky/20 rounded-lg px-3 py-2">{msg}</div>}
+
+      {status?.connected ? (
+        <div className="flex items-center justify-between bg-raised border border-ink rounded-lg px-3.5 py-3">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle size={16} className="text-emerald shrink-0" />
+            <div>
+              <p className="text-[13px] text-slate-text font-medium">Connected{status.email ? ` · ${status.email}` : ''}</p>
+              <p className="text-[11px] text-slate-muted">
+                {status.last_synced_at ? `Last synced ${new Date(status.last_synced_at).toLocaleString()}` : 'Not synced yet'}
+              </p>
+            </div>
+          </div>
+          <button onClick={disconnect} disabled={busy} className="text-[12px] text-slate-muted hover:text-rose border border-ink rounded-md px-3 py-1.5 transition-colors">
+            Disconnect
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="text-[11px] text-slate-muted mb-4 space-y-1.5">
+            <p className="text-slate-text font-medium text-[12px]">One-time Google setup:</p>
+            <p>1. In <span className="font-mono text-sky">console.cloud.google.com</span> create a project and enable the <span className="text-sky">Gmail API</span>.</p>
+            <p>2. Configure the OAuth consent screen (External) and add yourself as a test user.</p>
+            <p>3. Create an <span className="text-sky">OAuth client ID</span> (type: Web application) with this Authorized redirect URI:</p>
+            <code className="block bg-base border border-ink rounded px-2 py-1.5 font-mono text-[11px] text-slate-text break-all">{redirectUri || '…'}</code>
+            <p>4. Paste the Client ID and Secret below, save, then Connect.</p>
+          </div>
+
+          <div className="flex flex-col gap-2 mb-3">
+            <Field
+              label="Client ID"
+              value={clientId}
+              onChange={setClientId}
+              placeholder={status?.has_client_id ? '•••• saved — paste to replace' : 'xxxx.apps.googleusercontent.com'}
+            />
+            <div>
+              <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Client Secret</p>
+              <input
+                type="password"
+                autoComplete="off"
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                placeholder={status?.has_client_secret ? '•••• saved — paste to replace' : 'GOCSPX-…'}
+                className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={saveCreds}
+              disabled={busy}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 disabled:opacity-40 rounded-lg transition-all"
+            >
+              <Save size={13} /> Save credentials
+            </button>
+            {hasCreds && (
+              <a
+                href="/api/gmail/auth"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-lg transition-all"
+              >
+                <Mail size={13} /> Connect Gmail
+              </a>
+            )}
+          </div>
+        </>
+      )}
+    </Section>
   );
 }
 

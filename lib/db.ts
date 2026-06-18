@@ -1,6 +1,6 @@
 /** Server-side data access helpers over the service-role Supabase client. */
 import { supabaseAdmin } from './supabase';
-import type { Settings, Profile, Run, Job } from './types';
+import type { Settings, Profile, Run, Job, GmailConnection, MailMessage } from './types';
 
 export async function getSettings(): Promise<Settings> {
   const { data, error } = await supabaseAdmin().from('settings').select('*').eq('id', 1).single();
@@ -137,4 +137,47 @@ export async function finalizeRun(runId: string, status: 'succeeded' | 'failed')
     .update({ status, finished_at: new Date().toISOString() })
     .eq('id', runId);
   if (error) throw new Error(`Failed to finalize run: ${error.message}`);
+}
+
+// ── Gmail inbox (ADR 0012) ───────────────────────────────────────────────────
+
+export async function getGmailConnection(): Promise<GmailConnection> {
+  const { data, error } = await supabaseAdmin().from('gmail_connection').select('*').eq('id', 1).single();
+  if (error) throw new Error(`Failed to load Gmail connection: ${error.message}`);
+  return data as GmailConnection;
+}
+
+export async function updateGmailConnection(patch: Partial<GmailConnection>): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from('gmail_connection')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', 1);
+  if (error) throw new Error(`Failed to update Gmail connection: ${error.message}`);
+}
+
+/** Insert classified messages, ignoring any already stored (de-duped by gmail_id). */
+export async function insertMailMessages(rows: Partial<MailMessage>[]): Promise<number> {
+  if (rows.length === 0) return 0;
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .upsert(rows, { onConflict: 'gmail_id', ignoreDuplicates: true })
+    .select('id');
+  if (error) throw new Error(`Failed to insert mail: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+/** Which of these Gmail ids are already stored (so we don't reclassify them). */
+export async function existingGmailIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { data, error } = await supabaseAdmin().from('mail_messages').select('gmail_id').in('gmail_id', ids);
+  if (error) throw new Error(`Failed to check existing mail: ${error.message}`);
+  return new Set((data ?? []).map((r) => (r as { gmail_id: string }).gmail_id));
+}
+
+export async function listMail(category: string | null, limit = 200): Promise<MailMessage[]> {
+  let q = supabaseAdmin().from('mail_messages').select('*').order('received_at', { ascending: false, nullsFirst: false }).limit(limit);
+  if (category) q = q.eq('category', category);
+  const { data, error } = await q;
+  if (error) throw new Error(`Failed to list mail: ${error.message}`);
+  return (data ?? []) as MailMessage[];
 }
