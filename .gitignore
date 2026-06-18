@@ -21,6 +21,11 @@ next-env.d.ts
 .env*.local
 .env.local
 
+# Claude Code local settings — holds a machine-local permission allowlist that
+# includes psql commands with the DB password. Must never be tracked.
+.claude/settings.json
+.claude/settings.local.json
+
 # vercel
 .vercel
 
