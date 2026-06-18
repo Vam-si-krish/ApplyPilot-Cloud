@@ -67,9 +67,20 @@ the cap was stranded forever. Fix splits sync into **fetch → classify**:
 - `0011_mail_pending.sql` — applied + verified. One-off: `update gmail_connection set
   last_synced_at = null` so the next fetch backfills the full last-3-days the buggy cursor skipped.
 
+## Built — Application Tracker (ADR 0014)
+A dedicated **Tracker** tab (`/tracker`) that visualizes application momentum from the AI-classified
+`applied` confirmation emails — no new schema, no new LLM calls, all real data.
+- `GET /api/mail/stats` returns raw applied events (timestamp, company, subject, AI summary) +
+  per-category totals; `lib/trackerStats.ts` (pure, tz-aware, unit-tested) buckets them client-side so
+  "today" is correct in the user's timezone.
+- UI: momentum cards (today/week/month/all-time + streak, avg/active-day, best day); Daily/Weekly/
+  Monthly zero-filled bar chart; a Pipeline strip (applied→shortlisted→assessment→action→rejection);
+  and a day-by-day accordion with per-day summary (companies + the AI one-liner per application).
+- Nav item added to AppShell (after Inbox).
+
 ## Next
 1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
    tiers and the `unknown` discipline.
 2. Open the Inbox and hit "Sync now": confirm the 3-day backlog all appears as Pending, then drains to
-   classified with live progress.
+   classified with live progress; then check Tracker reflects the applied counts.
 3. Commit to `main`.

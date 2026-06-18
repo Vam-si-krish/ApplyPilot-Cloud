@@ -236,6 +236,31 @@ export async function existingGmailIds(ids: string[]): Promise<Set<string>> {
   return found;
 }
 
+/** Minimal classified-mail rows for the Application Tracker (ADR 0014). */
+export interface MailStatRow {
+  received_at: string;
+  category: string;
+  subject: string | null;
+  from_name: string | null;
+  from_email: string | null;
+  summary: string | null;
+}
+
+/** Classified mail within the last `sinceDays`, newest first — feeds the tracker. */
+export async function getClassifiedMailForStats(sinceDays = 400, limit = 5000): Promise<MailStatRow[]> {
+  const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .select('received_at, category, subject, from_name, from_email, summary')
+    .eq('status', 'classified')
+    .not('received_at', 'is', null)
+    .gte('received_at', since)
+    .order('received_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`Failed to load mail stats: ${error.message}`);
+  return (data ?? []) as MailStatRow[];
+}
+
 export async function listMail(category: string | null, limit = 200): Promise<MailMessage[]> {
   let q = supabaseAdmin().from('mail_messages').select('*').order('received_at', { ascending: false, nullsFirst: false }).limit(limit);
   if (category) q = q.eq('category', category);
