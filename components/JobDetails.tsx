@@ -13,6 +13,11 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           Pre-filtered — {job.prefilter_score}% résumé match (below your threshold), so it skipped LLM scoring.
         </div>
       )}
+      {job.status !== 'filtered' && job.prefilter_score != null && (
+        <p className="text-[11px] text-slate-muted">
+          Keyword pre-screen: {job.prefilter_score}% résumé overlap (a rough pre-filter, not the fit score).
+        </p>
+      )}
       {job.company_tier && (
         <div>
           <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Company rated by AI</p>

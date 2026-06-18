@@ -21,6 +21,7 @@ interface Stats {
   scored: number;
   shortlisted: number;
   unscored: number;
+  applied: number;
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-4 py-4 border-t border-ink-subtle space-y-2">
             <Stat label="Discovered" value={stats.total} />
             <Stat label="Scored" value={stats.scored} color="text-sky" />
+            <Stat label="Applied" value={stats.applied} color="text-emerald" />
             <Stat label="Shortlisted" value={stats.shortlisted} color="text-emerald" />
             {stats.unscored > 0 && <Stat label="To score" value={stats.unscored} color="text-amber" />}
           </div>

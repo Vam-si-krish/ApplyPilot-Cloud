@@ -121,7 +121,7 @@ export default function DashboardPage() {
               .map(([score, count]) => {
                 const max = Math.max(...s.score_distribution.map(([, c]) => c));
                 const pct = max > 0 ? (count / max) * 100 : 0;
-                const color = score >= 8 ? 'bg-emerald' : score >= 6 ? 'bg-amber' : 'bg-rose';
+                const color = score >= 7 ? 'bg-emerald' : score >= 5 ? 'bg-amber' : 'bg-rose';
                 return (
                   <div key={score} className="flex flex-col items-center gap-1 flex-1">
                     <span className="text-slate-muted font-mono text-[10px]">{count}</span>

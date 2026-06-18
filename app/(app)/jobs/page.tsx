@@ -56,6 +56,8 @@ export default function JobsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
   const [companyTier, setCompanyTier] = useState('good,medium');
+  const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
+  const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -109,13 +111,15 @@ export default function JobsPage() {
     if (easyApply === true) p.set('easyApply', 'true');
     if (easyApply === false) p.set('easyApply', 'false');
     if (companyTier) p.set('companyTier', companyTier);
+    if (hideApplied && status !== 'applied') p.set('excludeApplied', 'true');
+    if (hideOpened && status !== 'opened') p.set('excludeOpened', 'true');
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
     setJobs(d.jobs ?? []);
     setTotal(d.total ?? 0);
     setLoading(false);
-  }, [search, minScore, status, easyApply, companyTier, selectedRunIds]);
+  }, [search, minScore, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -156,6 +160,17 @@ export default function JobsPage() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
+  function resetFilters() {
+    setSearch('');
+    setStatus('all');
+    setMinScore('6');
+    setCompanyTier('good,medium');
+    setEasyApply(null);
+    setHideApplied(true);
+    setHideOpened(false);
+    setSelectedRunIds([]);
+  }
+
   async function patch(id: string, body: Record<string, unknown>) {
     await fetch(`/api/jobs/${id}`, {
       method: 'PATCH',
@@ -172,10 +187,11 @@ export default function JobsPage() {
     refreshStats();
   }
 
-  function openJobLink(job: Job) {
+  // Apply-tracking + "opened" tint. The navigation itself is a real <a target="_blank">
+  // (see the row) — far more reliable than window.open, which browsers popup-block
+  // on repeat opens (the "already-opened job won't reopen" glitch).
+  function markOpened(job: Job) {
     pendingApplyJob.current = job;
-    window.open(job.application_url || job.url, '_blank', 'noopener,noreferrer');
-    // Mark the row "opened" so the user can see where they left off (optimistic + persist).
     if (!job.clicked_at) {
       const now = new Date().toISOString();
       setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, clicked_at: now } : j)));
@@ -486,17 +502,18 @@ export default function JobsPage() {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="relative">
+      {/* Filters — search, then the primary status tabs, then grouped refinements */}
+      <div className="space-y-3 mb-5">
+        <div className="relative max-w-md">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search title, company, location…"
-            className="pl-8 pr-3 py-1.5 w-72 bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
+            className="pl-8 pr-3 py-1.5 w-full bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
           />
         </div>
+
         <div className="flex gap-1 flex-wrap">
           {STATUSES.map((st) => (
             <button
@@ -515,54 +532,80 @@ export default function JobsPage() {
             </button>
           ))}
         </div>
-        <select
-          value={minScore}
-          onChange={(e) => setMinScore(e.target.value)}
-          className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
-        >
-          <option value="">Any score</option>
-          <option value="8">≥ 8</option>
-          <option value="6">≥ 6</option>
-          <option value="4">≥ 4</option>
-        </select>
 
-        <select
-          value={companyTier}
-          onChange={(e) => setCompanyTier(e.target.value)}
-          title="Filter by AI company assessment"
-          className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
-        >
-          <option value="good,medium">Company: Good or Medium</option>
-          <option value="">Any company</option>
-          <option value="good">Company: Good</option>
-          <option value="medium">Company: Medium</option>
-          <option value="low">Company: Low</option>
-          <option value="unknown">Company: Unknown</option>
-        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={easyApply === null ? '' : easyApply ? 'easy' : 'external'}
+            onChange={(e) => setEasyApply(e.target.value === '' ? null : e.target.value === 'easy')}
+            title="Filter by how you apply"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any apply type</option>
+            <option value="easy">Easy Apply</option>
+            <option value="external">External</option>
+          </select>
 
-        {/* Easy Apply filter */}
-        <div className="flex gap-1">
-          {([
-            [null,  'All apply types'],
-            [true,  'Easy Apply'],
-            [false, 'Full application'],
-          ] as [boolean | null, string][]).map(([val, label]) => (
-            <button
-              key={String(val)}
-              onClick={() => setEasyApply(val)}
-              className={`px-3 py-1.5 text-[12px] rounded-md border transition-all ${
-                easyApply === val
-                  ? val === true
-                    ? 'bg-emerald/10 text-emerald border-emerald/30'
-                    : val === false
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                    : 'bg-sky-glow text-sky border-sky/30'
-                  : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          <select
+            value={minScore}
+            onChange={(e) => setMinScore(e.target.value)}
+            title="Filter by fit score"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any score</option>
+            <option value="8">Score ≥ 8</option>
+            <option value="6">Score ≥ 6</option>
+            <option value="4">Score ≥ 4</option>
+          </select>
+
+          <select
+            value={companyTier}
+            onChange={(e) => setCompanyTier(e.target.value)}
+            title="Filter by AI company assessment"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="good,medium">Company: Good or Medium</option>
+            <option value="">Any company</option>
+            <option value="good">Company: Good</option>
+            <option value="medium">Company: Medium</option>
+            <option value="low">Company: Low</option>
+            <option value="unknown">Company: Unknown</option>
+          </select>
+
+          <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
+
+          <label
+            title="Hide jobs you've already applied to (still under the Applied tab)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+              hideApplied && status !== 'applied' ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+            } ${status === 'applied' ? 'opacity-40 pointer-events-none' : ''}`}
+          >
+            <input
+              type="checkbox"
+              checked={hideApplied && status !== 'applied'}
+              onChange={(e) => setHideApplied(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+            />
+            Hide applied
+          </label>
+
+          <label
+            title="Hide jobs you opened but didn't apply to (ones you've already looked at)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+              hideOpened && status !== 'opened' ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+            } ${status === 'opened' ? 'opacity-40 pointer-events-none' : ''}`}
+          >
+            <input
+              type="checkbox"
+              checked={hideOpened && status !== 'opened'}
+              onChange={(e) => setHideOpened(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+            />
+            Hide opened
+          </label>
+
+          <button onClick={resetFilters} className="ml-1 text-[12px] text-slate-muted hover:text-sky underline">
+            Reset
+          </button>
         </div>
       </div>
 
@@ -668,7 +711,6 @@ export default function JobsPage() {
                         {job.company} · {job.location || 'Unknown'}
                         {job.salary ? ` · ${job.salary}` : ''}
                         {job.company_size ? ` · ${job.company_size}` : ''}
-                        {job.prefilter_score != null ? ` · ${job.prefilter_score}% match` : ''}
                       </p>
                     </div>
 
@@ -713,13 +755,16 @@ export default function JobsPage() {
                     >
                       <Star size={15} fill={job.is_shortlisted ? 'currentColor' : 'none'} />
                     </button>
-                    <button
-                      onClick={() => openJobLink(job)}
+                    <a
+                      href={job.application_url || job.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => markOpened(job)}
                       title="Open posting (will ask if you applied)"
                       className="text-slate-muted hover:text-sky"
                     >
                       <ExternalLink size={15} />
-                    </button>
+                    </a>
                     {job.status !== 'archived' && (
                       <button
                         onClick={() => patch(job.id, { status: 'archived' })}

@@ -1,4 +1,4 @@
-/** Score chip — color thresholds match ApplyPilot-Lite (≥8 emerald, ≥6 amber, else rose). */
+/** Score chip. Color reads by quality: ≥7 strong (green), 5–6 moderate (amber), <5 weak (red). */
 export default function ScoreBadge({ score }: { score: number | null }) {
   if (score == null) {
     return (
@@ -8,9 +8,9 @@ export default function ScoreBadge({ score }: { score: number | null }) {
     );
   }
   const color =
-    score >= 8
+    score >= 7
       ? 'text-emerald border-emerald/30 bg-emerald/10'
-      : score >= 6
+      : score >= 5
         ? 'text-amber border-amber/30 bg-amber/10'
         : 'text-rose border-rose/30 bg-rose/10';
   return (

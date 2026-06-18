@@ -159,6 +159,7 @@ export default function PastJobsPage() {
                             <p className="text-slate-muted text-[11px] truncate">
                               {job.company} · {job.location || 'Unknown'}
                               {job.company_size ? ` · ${job.company_size}` : ''}
+                              <span className="text-slate-muted/70"> · {new Date(job.discovered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             </p>
                           </div>
 

@@ -35,6 +35,10 @@ export async function GET(req: Request) {
   if (easyApply === 'true') q = q.eq('easy_apply', true);
   if (easyApply === 'false') q = q.eq('easy_apply', false);
   if (applied === 'true') q = q.not('applied_at', 'is', null);
+  // Keep jobs you've already applied to out of the working list (they live under the Applied tab).
+  if (url.searchParams.get('excludeApplied') === 'true') q = q.is('applied_at', null);
+  // Optionally hide jobs you opened but didn't apply to (clicked_at set, not yet applied).
+  if (url.searchParams.get('excludeOpened') === 'true') q = q.or('clicked_at.is.null,applied_at.not.is.null');
   // 'opened' = link clicked but not yet marked applied (where the user left off).
   if (opened === 'true') q = q.not('clicked_at', 'is', null).is('applied_at', null);
   if (companyTier) q = companyTier.includes(',') ? q.in('company_tier', companyTier.split(',')) : q.eq('company_tier', companyTier);
