@@ -4,11 +4,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
-import JobDetails, { TIER_BADGE } from '@/components/JobDetails';
+import JobDetails from '@/components/JobDetails';
+import CompanyTierBadge from '@/components/CompanyTierBadge';
+import JobsLegend from '@/components/JobsLegend';
 import type { Job } from '@/lib/types';
 
 const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
 type StatusFilter = (typeof STATUSES)[number];
+
+const STATUS_HELP: Record<StatusFilter, string> = {
+  all: 'All jobs from the last 24h',
+  scored: 'Jobs the AI has scored for fit',
+  unscored: 'Not scored by the AI yet',
+  filtered: 'Pre-screened out before AI scoring (low résumé keyword match)',
+  opened: "You clicked the apply link but haven't marked it applied",
+  shortlisted: 'Jobs you starred',
+  applied: 'Jobs you marked as applied',
+  archived: 'Hidden / skipped jobs',
+};
 
 interface RunSummary {
   id: string;
@@ -489,6 +502,7 @@ export default function JobsPage() {
             <button
               key={st}
               onClick={() => setStatus(st)}
+              title={STATUS_HELP[st]}
               className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
                 status === st
                   ? st === 'applied'
@@ -551,6 +565,8 @@ export default function JobsPage() {
           ))}
         </div>
       </div>
+
+      <JobsLegend />
 
       {/* Selection toolbar — pick specific jobs and act on just those */}
       {!loading && jobs.length > 0 && (
@@ -656,26 +672,21 @@ export default function JobsPage() {
                       </p>
                     </div>
 
-                    {/* Easy Apply / Full App badge */}
+                    {/* Apply type badge */}
                     {job.easy_apply === true && (
-                      <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded">
+                      <span title="One-click apply on LinkedIn" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded">
                         Easy Apply
                       </span>
                     )}
                     {job.easy_apply === false && (
-                      <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded">
-                        Full App
+                      <span title="Apply on the company / external site" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded">
+                        External
                       </span>
                     )}
 
                     {/* AI company-tier badge */}
                     {job.company_tier && (
-                      <span
-                        title={job.company_tier_note || 'AI company assessment'}
-                        className={`shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium rounded border ${TIER_BADGE[job.company_tier].cls}`}
-                      >
-                        {TIER_BADGE[job.company_tier].label}
-                      </span>
+                      <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
                     )}
 
                     {/* Opened (clicked but not yet applied) badge */}

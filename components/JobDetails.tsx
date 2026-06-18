@@ -1,16 +1,8 @@
 'use client';
 
 import { CheckCircle2 } from 'lucide-react';
+import CompanyTierBadge from '@/components/CompanyTierBadge';
 import type { Job } from '@/lib/types';
-
-// AI company-tier badge styles (ADR 0009). Shared by the row badge and the
-// expanded panel on both the Jobs and Past Jobs pages.
-export const TIER_BADGE: Record<string, { cls: string; label: string }> = {
-  good: { cls: 'bg-emerald/10 border-emerald/25 text-emerald', label: 'Good co.' },
-  medium: { cls: 'bg-amber-500/10 border-amber-500/25 text-amber-400', label: 'Medium co.' },
-  low: { cls: 'bg-rose/10 border-rose/30 text-rose', label: 'Low co. ⚠' },
-  unknown: { cls: 'bg-raised border-ink text-slate-muted', label: 'Co. ?' },
-};
 
 /** Expanded detail panel for a job row — shared so Jobs and Past Jobs render identically. */
 export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: string, body: Record<string, unknown>) => void }) {
@@ -23,10 +15,10 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
       )}
       {job.company_tier && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Company assessment (AI)</p>
+          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Company rated by AI</p>
           <p className="text-slate-text text-[12px] leading-relaxed">
-            <span className={`inline-block px-1.5 py-0.5 mr-2 text-[10px] font-medium rounded border ${TIER_BADGE[job.company_tier].cls}`}>
-              {TIER_BADGE[job.company_tier].label}
+            <span className="mr-2 align-middle">
+              <CompanyTierBadge tier={job.company_tier} />
             </span>
             {job.company_size ? `${job.company_size} · ` : ''}
             {job.company_tier_note}

@@ -85,7 +85,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Stat label="Discovered" value={stats.total} />
             <Stat label="Scored" value={stats.scored} color="text-sky" />
             <Stat label="Shortlisted" value={stats.shortlisted} color="text-emerald" />
-            {stats.unscored > 0 && <Stat label="Queued" value={stats.unscored} color="text-amber" />}
+            {stats.unscored > 0 && <Stat label="To score" value={stats.unscored} color="text-amber" />}
           </div>
         )}
 

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, Trash2, ArrowLeft } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
-import JobDetails, { TIER_BADGE } from '@/components/JobDetails';
+import JobDetails from '@/components/JobDetails';
+import CompanyTierBadge from '@/components/CompanyTierBadge';
+import JobsLegend from '@/components/JobsLegend';
 import type { Job } from '@/lib/types';
 
 const STATUSES = ['all', 'applied', 'archived', 'filtered', 'shortlisted', 'opened'] as const;
@@ -125,6 +127,8 @@ export default function PastJobsPage() {
         </div>
       </div>
 
+      <JobsLegend />
+
       {loading ? (
         <div className="bg-card border border-ink rounded-xl px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
       ) : groups.length === 0 ? (
@@ -160,12 +164,7 @@ export default function PastJobsPage() {
 
                           <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded border ${chip.cls}`}>{chip.label}</span>
                           {job.company_tier && (
-                            <span
-                              title={job.company_tier_note || 'AI company assessment'}
-                              className={`shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium rounded border ${TIER_BADGE[job.company_tier].cls}`}
-                            >
-                              {TIER_BADGE[job.company_tier].label}
-                            </span>
+                            <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
                           )}
 
                           <button
