@@ -19,10 +19,13 @@ export async function GET(req: Request) {
     const all = await listMail(null, 500);
     const messages = category ? all.filter((m) => m.category === category) : all;
 
+    // Counts cover classified mail only; pending (category null) is reported separately.
+    const pending = all.filter((m) => m.status === 'pending').length;
+
     // Per-day counts per category (by received date).
     const byDay = new Map<string, Record<string, number>>();
     for (const m of all) {
-      if (!m.received_at) continue;
+      if (!m.received_at || !m.category) continue;
       const day = new Date(m.received_at).toISOString().slice(0, 10);
       const row = byDay.get(day) ?? { total: 0 };
       row[m.category] = (row[m.category] ?? 0) + 1;
@@ -43,6 +46,7 @@ export async function GET(req: Request) {
       messages: messages.slice(0, 200) as MailMessage[],
       daily,
       totals,
+      pending,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

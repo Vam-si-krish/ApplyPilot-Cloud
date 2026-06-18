@@ -166,12 +166,74 @@ export async function insertMailMessages(rows: Partial<MailMessage>[]): Promise<
   return data?.length ?? 0;
 }
 
-/** Which of these Gmail ids are already stored (so we don't reclassify them). */
+/** Raw message stored by the fetch phase — headers + snippet, no AI category yet. */
+export interface FetchedMailRow {
+  gmail_id: string;
+  thread_id: string | null;
+  received_at: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  subject: string | null;
+  snippet: string | null;
+}
+
+/**
+ * Store fetched messages as 'pending' (no category yet), ignoring any already
+ * stored (ADR 0013). Decouples pulling mail from classifying it, so a single run
+ * hitting its cap never strands the rest of the backlog.
+ */
+export async function insertFetchedMail(rows: FetchedMailRow[]): Promise<number> {
+  if (rows.length === 0) return 0;
+  const payload = rows.map((r) => ({ ...r, status: 'pending', category: null }));
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .upsert(payload, { onConflict: 'gmail_id', ignoreDuplicates: true })
+    .select('id');
+  if (error) throw new Error(`Failed to insert fetched mail: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+/** A batch of fetched-but-unclassified messages, oldest first. */
+export async function getPendingMailBatch(limit: number): Promise<MailMessage[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .select('*')
+    .eq('status', 'pending')
+    .order('received_at', { ascending: true, nullsFirst: true })
+    .limit(limit);
+  if (error) throw new Error(`Failed to load pending mail: ${error.message}`);
+  return (data ?? []) as MailMessage[];
+}
+
+/** How many fetched messages still await AI classification. */
+export async function countPendingMail(): Promise<number> {
+  const { count, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending');
+  if (error) throw new Error(`Failed to count pending mail: ${error.message}`);
+  return count ?? 0;
+}
+
+/** Write the AI category + summary for one message and mark it classified. */
+export async function setMailClassification(id: string, category: string, summary: string): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from('mail_messages')
+    .update({ category, summary, status: 'classified' })
+    .eq('id', id);
+  if (error) throw new Error(`Failed to update mail classification: ${error.message}`);
+}
+
+/** Which of these Gmail ids are already stored (so we don't refetch them). Chunked to keep the URL small. */
 export async function existingGmailIds(ids: string[]): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
-  const { data, error } = await supabaseAdmin().from('mail_messages').select('gmail_id').in('gmail_id', ids);
-  if (error) throw new Error(`Failed to check existing mail: ${error.message}`);
-  return new Set((data ?? []).map((r) => (r as { gmail_id: string }).gmail_id));
+  const found = new Set<string>();
+  for (let i = 0; i < ids.length; i += 150) {
+    const slice = ids.slice(i, i + 150);
+    const { data, error } = await supabaseAdmin().from('mail_messages').select('gmail_id').in('gmail_id', slice);
+    if (error) throw new Error(`Failed to check existing mail: ${error.message}`);
+    for (const r of data ?? []) found.add((r as { gmail_id: string }).gmail_id);
+  }
+  return found;
 }
 
 export async function listMail(category: string | null, limit = 200): Promise<MailMessage[]> {

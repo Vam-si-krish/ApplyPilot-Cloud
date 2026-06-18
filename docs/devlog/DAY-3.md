@@ -47,7 +47,29 @@ Continued from Day 2 (key vault, auto-rotate, pre-filter, manual re-score, job s
 ## Applied to live DB
 - `0008_auto_assess.sql` — `auto_assess_enabled` (true), `auto_assess_min_score` (6); verified.
 
+## Built — Gmail two-phase sync + live progress (ADR 0013)
+Bug: the single-pass sync classified ≤15/run then advanced `last_synced_at` to now — backlog beyond
+the cap was stranded forever. Fix splits sync into **fetch → classify**:
+- Migration 0011: `mail_messages.category` nullable + `status('pending'|'classified')`. Fetch stores
+  raw messages as `pending`; classify flips them to `classified`. Existing rows backfilled.
+- `lib/mailSync.ts`: `fetchChunk` paginates the **whole** window (`listAllMessageIds`, cap 500),
+  de-dupes by `gmail_id`, stores 25/run as pending, and advances `last_synced_at` **only when no
+  fresh ids remain** → nothing skipped. `classifyChunk` labels 8/run (separate LLM call, SCORE_PROMPT
+  untouched).
+- Routes: `POST/GET /api/gmail/fetch` + `/api/gmail/classify-batch` (one chunk each, return progress;
+  in middleware SELF_AUTH). `/api/gmail/sync` rewritten as a **headless cron orchestrator** (loops
+  both phases under a ~50s budget; next tick resumes). `GET /api/mail` returns a `pending` count.
+- UI: "Sync now" **drives the loop client-side** — fetch until done ("N found", mail appears as
+  **Pending** immediately), then classify-batch until drained, with a live progress bar
+  ("X of N classified") + final "Done". Pending count also shown in the header subtitle.
+
+### Applied to live DB
+- `0011_mail_pending.sql` — applied + verified. One-off: `update gmail_connection set
+  last_synced_at = null` so the next fetch backfills the full last-3-days the buggy cursor skipped.
+
 ## Next
 1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
    tiers and the `unknown` discipline.
-2. Commit to `main`.
+2. Open the Inbox and hit "Sync now": confirm the 3-day backlog all appears as Pending, then drains to
+   classified with live progress.
+3. Commit to `main`.

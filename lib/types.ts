@@ -137,8 +137,11 @@ export interface MailMessage {
   from_name: string | null;
   subject: string | null;
   snippet: string | null;
-  category: MailCategory;
+  /** null while 'pending' (fetched but not yet AI-classified — ADR 0013). */
+  category: MailCategory | null;
   summary: string | null;
+  /** 'pending' = fetched, awaiting AI; 'classified' = category assigned. */
+  status: 'pending' | 'classified';
   created_at: string;
 }
 

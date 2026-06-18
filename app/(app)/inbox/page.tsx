@@ -14,6 +14,7 @@ const META: Record<MailCategory, { label: string; cls: string }> = {
   rejection: { label: 'Rejection', cls: 'bg-rose/10 border-rose/30 text-rose' },
   other: { label: 'Other', cls: 'bg-raised border-ink text-slate-muted' },
 };
+const PENDING_META = { label: 'Pending', cls: 'bg-raised border-ink text-slate-muted animate-pulse' };
 
 interface MailData {
   connected: boolean;
@@ -22,12 +23,20 @@ interface MailData {
   messages: MailMessage[];
   daily: { date: string; counts: Record<string, number> }[];
   totals: Record<string, number>;
+  pending: number;
 }
+
+// Live sync progress shown while "Sync now" runs its fetch → classify loop.
+type SyncProgress =
+  | { phase: 'fetching'; found: number }
+  | { phase: 'classifying'; done: number; total: number }
+  | { phase: 'done'; total: number };
 
 export default function InboxPage() {
   const [data, setData] = useState<MailData | null>(null);
   const [category, setCategory] = useState<MailCategory | 'all'>('all');
   const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -44,19 +53,67 @@ export default function InboxPage() {
     load();
   }, [load]);
 
+  // Drive the two-phase sync from the client so progress is visible in real time:
+  //   1. /api/gmail/fetch in a loop until the whole window is stored ("N found"),
+  //   2. /api/gmail/classify-batch in a loop until pending drains ("X of N").
   async function syncNow() {
     setSyncing(true);
-    setMsg('Fetching and classifying new mail…');
+    setMsg(null);
+
+    const postJson = (url: string) => fetch(url, { method: 'POST' }).then((r) => r.json());
+
     try {
-      const d = await fetch('/api/gmail/sync', { method: 'POST' }).then((r) => r.json());
-      if (d.ok) setMsg(d.reason === 'not_connected' ? 'Connect Gmail in Settings first.' : `Classified ${d.classified ?? 0} new email${d.classified === 1 ? '' : 's'}.`);
-      else setMsg(d.error || 'Sync failed.');
-      await load();
+      // Phase 1 — fetch all new mail into the inbox (appears as "Pending").
+      setProgress({ phase: 'fetching', found: 0 });
+      let pending = 0;
+      let found = 0;
+      for (let i = 0; i < 80; i++) {
+        const r = await postJson('/api/gmail/fetch');
+        if (r.reason === 'not_connected') {
+          setMsg('Connect Gmail in Settings first.');
+          setProgress(null);
+          return;
+        }
+        if (!r.ok) {
+          setMsg(r.error || 'Fetch failed.');
+          setProgress(null);
+          return;
+        }
+        found = r.found ?? found;
+        pending = r.pending ?? pending;
+        setProgress({ phase: 'fetching', found });
+        await load(); // newly fetched mail shows up immediately as "Pending"
+        if (r.done) break;
+      }
+
+      // Phase 2 — classify the pending backlog one batch at a time.
+      const total = pending;
+      if (total === 0) {
+        setProgress({ phase: 'done', total: 0 });
+        setMsg('No new mail — you’re all caught up.');
+        return;
+      }
+      let remaining = total;
+      setProgress({ phase: 'classifying', done: 0, total });
+      for (let i = 0; i < 200 && remaining > 0; i++) {
+        const r = await postJson('/api/gmail/classify-batch');
+        if (!r.ok) break;
+        remaining = r.remaining ?? 0;
+        setProgress({ phase: 'classifying', done: total - remaining, total });
+        await load(); // categories light up live as the AI works through them
+        if (r.done) break;
+      }
+      setProgress({ phase: 'done', total });
+      setMsg(`Done — classified ${total} new email${total === 1 ? '' : 's'}.`);
     } catch {
       setMsg('Sync failed.');
     } finally {
       setSyncing(false);
-      setTimeout(() => setMsg(null), 6000);
+      await load();
+      setTimeout(() => {
+        setMsg(null);
+        setProgress(null);
+      }, 6000);
     }
   }
 
@@ -71,7 +128,7 @@ export default function InboxPage() {
           </h1>
           <p className="text-slate-muted text-[13px] mt-1">
             {data?.connected ? (
-              <>AI-sorted job mail{data.email ? ` · ${data.email}` : ''}{data.last_synced_at ? ` · synced ${new Date(data.last_synced_at).toLocaleTimeString()}` : ''}</>
+              <>AI-sorted job mail{data.email ? ` · ${data.email}` : ''}{data.last_synced_at ? ` · synced ${new Date(data.last_synced_at).toLocaleTimeString()}` : ''}{data.pending > 0 ? ` · ${data.pending} awaiting AI` : ''}</>
             ) : (
               <>Not connected — set it up in Settings → Gmail Inbox</>
             )}
@@ -90,6 +147,9 @@ export default function InboxPage() {
           )}
         </div>
       </div>
+
+      {/* Live sync progress: fetching new mail, then AI classifying it. */}
+      {progress && <SyncProgressPanel progress={progress} />}
 
       {data && !data.connected ? (
         <div className="bg-card border border-ink rounded-xl px-6 py-12 text-center">
@@ -153,9 +213,11 @@ export default function InboxPage() {
               </div>
             ) : (
               <div className="divide-y divide-ink-subtle">
-                {data.messages.map((m) => (
+                {data.messages.map((m) => {
+                  const meta = m.category ? META[m.category] : PENDING_META;
+                  return (
                   <div key={m.id} className="flex items-start gap-3 px-5 py-3 hover:bg-raised transition-colors">
-                    <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${META[m.category].cls}`}>{META[m.category].label}</span>
+                    <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${meta.cls}`}>{meta.label}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-slate-text text-[13px] font-medium truncate">{m.subject || '(no subject)'}</p>
                       <p className="text-slate-muted text-[11px] truncate">
@@ -170,12 +232,44 @@ export default function InboxPage() {
                       </a>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function SyncProgressPanel({ progress }: { progress: SyncProgress }) {
+  const pct =
+    progress.phase === 'classifying' && progress.total > 0
+      ? Math.round((progress.done / progress.total) * 100)
+      : progress.phase === 'done'
+      ? 100
+      : null;
+  const line =
+    progress.phase === 'fetching'
+      ? `Fetching new mail from Gmail… ${progress.found} found`
+      : progress.phase === 'classifying'
+      ? `AI is reading your mail — ${progress.done} of ${progress.total} classified`
+      : progress.total === 0
+      ? 'All caught up — no new mail.'
+      : `Done — ${progress.total} email${progress.total === 1 ? '' : 's'} classified.`;
+  return (
+    <div className="bg-card border border-ink rounded-xl px-5 py-4 mb-5 animate-fade-in">
+      <div className="flex items-center gap-2 mb-2">
+        <RefreshCw size={13} className={progress.phase === 'done' ? 'text-emerald' : 'text-sky animate-spin'} />
+        <span className="text-[13px] text-slate-text font-medium">{line}</span>
+      </div>
+      <div className="h-1.5 w-full bg-raised rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${progress.phase === 'done' ? 'bg-emerald' : 'bg-sky'} ${pct === null ? 'animate-pulse w-1/3' : ''}`}
+          style={pct === null ? undefined : { width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }

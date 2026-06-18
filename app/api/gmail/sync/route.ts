@@ -1,22 +1,26 @@
 /**
- * POST/GET /api/gmail/sync — fetch new Gmail messages, classify each into a
- * job-search category, and store them (ADR 0012). Triggered by cron (GET, with
- * CRON_SECRET) and by the "Sync now" button (POST, session). De-duped by gmail_id;
- * capped per run to stay under the serverless timeout.
+ * POST/GET /api/gmail/sync — headless orchestrator for the two-phase sync
+ * (ADR 0013), driven by cron (every 30 min) and usable as a manual fallback.
+ *
+ * It runs fetch chunks until the look-back window is fully stored, then classify
+ * chunks until the pending queue drains — all within one invocation, bounded by a
+ * time budget so it stays under the serverless limit. Whatever it can't finish is
+ * picked up by the next cron tick (fetch resumes from the remaining fresh ids;
+ * classification resumes from status='pending'), so nothing is ever skipped.
+ *
+ * The Inbox "Sync now" button does NOT use this — it drives /api/gmail/fetch and
+ * /api/gmail/classify-batch directly so it can render live progress.
  */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { checkCronAuth, verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
-import { getGmailConnection, updateGmailConnection, existingGmailIds, insertMailMessages, getSettings } from '@/lib/db';
-import { getAccessToken, listMessageIds, getMessage } from '@/lib/gmail';
-import { classifyEmail } from '@/lib/mailClassify';
-import { buildScoringClient } from '@/lib/scoreRunner';
-import { getClient } from '@/lib/llm';
+import { resolveGmailContext, fetchChunk, classifyChunk } from '@/lib/mailSync';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const PER_RUN = 15; // classify at most this many new emails per invocation
+const TIME_BUDGET_MS = 50_000; // leave headroom under maxDuration
+const MAX_ITERS = 40; // safety cap per phase
 
 async function handle(req: Request) {
   const sessionOk = await verifySessionToken(cookies().get(SESSION_COOKIE)?.value);
@@ -24,56 +28,38 @@ async function handle(req: Request) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const conn = await getGmailConnection();
-  if (!conn.client_id || !conn.client_secret || !conn.refresh_token) {
-    return NextResponse.json({ ok: false, reason: 'not_connected' });
-  }
+  const started = Date.now();
+  const budgetLeft = () => Date.now() - started < TIME_BUDGET_MS;
 
   try {
-    const accessToken = await getAccessToken(conn.client_id, conn.client_secret, conn.refresh_token);
+    const { ctx, reason } = await resolveGmailContext();
+    if (!ctx) return NextResponse.json({ ok: false, reason });
 
-    // Look back from the last sync (with a buffer); default to the last 3 days.
-    let query = 'newer_than:3d';
-    if (conn.last_synced_at) {
-      const since = Math.floor(new Date(conn.last_synced_at).getTime() / 1000) - 3600;
-      query = `after:${since}`;
+    // Phase 1 — fetch the whole window into the DB as 'pending'.
+    let fetched = 0;
+    let found = 0;
+    let fetchDone = false;
+    for (let i = 0; i < MAX_ITERS && budgetLeft(); i++) {
+      const r = await fetchChunk(ctx);
+      fetched += r.fetched;
+      found = r.found;
+      if (r.done) {
+        fetchDone = true;
+        break;
+      }
     }
 
-    const ids = await listMessageIds(accessToken, query, 50);
-    const existing = await existingGmailIds(ids);
-    const fresh = ids.filter((id) => !existing.has(id)).slice(0, PER_RUN);
-
-    if (fresh.length === 0) {
-      await updateGmailConnection({ last_synced_at: new Date().toISOString() });
-      return NextResponse.json({ ok: true, classified: 0 });
+    // Phase 2 — classify pending messages until drained (or out of budget).
+    let classified = 0;
+    let remaining = 0;
+    for (let i = 0; i < MAX_ITERS && budgetLeft(); i++) {
+      const r = await classifyChunk();
+      classified += r.classified;
+      remaining = r.remaining;
+      if (r.done) break;
     }
 
-    const settings = await getSettings();
-    const client = (await buildScoringClient(settings)) ?? getClient();
-
-    const rows = [];
-    for (const id of fresh) {
-      const msg = await getMessage(accessToken, id);
-      const { category, summary } = await classifyEmail(
-        { from: `${msg.fromName ?? ''} <${msg.fromEmail ?? ''}>`, subject: msg.subject ?? '', snippet: msg.snippet },
-        client,
-      );
-      rows.push({
-        gmail_id: msg.id,
-        thread_id: msg.threadId,
-        received_at: msg.receivedAt,
-        from_email: msg.fromEmail,
-        from_name: msg.fromName,
-        subject: msg.subject,
-        snippet: msg.snippet,
-        category,
-        summary,
-      });
-    }
-
-    const inserted = await insertMailMessages(rows);
-    await updateGmailConnection({ last_synced_at: new Date().toISOString() });
-    return NextResponse.json({ ok: true, classified: inserted, scanned: ids.length });
+    return NextResponse.json({ ok: true, found, fetched, classified, remaining, fetchDone });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

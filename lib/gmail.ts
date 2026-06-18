@@ -90,6 +90,26 @@ export async function listMessageIds(accessToken: string, query: string, maxResu
   return ((data.messages || []) as { id: string }[]).map((m) => m.id);
 }
 
+/**
+ * List *every* message id matching a query, following pageToken until exhausted
+ * or until `cap` ids are collected. This is what lets the fetch phase pull the
+ * full look-back window (not just the first page) so no mail is left behind.
+ */
+export async function listAllMessageIds(accessToken: string, query: string, cap = 500): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const p = new URLSearchParams({ q: query, maxResults: '100' });
+    if (pageToken) p.set('pageToken', pageToken);
+    const resp = await fetch(`${GMAIL_API}/messages?${p.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!resp.ok) throw new Error(`Gmail list error: ${resp.status} ${await resp.text()}`);
+    const data = await resp.json();
+    for (const m of (data.messages || []) as { id: string }[]) ids.push(m.id);
+    pageToken = data.nextPageToken as string | undefined;
+  } while (pageToken && ids.length < cap);
+  return ids;
+}
+
 export interface FetchedMessage {
   id: string;
   threadId: string;
