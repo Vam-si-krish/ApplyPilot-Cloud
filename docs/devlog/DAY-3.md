@@ -32,7 +32,22 @@ Continued from Day 2 (key vault, auto-rotate, pre-filter, manual re-score, job s
   to confirm tiers are sensible and `unknown` is used (not fabricated) for obscure employers.
 - `company_size` capture is unconfirmed against real actor output (likely null for most).
 
+## Built — automated assess stage + recommended view (ADR 0010)
+- New 3rd pipeline stage `POST /api/assess-batch` (CRON auth, in middleware SELF_AUTH): after
+  `/api/score-batch` drains, if `settings.auto_assess_enabled`, it auto-assesses companies for jobs
+  scoring ≥ `auto_assess_min_score` (default 6) that have `company_tier IS NULL`, chunked +
+  self-retriggering. Flow: `run → webhook → score-batch loop → assess-batch loop`. Migration 0008
+  adds the two settings; Settings page gets a "Company Assessment" section.
+- Jobs page now defaults to the **recommended** view: `minScore=6` + `companyTier=good,medium` (new
+  "Good or Medium" option; `/api/jobs` supports comma-separated `companyTier`). Hides low/unknown/null
+  by default — switch the company filter to "Any" to widen.
+- Also this session: recency split (main = last 24h) + new **Past Jobs** page (`/past`, date-grouped),
+  runs-dropdown closes on outside-click/Esc, shared `<JobDetails>` component.
+
+## Applied to live DB
+- `0008_auto_assess.sql` — `auto_assess_enabled` (true), `auto_assess_min_score` (6); verified.
+
 ## Next
-1. Real run: open a few links (confirm "Opened" persists), bulk mark-applied, then select high
-   scorers and "Assess companies" — sanity-check the tiers and the `unknown` discipline.
+1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
+   tiers and the `unknown` discipline.
 2. Commit to `main`.

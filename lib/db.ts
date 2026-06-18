@@ -76,6 +76,32 @@ export async function getUnscoredBatch(limit: number): Promise<Job[]> {
   return (data ?? []) as Job[];
 }
 
+/** Scored jobs at/above minScore whose company hasn't been AI-assessed yet (ADR 0010). */
+export async function getUnassessedHighScoreBatch(minScore: number, limit: number): Promise<Job[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('jobs')
+    .select('*')
+    .eq('status', 'scored')
+    .gte('fit_score', minScore)
+    .is('company_tier', null)
+    .order('fit_score', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`Failed to load unassessed batch: ${error.message}`);
+  return (data ?? []) as Job[];
+}
+
+/** Count of scored high-score jobs still awaiting company assessment. */
+export async function countUnassessedHighScore(minScore: number): Promise<number> {
+  const { count, error } = await supabaseAdmin()
+    .from('jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'scored')
+    .gte('fit_score', minScore)
+    .is('company_tier', null);
+  if (error) throw new Error(`Failed to count unassessed: ${error.message}`);
+  return count ?? 0;
+}
+
 /** The most recent run still marked 'running', if any. */
 export async function getLatestRunningRun(): Promise<Run | null> {
   const { data, error } = await supabaseAdmin()

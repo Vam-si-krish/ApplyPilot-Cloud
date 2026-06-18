@@ -45,6 +45,10 @@ export async function PUT(req: Request) {
   if (Number.isFinite(Number(body.prefilter_threshold))) {
     patch.prefilter_threshold = Math.max(0, Math.min(100, Math.round(Number(body.prefilter_threshold))));
   }
+  if (typeof body.auto_assess_enabled === 'boolean') patch.auto_assess_enabled = body.auto_assess_enabled;
+  if (Number.isFinite(Number(body.auto_assess_min_score))) {
+    patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));
+  }
 
   const { error } = await supabaseAdmin().from('settings').update(patch).eq('id', 1);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   if (applied === 'true') q = q.not('applied_at', 'is', null);
   // 'opened' = link clicked but not yet marked applied (where the user left off).
   if (opened === 'true') q = q.not('clicked_at', 'is', null).is('applied_at', null);
-  if (companyTier) q = q.eq('company_tier', companyTier);
+  if (companyTier) q = companyTier.includes(',') ? q.in('company_tier', companyTier.split(',')) : q.eq('company_tier', companyTier);
   if (runId) {
     if (runId.includes(',')) {
       q = q.in('run_id', runId.split(','));

@@ -18,7 +18,7 @@ import {
   bumpRunScored,
   finalizeRun,
 } from '@/lib/db';
-import { SCORE_BATCH_SIZE, triggerScoreBatch } from '@/lib/pipeline';
+import { SCORE_BATCH_SIZE, triggerScoreBatch, triggerAssessBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -28,16 +28,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const settings = await getSettings();
   const running = await getLatestRunningRun();
 
   const batch = await getUnscoredBatch(SCORE_BATCH_SIZE);
   if (batch.length === 0) {
     if (running) await finalizeRun(running.id, 'succeeded');
+    // Scoring done → kick the company-assessment stage (ADR 0010).
+    if (settings.auto_assess_enabled) triggerAssessBatch();
     return NextResponse.json({ ok: true, scored: 0, done: true });
   }
 
   const resume = await getResumeText();
-  const settings = await getSettings();
   const client = await buildScoringClient(settings);
 
   const { scored, filtered, errors } = await scoreJobRows(batch, {
@@ -55,5 +57,7 @@ export async function POST(req: Request) {
   }
 
   if (running) await finalizeRun(running.id, 'succeeded');
+  // Scoring complete → kick the company-assessment stage for high scorers (ADR 0010).
+  if (settings.auto_assess_enabled) triggerAssessBatch();
   return NextResponse.json({ ok: true, scored, filtered, remaining: 0, done: true });
 }

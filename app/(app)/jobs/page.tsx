@@ -37,10 +37,12 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
-  const [minScore, setMinScore] = useState('');
+  // Defaults to the "recommended" view (ADR 0010): strong jobs (6+) at solid
+  // companies (good/medium). Change the filters to widen.
+  const [minScore, setMinScore] = useState('6');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
-  const [companyTier, setCompanyTier] = useState('');
+  const [companyTier, setCompanyTier] = useState('good,medium');
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -371,7 +373,7 @@ export default function JobsPage() {
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Jobs</h1>
           <p className="text-slate-muted text-[13px] mt-1">
-            {total} from the last 24h · sorted by fit score ·{' '}
+            {total} shown · last 24h · sorted by fit score ·{' '}
             <Link href="/past" className="text-sky hover:underline inline-flex items-center gap-1">
               <History size={12} /> Past jobs
             </Link>
@@ -516,6 +518,7 @@ export default function JobsPage() {
           title="Filter by AI company assessment"
           className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
         >
+          <option value="good,medium">Company: Good or Medium</option>
           <option value="">Any company</option>
           <option value="good">Company: Good</option>
           <option value="medium">Company: Medium</option>

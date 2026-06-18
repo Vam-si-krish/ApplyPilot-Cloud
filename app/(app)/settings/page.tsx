@@ -189,6 +189,37 @@ export default function SettingsPage() {
         </p>
       </Section>
 
+      {/* Company assessment (daily pipeline) */}
+      <Section title="Company Assessment">
+        <p className="text-slate-muted text-[12px] mb-4">
+          After the daily run scores jobs, it can automatically AI-assess the companies behind your high scorers
+          (good / medium / low / unknown) — so the Jobs page can default to strong jobs at solid companies. Only jobs scoring
+          at or above the threshold are assessed.
+        </p>
+        <div className="flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3 mb-4">
+          <button
+            role="switch"
+            aria-checked={s.auto_assess_enabled ?? true}
+            onClick={() => patch({ auto_assess_enabled: !(s.auto_assess_enabled ?? true) })}
+            className={`mt-0.5 shrink-0 w-9 h-5 rounded-full transition-colors relative ${s.auto_assess_enabled ?? true ? 'bg-emerald/80' : 'bg-ink'}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${s.auto_assess_enabled ?? true ? 'left-[18px]' : 'left-0.5'}`} />
+          </button>
+          <div>
+            <p className="text-[13px] font-medium text-slate-text">Auto-assess companies after scoring</p>
+            <p className="text-[11px] text-slate-muted mt-0.5">Off = company assessment stays on-demand only (the “Assess companies” button).</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field
+            label="Minimum fit score to assess"
+            value={String(s.auto_assess_min_score ?? 6)}
+            onChange={(v) => patch({ auto_assess_min_score: Math.max(0, Math.min(10, Number(v) || 0)) })}
+            placeholder="6"
+          />
+        </div>
+      </Section>
+
       {/* API Keys vault */}
       <ApiKeysSection autoRotate={s.auto_rotate_keys ?? false} onAutoRotate={setAutoRotate} />
 

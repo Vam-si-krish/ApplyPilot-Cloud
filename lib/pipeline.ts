@@ -4,6 +4,9 @@
  *  serverless timeout given LLM rate limits (Gemini free tier ~15 RPM). */
 export const SCORE_BATCH_SIZE = 5;
 
+/** Companies assessed per /api/assess-batch invocation (ADR 0010). */
+export const ASSESS_BATCH_SIZE = 5;
+
 /** Base URL of this deployment, used to build self-referential trigger URLs. */
 export function appBaseUrl(): string {
   const u = process.env.NEXT_PUBLIC_APP_URL;
@@ -25,5 +28,19 @@ export function triggerScoreBatch(): void {
     headers: { Authorization: `Bearer ${secret}` },
   }).catch(() => {
     /* best-effort; the next cron tick / webhook can re-drive if this drops */
+  });
+}
+
+/**
+ * Fire-and-forget POST to /api/assess-batch — the post-scoring company-assessment
+ * stage (ADR 0010). Authenticated with CRON_SECRET.
+ */
+export function triggerAssessBatch(): void {
+  const secret = process.env.CRON_SECRET || '';
+  void fetch(`${appBaseUrl()}/api/assess-batch`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${secret}` },
+  }).catch(() => {
+    /* best-effort */
   });
 }
