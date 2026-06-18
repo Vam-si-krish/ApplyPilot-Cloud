@@ -20,12 +20,20 @@ async function client(): Promise<ApifyClient> {
 
 // ── Per-portal input builders ─────────────────────────────────────────────
 
+function mapPublishedAt(hours: number): string {
+  const seconds = hours * 3600;
+  if (seconds <= 0) return '';
+  if (seconds <= 86400) return 'r86400'; // Past 24 hours
+  if (seconds <= 604800) return 'r604800'; // Past week
+  return 'r2592000'; // Past month
+}
+
 /** Build a LinkedIn job-search URL for one keyword × location, last-N-hours window. */
 export function buildLinkedInSearchUrl(keyword: string, location: string, hoursOld: number): string {
   const params = new URLSearchParams({
     keywords: keyword,
     location: location,
-    f_TPR: `r${Math.max(1, Math.round(hoursOld * 3600))}`,
+    f_TPR: mapPublishedAt(hoursOld),
   });
   return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
 }
@@ -45,7 +53,7 @@ function buildLinkedInInput(settings: Settings): Record<string, unknown> {
     rows: settings.results_per_query,
     maxItems: settings.results_per_query * Math.max(1, combos.length),
     maxResults: settings.results_per_query * Math.max(1, combos.length),
-    publishedAt: `r${Math.max(1, Math.round(settings.hours_old * 3600))}`,
+    publishedAt: mapPublishedAt(settings.hours_old),
     urls: combos.map((c) => buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old)),
     startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })),
     searchUrl: combos[0] ? buildLinkedInSearchUrl(combos[0].keyword, combos[0].location, settings.hours_old) : '',
@@ -185,6 +193,19 @@ function firstBool(item: Record<string, unknown>, keys: string[]): boolean | nul
   return null;
 }
 
+/** Like firstString but also accepts numbers (employee counts arrive as numbers in some actors). */
+function firstSize(item: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = item[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+    if (v && typeof v === 'object' && typeof (v as { name?: unknown }).name === 'string') {
+      return (v as { name: string }).name;
+    }
+  }
+  return null;
+}
+
 export interface MappedJob {
   url: string;
   title: string | null;
@@ -194,6 +215,8 @@ export interface MappedJob {
   full_description: string | null;
   application_url: string | null;
   easy_apply: boolean | null;
+  /** Company headcount/size text when an actor provides it (often absent in job-search results). */
+  company_size: string | null;
   source: string;
 }
 
@@ -212,6 +235,9 @@ export function mapDatasetItemToJob(item: Record<string, unknown>, source: strin
     application_url: applyUrl ?? url,
     // LinkedIn actors expose easyApply as a boolean; other portals return null.
     easy_apply: firstBool(item, ['easyApply', 'isEasyApply', 'easy_apply', 'isEasyApplyJob']),
+    company_size: firstSize(item, [
+      'companySize', 'companySizeRange', 'employeeCount', 'numEmployees', 'companyEmployeesCount', 'staffCount', 'employees',
+    ]),
     source,
   };
 }

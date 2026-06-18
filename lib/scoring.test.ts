@@ -54,16 +54,16 @@ describe('buildScoreMessages', () => {
     expect(msgs[0]).toEqual({ role: 'system', content: SCORE_PROMPT });
   });
 
-  it('embeds resume and job, truncating description to 6000 chars', () => {
-    const longDesc = 'x'.repeat(7000);
+  it('embeds resume and job, truncating description to 15000 chars', () => {
+    const longDesc = 'x'.repeat(16000);
     const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', location: 'NYC', full_description: longDesc });
     const user = msgs[1].content;
     expect(user.startsWith('RESUME:\nRES\n\n---\n\nJOB POSTING:\n')).toBe(true);
     expect(user).toContain('TITLE: T');
     expect(user).toContain('COMPANY: C');
     expect(user).toContain('LOCATION: NYC');
-    expect(user).toContain('x'.repeat(6000));
-    expect(user).not.toContain('x'.repeat(6001));
+    expect(user).toContain('x'.repeat(15000));
+    expect(user).not.toContain('x'.repeat(15001));
   });
 
   it('falls back to description when full_description is missing and defaults location to N/A', () => {

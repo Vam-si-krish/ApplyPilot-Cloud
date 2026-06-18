@@ -4,6 +4,9 @@
 
 export type JobStatus = 'unscored' | 'scored' | 'archived' | 'filtered';
 
+/** AI company assessment tier (ADR 0009). 'unknown' = model couldn't tell (never guessed). */
+export type CompanyTier = 'good' | 'medium' | 'low' | 'unknown';
+
 export interface Job {
   id: string;
   url: string;
@@ -28,6 +31,14 @@ export interface Job {
   run_id: string | null;
   /** Timestamp when the user marked themselves as having applied. Null = not applied. */
   applied_at: string | null;
+  /** Timestamp when the user opened the apply link (drives the "opened" row state). Null = not opened. */
+  clicked_at: string | null;
+  /** Company headcount/size text from scrape (e.g. '51-200 employees'); null when not provided. */
+  company_size: string | null;
+  /** On-demand AI assessment of the employer (ADR 0009); null = not assessed. */
+  company_tier: CompanyTier | null;
+  /** One-line reason for the company_tier. */
+  company_tier_note: string | null;
   discovered_at: string;
   scored_at: string | null;
   source: string | null;

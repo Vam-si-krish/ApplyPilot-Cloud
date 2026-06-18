@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
+import JobDetails, { TIER_BADGE } from '@/components/JobDetails';
 import type { Job } from '@/lib/types';
 
-const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'shortlisted', 'applied', 'archived'] as const;
+const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
 type StatusFilter = (typeof STATUSES)[number];
 
 interface RunSummary {
@@ -38,11 +40,13 @@ export default function JobsPage() {
   const [minScore, setMinScore] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
+  const [companyTier, setCompanyTier] = useState('');
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
   const [showRunsDropdown, setShowRunsDropdown] = useState(false);
+  const runsDropdownRef = useRef<HTMLDivElement>(null);
 
   // Manual scoring re-trigger (recovers a stalled auto-loop).
   const [unscoredCount, setUnscoredCount] = useState(0);
@@ -85,15 +89,18 @@ export default function JobsPage() {
     if (minScore) p.set('minScore', minScore);
     if (status === 'applied') p.set('applied', 'true');
     else if (status === 'shortlisted') p.set('shortlisted', 'true');
+    else if (status === 'opened') p.set('opened', 'true');
     else if (status !== 'all') p.set('status', status);
     if (easyApply === true) p.set('easyApply', 'true');
     if (easyApply === false) p.set('easyApply', 'false');
+    if (companyTier) p.set('companyTier', companyTier);
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
+    p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
     setJobs(d.jobs ?? []);
     setTotal(d.total ?? 0);
     setLoading(false);
-  }, [search, minScore, status, easyApply, selectedRunIds]);
+  }, [search, minScore, status, easyApply, companyTier, selectedRunIds]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -103,7 +110,24 @@ export default function JobsPage() {
   // Drop the selection whenever the filter set changes (the ids on screen change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, status, minScore, easyApply, selectedRunIds]);
+  }, [search, status, minScore, easyApply, companyTier, selectedRunIds]);
+
+  // Close the runs dropdown on any click outside it (or Escape).
+  useEffect(() => {
+    if (!showRunsDropdown) return;
+    function onDown(e: MouseEvent) {
+      if (runsDropdownRef.current && !runsDropdownRef.current.contains(e.target as Node)) setShowRunsDropdown(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowRunsDropdown(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showRunsDropdown]);
 
   // Detect when user returns to the tab after clicking an external job link.
   useEffect(() => {
@@ -136,6 +160,16 @@ export default function JobsPage() {
   function openJobLink(job: Job) {
     pendingApplyJob.current = job;
     window.open(job.application_url || job.url, '_blank', 'noopener,noreferrer');
+    // Mark the row "opened" so the user can see where they left off (optimistic + persist).
+    if (!job.clicked_at) {
+      const now = new Date().toISOString();
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, clicked_at: now } : j)));
+      fetch(`/api/jobs/${job.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clicked_at: now }),
+      }).catch(() => {});
+    }
   }
 
   // ── Bulk selection ─────────────────────────────────────────────────────────
@@ -218,6 +252,65 @@ export default function JobsPage() {
     }
   }
 
+  async function markAppliedSelected() {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkMsg('Marking applied…');
+    try {
+      const now = new Date().toISOString();
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applied_at: now }),
+          }),
+        ),
+      );
+      setBulkMsg(`Marked ${ids.length} applied.`);
+      setSelected(new Set());
+      load();
+      refreshStats();
+    } catch {
+      setBulkMsg('Failed to mark applied.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 5000);
+    }
+  }
+
+  // AI-assess the companies behind the picked jobs (chunked, like scoreSelected).
+  async function assessSelected() {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkMsg('Assessing companies…');
+    let assessed = 0;
+    let done = 0;
+    try {
+      for (let i = 0; i < ids.length; i += 5) {
+        const chunk = ids.slice(i, i + 5);
+        const d = await fetch('/api/company-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: chunk }),
+        }).then((r) => r.json());
+        assessed += d.assessed ?? 0;
+        done += chunk.length;
+        setBulkMsg(`Assessed ${done}/${ids.length}…`);
+      }
+      setBulkMsg(`Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}.`);
+      setSelected(new Set());
+      load();
+    } catch {
+      setBulkMsg('Company assessment failed.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 6000);
+    }
+  }
+
   async function deleteSelected() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy) return;
@@ -277,7 +370,12 @@ export default function JobsPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Jobs</h1>
-          <p className="text-slate-muted text-[13px] mt-1">{total} matching · sorted by fit score</p>
+          <p className="text-slate-muted text-[13px] mt-1">
+            {total} from the last 24h · sorted by fit score ·{' '}
+            <Link href="/past" className="text-sky hover:underline inline-flex items-center gap-1">
+              <History size={12} /> Past jobs
+            </Link>
+          </p>
         </div>
         {unscoredCount > 0 && (
           <div className="flex items-center gap-3">
@@ -296,58 +394,56 @@ export default function JobsPage() {
 
       {/* Run selector */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="relative">
+        <div className="relative" ref={runsDropdownRef}>
           <button
             type="button"
-            onClick={() => setShowRunsDropdown(!showRunsDropdown)}
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40 flex items-center gap-2 hover:bg-raised transition-colors"
+            onClick={() => setShowRunsDropdown((v) => !v)}
+            className={`px-3 py-1.5 rounded-md text-[12px] flex items-center gap-2 transition-colors border ${
+              showRunsDropdown || selectedRunIds.length > 0
+                ? 'bg-sky/10 border-sky/30 text-sky'
+                : 'bg-card border-ink text-slate-text hover:bg-raised'
+            }`}
           >
-            Filter by Runs ({selectedRunIds.length === 0 ? 'All runs' : `${selectedRunIds.length} selected`})
-            <ChevronDown size={13} />
+            {selectedRunIds.length === 0 ? 'All runs' : `${selectedRunIds.length} run${selectedRunIds.length > 1 ? 's' : ''} selected`}
+            <ChevronDown size={13} className={`transition-transform ${showRunsDropdown ? 'rotate-180' : ''}`} />
           </button>
           {showRunsDropdown && (
-            <div className="absolute left-0 mt-1.5 z-50 bg-card border border-ink rounded-lg shadow-xl py-2 w-72 max-h-64 overflow-y-auto glow-sky">
-              <div className="px-3 pb-2 mb-1 border-b border-ink/45 flex justify-between items-center">
-                <button
-                  type="button"
-                  onClick={() => setSelectedRunIds([])}
-                  className="text-[10px] text-slate-muted hover:text-sky underline"
-                >
-                  Clear all
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowRunsDropdown(false)}
-                  className="text-[10px] text-slate-muted hover:text-sky font-semibold"
-                >
-                  Close
-                </button>
+            <div className="absolute left-0 mt-1.5 z-50 bg-card border border-ink rounded-xl shadow-2xl overflow-hidden w-72 animate-fade-in">
+              <div className="px-3 py-2 border-b border-ink-subtle flex justify-between items-center">
+                <span className="text-[10px] uppercase tracking-wider text-slate-muted font-medium">Filter by run</span>
+                {selectedRunIds.length > 0 && (
+                  <button type="button" onClick={() => setSelectedRunIds([])} className="text-[11px] text-slate-muted hover:text-sky">
+                    Clear
+                  </button>
+                )}
               </div>
-              {runs.length === 0 ? (
-                <div className="px-3 py-2 text-slate-muted text-[11px]">No runs found</div>
-              ) : (
-                runs.map((run) => {
-                  const checked = selectedRunIds.includes(run.id);
-                  return (
-                    <label
-                      key={run.id}
-                      className="flex items-center gap-2 px-3 py-1.5 hover:bg-raised cursor-pointer select-none text-[11px] text-slate-text"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          setSelectedRunIds((prev) =>
-                            checked ? prev.filter((id) => id !== run.id) : [...prev, run.id]
-                          );
-                        }}
-                        className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 cursor-pointer"
-                      />
-                      <span className="truncate">{formatRunLabel(run)}</span>
-                    </label>
-                  );
-                })
-              )}
+              <div className="max-h-64 overflow-y-auto py-1">
+                {runs.length === 0 ? (
+                  <div className="px-3 py-2 text-slate-muted text-[11px]">No runs found</div>
+                ) : (
+                  runs.map((run) => {
+                    const checked = selectedRunIds.includes(run.id);
+                    return (
+                      <label
+                        key={run.id}
+                        className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer select-none text-[12px] transition-colors ${
+                          checked ? 'bg-sky/5 text-slate-text' : 'text-slate-muted hover:bg-raised hover:text-slate-text'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setSelectedRunIds((prev) => (checked ? prev.filter((id) => id !== run.id) : [...prev, run.id]))
+                          }
+                          className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 cursor-pointer"
+                        />
+                        <span className="truncate">{formatRunLabel(run)}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -414,6 +510,19 @@ export default function JobsPage() {
           <option value="4">≥ 4</option>
         </select>
 
+        <select
+          value={companyTier}
+          onChange={(e) => setCompanyTier(e.target.value)}
+          title="Filter by AI company assessment"
+          className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+        >
+          <option value="">Any company</option>
+          <option value="good">Company: Good</option>
+          <option value="medium">Company: Medium</option>
+          <option value="low">Company: Low</option>
+          <option value="unknown">Company: Unknown</option>
+        </select>
+
         {/* Easy Apply filter */}
         <div className="flex gap-1">
           {([
@@ -463,6 +572,22 @@ export default function JobsPage() {
                 <Sparkles size={13} /> Score selected ({selected.size})
               </button>
               <button
+                onClick={assessSelected}
+                disabled={bulkBusy}
+                title="AI-assess the companies behind the selected jobs (spot time-wasters)"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+              >
+                <Building2 size={13} /> Assess companies ({selected.size})
+              </button>
+              <button
+                onClick={markAppliedSelected}
+                disabled={bulkBusy}
+                title="Mark the selected jobs as applied"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 disabled:opacity-40 rounded-md transition-all"
+              >
+                <CheckCircle2 size={13} /> Mark applied
+              </button>
+              <button
                 onClick={archiveSelected}
                 disabled={bulkBusy}
                 title="Archive the selected jobs"
@@ -498,7 +623,15 @@ export default function JobsPage() {
               const open = expanded === job.id;
               return (
                 <div key={job.id}>
-                  <div className={`flex items-center gap-4 px-5 py-3 transition-colors ${selected.has(job.id) ? 'bg-sky/5' : 'hover:bg-raised'}`}>
+                  <div
+                    className={`flex items-center gap-4 px-5 py-3 transition-colors ${
+                      selected.has(job.id)
+                        ? 'bg-sky/5'
+                        : job.clicked_at && !job.applied_at
+                        ? 'bg-violet-500/[0.07] hover:bg-violet-500/10'
+                        : 'hover:bg-raised'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={selected.has(job.id)}
@@ -515,6 +648,7 @@ export default function JobsPage() {
                       <p className="text-slate-muted text-[11px] truncate">
                         {job.company} · {job.location || 'Unknown'}
                         {job.salary ? ` · ${job.salary}` : ''}
+                        {job.company_size ? ` · ${job.company_size}` : ''}
                         {job.prefilter_score != null ? ` · ${job.prefilter_score}% match` : ''}
                       </p>
                     </div>
@@ -528,6 +662,23 @@ export default function JobsPage() {
                     {job.easy_apply === false && (
                       <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded">
                         Full App
+                      </span>
+                    )}
+
+                    {/* AI company-tier badge */}
+                    {job.company_tier && (
+                      <span
+                        title={job.company_tier_note || 'AI company assessment'}
+                        className={`shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium rounded border ${TIER_BADGE[job.company_tier].cls}`}
+                      >
+                        {TIER_BADGE[job.company_tier].label}
+                      </span>
+                    )}
+
+                    {/* Opened (clicked but not yet applied) badge */}
+                    {job.clicked_at && !job.applied_at && (
+                      <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded">
+                        Opened
                       </span>
                     )}
 
@@ -573,48 +724,7 @@ export default function JobsPage() {
                     </button>
                   </div>
 
-                  {open && (
-                    <div className="px-14 pb-5 pt-1 space-y-3 bg-base/40">
-                      {job.status === 'filtered' && (
-                        <div className="text-[12px] text-amber-400">
-                          Pre-filtered — {job.prefilter_score}% résumé match (below your threshold), so it skipped LLM scoring.
-                        </div>
-                      )}
-                      {job.applied_at && (
-                        <div className="flex items-center gap-2 text-emerald text-[12px]">
-                          <CheckCircle2 size={13} />
-                          Applied {new Date(job.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          <button
-                            onClick={() => patch(job.id, { applied_at: null })}
-                            className="text-slate-muted hover:text-rose text-[11px] ml-1 underline"
-                          >
-                            undo
-                          </button>
-                        </div>
-                      )}
-                      {job.score_keywords && (
-                        <div>
-                          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Matched keywords</p>
-                          <p className="text-sky text-[12px] font-mono">{job.score_keywords}</p>
-                        </div>
-                      )}
-                      {job.score_reasoning && (
-                        <div>
-                          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Reasoning</p>
-                          <p className="text-slate-text text-[12px] leading-relaxed">{job.score_reasoning}</p>
-                        </div>
-                      )}
-                      {job.full_description && (
-                        <div>
-                          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Description</p>
-                          <div
-                            className="text-slate-muted text-[12px] leading-relaxed job-description-html"
-                            dangerouslySetInnerHTML={{ __html: job.full_description }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {open && <JobDetails job={job} onPatch={patch} />}
                 </div>
               );
             })}

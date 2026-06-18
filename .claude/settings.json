@@ -16,7 +16,8 @@
       "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -tAc \"select 'settings='||count\\(*\\) from settings; select 'profile='||count\\(*\\) from profile;\")",
       "Bash(lsof -ti:3000)",
       "Bash(xargs kill)",
-      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -f /Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Cloud/supabase/migrations/0002_add_portals_easy_apply.sql)"
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' psql -h db.ftrakpebzcabztwyunum.supabase.co -U postgres -d postgres -f /Users/vamsikrishnachiguruwada/Desktop/02_Projects/ApplyPilot-Cloud/supabase/migrations/0002_add_portals_easy_apply.sql)",
+      "Bash(PGPASSWORD='P89Liv4jEe3j@4$' PGCONNECT_TIMEOUT=10 psql -h db.ftrakpebzcabztwyunum.supabase.co -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/0004_api_keys.sql)"
     ]
   }
 }
