@@ -67,6 +67,10 @@ export interface Profile {
   compensation: Record<string, unknown>;
   work_authorization: Record<string, unknown>;
   skills_boundary: Record<string, unknown>;
+  /** Complete applicant facts for the Assistant (ADR 0011): job_preferences,
+   *  availability, eeo_voluntary, work_history, education, resume_facts, etc.
+   *  The five structured sections above override their counterparts here. */
+  assistant_profile: Record<string, unknown>;
   resume_text: string;
   resume_pdf_path: string | null;
   updated_at: string;
