@@ -86,6 +86,7 @@ export default function JobsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false); // empty-state "Run a fetch" trigger
 
   // Apply tracking: when user clicks an external link we wait for them to return.
   const pendingApplyJob = useRef<Job | null>(null);
@@ -190,6 +191,22 @@ export default function JobsPage() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
+
+  // Kick off a fresh fetch from the empty state (same as the Dashboard "Run now").
+  async function runFetch() {
+    setFetching(true);
+    setBulkMsg('Starting a fetch…');
+    try {
+      const r = await fetch('/api/run', { method: 'POST' });
+      const d = await r.json();
+      setBulkMsg(r.ok ? 'Fetch started — new jobs appear here in a few minutes and score automatically.' : `Error: ${d.error || 'could not start a fetch'}`);
+    } catch {
+      setBulkMsg('Could not start a fetch.');
+    } finally {
+      setFetching(false);
+      setTimeout(() => setBulkMsg(null), 8000);
+    }
+  }
 
   function resetFilters() {
     setSearch('');
@@ -797,7 +814,19 @@ export default function JobsPage() {
         {loading ? (
           <div className="px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
         ) : jobs.length === 0 ? (
-          <div className="px-5 py-10 text-center text-slate-muted text-[13px]">No jobs match these filters.</div>
+          <div className="px-6 py-14 text-center">
+            <h3 className="text-[14px] font-medium text-slate-text mb-2">No jobs found in the last 24 hours</h3>
+            <p className="text-[13px] text-slate-muted mb-6 max-w-md mx-auto">
+              This list strictly shows jobs discovered in the last 24 hours. If your filters aren't hiding them, it's time to run a fresh fetch.
+            </p>
+            <button
+              onClick={runFetch}
+              disabled={fetching}
+              className="inline-flex items-center justify-center px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all disabled:opacity-50"
+            >
+              {fetching ? 'Starting fetch...' : 'Run a fetch now'}
+            </button>
+          </div>
         ) : (
           <div className="divide-y divide-ink-subtle">
             {jobs.map((job) => {

@@ -24,7 +24,7 @@ import {
   type FetchedMailRow,
 } from './db';
 import { getAccessToken, listAllMessageIds, getMessage } from './gmail';
-import { classifyEmail } from './mailClassify';
+import { classifyEmail, domainApplySource } from './mailClassify';
 import { buildScoringClient } from './scoreRunner';
 import { getClient } from './llm';
 import type { GmailConnection } from './types';
@@ -129,9 +129,9 @@ export async function classifyChunk(): Promise<ClassifyResult> {
       { from: `${m.from_name ?? ''} <${m.from_email ?? ''}>`, subject: m.subject ?? '', snippet: m.snippet ?? '' },
       client,
     );
-    // Safety net: a confirmation from linkedin.com is unambiguously Easy Apply.
-    const source =
-      apply_source ?? (category === 'applied' && (m.from_email ?? '').toLowerCase().endsWith('linkedin.com') ? 'easy_apply' : null);
+    // apply_source only applies to submitted applications. Trust the sender domain
+    // first (job board → easy_apply, ATS → company_portal); fall back to the AI.
+    const source = category === 'applied' ? domainApplySource(m.from_email) ?? apply_source ?? null : null;
     await setMailClassification(m.id, category, summary, source);
     classified++;
   }

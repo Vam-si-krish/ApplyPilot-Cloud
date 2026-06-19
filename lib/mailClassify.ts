@@ -22,14 +22,40 @@ Categories:
 Pick the single best category. If it isn't clearly about a job application, use "other".
 
 Also report HOW the application was submitted, judging mainly by the SENDER:
-- easy_apply: the email is from LinkedIn (sender domain linkedin.com) — a LinkedIn "Easy Apply" application ("your application was sent", "you applied on LinkedIn").
-- company_portal: it's from the company directly (careers@/talent@/recruiting@ their own domain) or an applicant tracking system — Greenhouse (greenhouse.io), Lever (lever.co), Workday (myworkday.com), Ashby (ashbyhq.com), iCIMS (icims.com), Workable (workable.com), SmartRecruiters, Taleo (taleo.net), Jobvite, BambooHR, etc.
+- easy_apply: you applied WITHIN a job board / aggregator and the confirmation comes from that platform — LinkedIn (linkedin.com), Indeed (indeed.com), Glassdoor (glassdoor.com), ZipRecruiter, Monster, Dice, Wellfound/AngelList, SimplyHired, CareerBuilder, etc. (e.g. LinkedIn "Easy Apply", "Indeed Apply").
+- company_portal: you applied on the company's OWN site or its applicant tracking system — Greenhouse (greenhouse.io), Lever (lever.co), Workday (myworkday.com), Ashby (ashbyhq.com), iCIMS (icims.com), Workable (workable.com), SmartRecruiters, Taleo (taleo.net), Jobvite, BambooHR, etc., or the company's own domain (careers@/talent@/recruiting@).
 - none: the email is not a job application you submitted (newsletters, alerts, generic mail).
 
 RESPOND IN EXACTLY THIS FORMAT, nothing else:
 CATEGORY: [applied|shortlisted|action_needed|assessment|rejection|other]
 SOURCE: [easy_apply|company_portal|none]
 SUMMARY: [one short sentence — what it is and any deadline/action]`;
+
+// Confirmation senders that pin the source deterministically (ADR 0021, broadened).
+// Job boards / aggregators → you applied within the platform = easy_apply.
+const JOB_BOARD_DOMAINS = [
+  'linkedin.com', 'indeed.com', 'indeedemail.com', 'glassdoor.com', 'ziprecruiter.com',
+  'monster.com', 'dice.com', 'wellfound.com', 'angel.co', 'simplyhired.com', 'careerbuilder.com', 'lensa.com',
+];
+// Applicant tracking systems → you applied on the company's portal = company_portal.
+const ATS_DOMAINS = [
+  'greenhouse.io', 'greenhouse-mail.io', 'us.greenhouse-mail.io', 'lever.co', 'hire.lever.co',
+  'myworkday.com', 'workday.com', 'ashbyhq.com', 'icims.com', 'workable.com', 'workablemail.com',
+  'smartrecruiters.com', 'taleo.net', 'jobvite.com', 'bamboohr.com', 'breezy.hr', 'recruitee.com',
+  'teamtailor.com', 'jazzhr.com', 'jazz.co', 'successfactors.com', 'oraclecloud.com',
+];
+
+/** Pin apply source by sender domain when it's an obvious job board or ATS; else null (let the AI decide). */
+export function domainApplySource(fromEmail: string | null | undefined): MailApplySource | null {
+  if (!fromEmail) return null;
+  const at = fromEmail.lastIndexOf('@');
+  const domain = (at >= 0 ? fromEmail.slice(at + 1) : fromEmail).toLowerCase().trim();
+  if (!domain) return null;
+  const hit = (list: string[]) => list.some((d) => domain === d || domain.endsWith('.' + d));
+  if (hit(JOB_BOARD_DOMAINS)) return 'easy_apply';
+  if (hit(ATS_DOMAINS)) return 'company_portal';
+  return null;
+}
 
 export interface MailClassification {
   category: MailCategory;
