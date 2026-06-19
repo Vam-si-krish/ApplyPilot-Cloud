@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Star, CheckCircle2, ExternalLink, Archive, Trash2, ChevronDown, ChevronRight, HelpCircle } from 'lucide-react';
+import { Star, CheckCircle2, ExternalLink, Archive, Trash2, ChevronDown, ChevronRight, HelpCircle, Target } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 
@@ -37,6 +37,12 @@ export default function JobsLegend() {
           <Item>
             <span className="text-[11px] text-slate-muted whitespace-nowrap">35% match</span>
             <Text title="Pre-screen %">Quick résumé keyword overlap, used to skip clearly-irrelevant jobs before AI scoring.</Text>
+          </Item>
+          <Item>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">
+              <Target size={10} /> 67%
+            </span>
+            <Text title="Skill match">How many of your listed skills the job mentions (Settings → Skills). Filter by it, incl. “No skill match”.</Text>
           </Item>
           <Item>
             <div className="flex gap-1">

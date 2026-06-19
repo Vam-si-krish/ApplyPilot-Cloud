@@ -24,6 +24,15 @@ const STATUS_HELP: Record<StatusFilter, string> = {
   archived: 'Hidden / skipped jobs',
 };
 
+const COMPANY_LABEL: Record<string, string> = {
+  'good,medium': 'Good or Medium',
+  good: 'Good',
+  medium: 'Medium',
+  low: 'Low',
+  unknown: 'Unknown',
+  none: 'Not assessed',
+};
+
 interface RunSummary {
   id: string;
   started_at: string;
@@ -104,24 +113,29 @@ export default function JobsPage() {
 
   // Shared filter params (everything except pagination), reused by the list load
   // and by "select all matching" (idsOnly).
+  // Unscored/Filtered jobs have no fit_score and no company tier, so those filters
+  // would silently empty the list on those tabs — skip them there.
+  const scoreless = status === 'unscored' || status === 'filtered';
+
   const buildParams = useCallback(() => {
     const p = new URLSearchParams();
     if (search) p.set('search', search);
-    if (minScore) p.set('minScore', minScore);
-    if (minSkill) p.set('minSkill', minSkill);
+    if (minScore && !scoreless) p.set('minScore', minScore);
+    if (minSkill === '0') p.set('maxSkill', '0'); // "No skill match" = matched none of my skills
+    else if (minSkill) p.set('minSkill', minSkill);
     if (status === 'applied') p.set('applied', 'true');
     else if (status === 'shortlisted') p.set('shortlisted', 'true');
     else if (status === 'opened') p.set('opened', 'true');
     else if (status !== 'all') p.set('status', status);
     if (easyApply === true) p.set('easyApply', 'true');
     if (easyApply === false) p.set('easyApply', 'false');
-    if (companyTier) p.set('companyTier', companyTier);
+    if (companyTier && !scoreless) p.set('companyTier', companyTier);
     if (hideApplied && status !== 'applied') p.set('excludeApplied', 'true');
     if (hideOpened && status !== 'opened') p.set('excludeOpened', 'true');
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     return p;
-  }, [search, minScore, minSkill, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
+  }, [search, minScore, minSkill, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -595,12 +609,21 @@ export default function JobsPage() {
 
           <select
             value={minSkill}
-            onChange={(e) => setMinSkill(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setMinSkill(v);
+              // "No skill match" is for finding junk to delete — relax score/company so they all show.
+              if (v === '0') {
+                setMinScore('');
+                setCompanyTier('');
+              }
+            }}
             title="Filter by skill match (how many of your skills the job mentions)"
             className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
             <option value="">Any skill match</option>
-            <option value="1">Skill match ≥ 1%</option>
+            <option value="0">No skill match (0%)</option>
+            <option value="1">Has a match (≥ 1%)</option>
             <option value="34">Skill match ≥ 34%</option>
             <option value="67">Skill match ≥ 67%</option>
             <option value="100">Skill match = 100%</option>
@@ -657,6 +680,42 @@ export default function JobsPage() {
             Reset
           </button>
         </div>
+
+        {/* Active-filter summary: the whole combination at a glance, clear any one */}
+        {(() => {
+          const chips: { key: string; label: string; clear: () => void }[] = [];
+          if (search) chips.push({ key: 'q', label: `“${search}”`, clear: () => setSearch('') });
+          if (status !== 'all') chips.push({ key: 'st', label: `Status: ${status}`, clear: () => setStatus('all') });
+          if (minScore && !scoreless) chips.push({ key: 'sc', label: `Fit ≥ ${minScore}`, clear: () => setMinScore('') });
+          if (minSkill)
+            chips.push({
+              key: 'sk',
+              label: minSkill === '0' ? 'Skill: no match' : minSkill === '100' ? 'Skill: 100%' : `Skill ≥ ${minSkill}%`,
+              clear: () => setMinSkill(''),
+            });
+          if (companyTier && !scoreless) chips.push({ key: 'co', label: `Company: ${COMPANY_LABEL[companyTier] ?? companyTier}`, clear: () => setCompanyTier('') });
+          if (easyApply !== null) chips.push({ key: 'ea', label: easyApply ? 'Easy Apply' : 'External', clear: () => setEasyApply(null) });
+          if (hideApplied && status !== 'applied') chips.push({ key: 'ha', label: 'Hiding applied', clear: () => setHideApplied(false) });
+          if (hideOpened && status !== 'opened') chips.push({ key: 'ho', label: 'Hiding opened', clear: () => setHideOpened(false) });
+          if (selectedRunIds.length) chips.push({ key: 'ru', label: `${selectedRunIds.length} run${selectedRunIds.length > 1 ? 's' : ''}`, clear: () => setSelectedRunIds([]) });
+          if (chips.length === 0) return null;
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-[11px] text-slate-muted">Active:</span>
+              {chips.map((c) => (
+                <span key={c.key} className="flex items-center gap-1 pl-2 pr-1 py-0.5 text-[11px] bg-sky/10 border border-sky/25 text-sky rounded">
+                  {c.label}
+                  <button onClick={c.clear} title="Remove this filter" className="text-sky/60 hover:text-rose px-0.5 leading-none">
+                    ×
+                  </button>
+                </span>
+              ))}
+              <button onClick={resetFilters} className="text-[11px] text-slate-muted hover:text-sky underline ml-1">
+                Clear all
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       <JobsLegend />

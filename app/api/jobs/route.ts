@@ -12,6 +12,7 @@ export async function GET(req: Request) {
   const minScore = url.searchParams.get('minScore');
   const maxScore = url.searchParams.get('maxScore');
   const minSkill = url.searchParams.get('minSkill');
+  const maxSkill = url.searchParams.get('maxSkill'); // e.g. 0 → "no skill match"
   const shortlisted = url.searchParams.get('shortlisted');
   const easyApply = url.searchParams.get('easyApply');
   const applied = url.searchParams.get('applied');
@@ -36,6 +37,8 @@ export async function GET(req: Request) {
   if (minScore !== null && minScore !== '') q = q.gte('fit_score', Number(minScore));
   if (maxScore !== null && maxScore !== '') q = q.lte('fit_score', Number(maxScore));
   if (minSkill !== null && minSkill !== '') q = q.gte('skill_match_score', Number(minSkill));
+  // maxSkill (incl. 0) filters by upper bound; lte excludes NULLs, so maxSkill=0 = "matched none of my skills".
+  if (maxSkill !== null && maxSkill !== '') q = q.lte('skill_match_score', Number(maxSkill));
   if (shortlisted === 'true') q = q.eq('is_shortlisted', true);
   if (easyApply === 'true') q = q.eq('easy_apply', true);
   if (easyApply === 'false') q = q.eq('easy_apply', false);
