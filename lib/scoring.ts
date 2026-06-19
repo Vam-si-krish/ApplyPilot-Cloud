@@ -7,8 +7,8 @@
  * byte-for-byte faithful — this is the project invariant (see CLAUDE.md).
  */
 
-import { getClient, ChatMessage, LLMClient } from './llm';
-import type { ScorableJob, ScoreResult } from './types';
+import { getClient, ChatMessage, LLMClient } from "./llm";
+import type { ScorableJob, ScoreResult } from "./types";
 
 // ── Scoring Prompt (copied verbatim from scorer.py) ──────────────────────────
 
@@ -19,7 +19,7 @@ First, inspect the "JOB POSTING" text.
 - If the text is NOT a job description (e.g., it is a legal disclaimer, accessibility statement, login screen, list of navigation links, or generic footer), you MUST set SCORE to 0 and stop.
 - If the job explicitly requires US Citizenship, a Green Card, or a Security Clearance, you MUST set SCORE to 1 and stop.
 - Otherwise, proceed to Phase 2.
-
+x
 ### PHASE 2: ALIGNMENT ANALYSIS
 Evaluate the candidate's fitness for the role using these weighted dimensions:
 1. CORE CAPABILITIES: Match technical and functional skills based on intent and application, not just literal keywords.
@@ -29,8 +29,8 @@ Evaluate the candidate's fitness for the role using these weighted dimensions:
 ### SCORING RUBRIC
 - 9-10: Exceptional fit. Resume directly demonstrates mastery of the primary requirements.
 - 7-8: Strong fit. Demonstrates necessary skills and relevant experience; minor gaps are acceptable.
-- 5-6: Moderate fit. Possesses baseline skills but lacks experience in key domain areas.
-- 3-4: Weak fit. Significant mismatch in skills, seniority, or industry.
+- 6: Moderate fit. Possesses baseline skills but lacks experience in key domain areas.
+- 3-5: Weak fit. Significant mismatch in skills, seniority, or industry.
 - 1-2: Non-match. Unrelated professional background.
 - 0: INVALID CONTENT. The input text is not a job description.
 
@@ -47,13 +47,13 @@ REASONING: [2-3 sentences providing a logical bridge between the resume facts an
  */
 export function parseScoreResponse(response: string): ScoreResult {
   let score = 0;
-  let keywords = '';
-  let note = '';
+  let keywords = "";
+  let note = "";
   let reasoning = response;
 
-  for (const raw of response.split('\n')) {
+  for (const raw of response.split("\n")) {
     const line = raw.trim();
-    if (line.startsWith('SCORE:')) {
+    if (line.startsWith("SCORE:")) {
       const m = line.match(/\d+/);
       if (m) {
         const n = parseInt(m[0], 10);
@@ -61,12 +61,12 @@ export function parseScoreResponse(response: string): ScoreResult {
       } else {
         score = 0;
       }
-    } else if (line.startsWith('KEYWORDS:')) {
-      keywords = line.replace('KEYWORDS:', '').trim();
-    } else if (line.startsWith('NOTE:')) {
-      note = line.replace('NOTE:', '').trim();
-    } else if (line.startsWith('REASONING:')) {
-      reasoning = line.replace('REASONING:', '').trim();
+    } else if (line.startsWith("KEYWORDS:")) {
+      keywords = line.replace("KEYWORDS:", "").trim();
+    } else if (line.startsWith("NOTE:")) {
+      note = line.replace("NOTE:", "").trim();
+    } else if (line.startsWith("REASONING:")) {
+      reasoning = line.replace("REASONING:", "").trim();
     }
   }
 
@@ -74,17 +74,26 @@ export function parseScoreResponse(response: string): ScoreResult {
 }
 
 /** Build the exact user message scorer.py sends (description truncated to 15000 chars). */
-export function buildScoreMessages(resumeText: string, job: ScorableJob): ChatMessage[] {
-  const description = (job.full_description || job.description || '').slice(0, 15000);
+export function buildScoreMessages(
+  resumeText: string,
+  job: ScorableJob,
+): ChatMessage[] {
+  const description = (job.full_description || job.description || "").slice(
+    0,
+    15000,
+  );
   const jobText =
-    `TITLE: ${job.title ?? ''}\n` +
-    `COMPANY: ${job.company ?? ''}\n` +
-    `LOCATION: ${job.location ?? 'N/A'}\n\n` +
+    `TITLE: ${job.title ?? ""}\n` +
+    `COMPANY: ${job.company ?? ""}\n` +
+    `LOCATION: ${job.location ?? "N/A"}\n\n` +
     `DESCRIPTION:\n${description}`;
 
   return [
-    { role: 'system', content: SCORE_PROMPT },
-    { role: 'user', content: `RESUME:\n${resumeText}\n\n---\n\nJOB POSTING:\n${jobText}` },
+    { role: "system", content: SCORE_PROMPT },
+    {
+      role: "user",
+      content: `RESUME:\n${resumeText}\n\n---\n\nJOB POSTING:\n${jobText}`,
+    },
   ];
 }
 
@@ -96,13 +105,25 @@ export function buildScoreMessages(resumeText: string, job: ScorableJob): ChatMe
  * `client` lets the caller pass a client built from the active vault key (ADR
  * 0006); when omitted it falls back to the env-detected singleton (getClient).
  */
-export async function scoreJob(resumeText: string, job: ScorableJob, client?: LLMClient): Promise<ScoreResult> {
+export async function scoreJob(
+  resumeText: string,
+  job: ScorableJob,
+  client?: LLMClient,
+): Promise<ScoreResult> {
   const messages = buildScoreMessages(resumeText, job);
   try {
     const llm = client ?? getClient();
-    const response = await llm.chat(messages, { maxTokens: 512, temperature: 0.2 });
+    const response = await llm.chat(messages, {
+      maxTokens: 512,
+      temperature: 0.2,
+    });
     return parseScoreResponse(response);
   } catch (e) {
-    return { score: 0, keywords: '', note: '', reasoning: `LLM error: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      score: 0,
+      keywords: "",
+      note: "",
+      reasoning: `LLM error: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
 }
