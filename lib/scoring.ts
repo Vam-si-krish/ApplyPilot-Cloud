@@ -17,6 +17,7 @@ export const SCORE_PROMPT = `You are an expert Talent Acquisition Strategist. Yo
 ### PHASE 1: CONTENT VALIDATION
 First, inspect the "JOB POSTING" text.
 - If the text is NOT a job description (e.g., it is a legal disclaimer, accessibility statement, login screen, list of navigation links, or generic footer), you MUST set SCORE to 0 and stop.
+- If the job explicitly requires US Citizenship, a Green Card, or a Security Clearance, you MUST set SCORE to 1 and stop.
 - Otherwise, proceed to Phase 2.
 
 ### PHASE 2: ALIGNMENT ANALYSIS
