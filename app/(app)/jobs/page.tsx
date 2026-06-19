@@ -6,6 +6,7 @@ import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCi
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
+import SkillMatchBadge from '@/components/SkillMatchBadge';
 import JobsLegend from '@/components/JobsLegend';
 import type { Job } from '@/lib/types';
 
@@ -729,6 +730,11 @@ export default function JobsPage() {
                     {/* AI company-tier badge */}
                     {job.company_tier && (
                       <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
+                    )}
+
+                    {/* Skill-match badge (resumeKeywords) */}
+                    {job.skill_match_score != null && (
+                      <SkillMatchBadge score={job.skill_match_score} matched={job.matched_skills} className="shrink-0 hidden sm:inline-flex" />
                     )}
 
                     {/* Opened (clicked but not yet applied) badge */}

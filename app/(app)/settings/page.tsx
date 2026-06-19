@@ -13,7 +13,7 @@ const PROVIDERS = [
 
 const ACTORS = [
   { id: 'bebity~linkedin-jobs-scraper', label: 'Standard (bebity)' },
-  { id: 'cheap_scraper~linkedin-jobs-scraper', label: 'Cheapest (cheap_scraper)' },
+  { id: 'cheap_scraper~linkedin-job-scraper', label: 'Cheapest (cheap_scraper)' },
   { id: 'fascinating_lentil~linkedin-jobs-scraper', label: 'Alternative (fascinating_lentil)' },
 ];
 
@@ -26,6 +26,9 @@ const KEYWORD_SUGGESTIONS = [
 const LOCATION_SUGGESTIONS = [
   'Boston, MA', 'Cambridge, MA', 'Worcester, MA', 'Providence, RI', 'Hartford, CT',
   'Stamford, CT', 'New York, NY', 'Manchester, NH', 'Portland, ME', 'Remote, US', 'United States',
+];
+const SKILL_SUGGESTIONS = [
+  'React', 'TypeScript', 'JavaScript', 'Node.js', 'Next.js', 'Python', 'SQL', 'AWS', 'GraphQL', 'Docker',
 ];
 
 export default function SettingsPage() {
@@ -168,42 +171,17 @@ export default function SettingsPage() {
           }}
         />
 
-        {/* Per-location "jobs per role" overrides (ADR 0015). Blank = use the default below. */}
-        {s.locations.length > 0 && (
-          <div className="mb-2">
-            <p className="text-[11px] text-slate-muted mb-2 font-medium uppercase tracking-wider">Jobs per role, by location</p>
-            <div className="flex flex-col gap-2">
-              {s.locations.map((loc) => (
-                <div key={loc} className="flex items-center gap-3">
-                  <span className="flex-1 min-w-0 text-[13px] text-slate-text truncate">{loc}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={s.location_limits?.[loc] ?? ''}
-                    placeholder={`${s.results_per_query} (default)`}
-                    onChange={(e) => {
-                      const next = { ...(s.location_limits ?? {}) };
-                      const n = Number(e.target.value);
-                      if (e.target.value.trim() === '' || !Number.isFinite(n) || n <= 0) delete next[loc];
-                      else next[loc] = Math.round(n);
-                      patch({ location_limits: next });
-                    }}
-                    className="w-36 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
-                  />
-                </div>
-              ))}
-            </div>
-            <p className="text-[11px] text-slate-muted mt-2">
-              Each location runs as its own LinkedIn search. Leave blank to use the default. Total per location ≈ this number ×
-              your number of keywords.
-            </p>
-          </div>
-        )}
+        <SkillsEditor skills={s.skills ?? []} onChange={(v) => patch({ skills: v })} />
 
         <div className="grid grid-cols-2 gap-4 mt-2">
           <Field label="Hours old (lookback window)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
-          <Field label="Default jobs per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
+          <Field label="Results per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
         </div>
+        <p className="text-slate-muted text-[11px] mt-3">
+          All selected roles and locations run as a <span className="text-sky">single search</span> that removes duplicates, so a
+          job matching two locations is fetched (and billed) once. The cap is <span className="font-mono">results per role × roles</span>
+          {' '}(minimum 150 for the cheapest actor).
+        </p>
       </Section>
 
       {/* LLM */}
@@ -827,6 +805,68 @@ function GmailSection() {
         </>
       )}
     </Section>
+  );
+}
+
+/**
+ * Skills the actor matches each job against (ADR 0018). Plain add/remove chips —
+ * every skill listed is used. Each job then shows a 0–100 skill-match % + which of
+ * these it matched, with no extra LLM cost.
+ */
+function SkillsEditor({ skills, onChange }: { skills: string[]; onChange: (v: string[]) => void }) {
+  const [input, setInput] = useState('');
+  function add(v: string) {
+    const t = v.trim();
+    if (t && !skills.includes(t)) onChange([...skills, t]);
+    setInput('');
+  }
+  const fresh = SKILL_SUGGESTIONS.filter((s) => !skills.includes(s));
+
+  return (
+    <div className="mb-4">
+      <p className="text-[11px] text-slate-muted mb-2 font-medium uppercase tracking-wider">Skills (skill-match scoring)</p>
+      <p className="text-[11px] text-slate-muted mb-2">
+        Each job gets a 0–100 <span className="text-sky">skill match</span> showing how many of these it mentions — free, no AI
+        call. Doesn’t change what’s fetched.
+      </p>
+      <div className="flex flex-wrap gap-2 mb-2.5">
+        {skills.length === 0 && <span className="text-[12px] text-slate-muted">No skills yet — add your primary ones below.</span>}
+        {skills.map((sk) => (
+          <span key={sk} className="group flex items-center rounded-md border border-emerald/30 bg-emerald/10 text-emerald text-[12px]">
+            <span className="pl-2 pr-1.5 py-1">{sk}</span>
+            <button onClick={() => onChange(skills.filter((x) => x !== sk))} title="Remove" className="pr-1.5 py-1 text-emerald/60 hover:text-rose transition-colors">
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add(input)}
+          placeholder="Add a skill (e.g. React)…"
+          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
+        />
+        <button onClick={() => add(input)} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all">
+          Add
+        </button>
+      </div>
+      {fresh.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+          <span className="text-[11px] text-slate-muted">Suggestions:</span>
+          {fresh.map((sk) => (
+            <button
+              key={sk}
+              onClick={() => add(sk)}
+              className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-slate-muted border border-ink border-dashed hover:text-sky hover:border-sky/40 rounded-md transition-all"
+            >
+              <Plus size={10} /> {sk}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

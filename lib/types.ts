@@ -39,6 +39,11 @@ export interface Job {
   company_tier: CompanyTier | null;
   /** One-line reason for the company_tier. */
   company_tier_note: string | null;
+  /** 0–100 share of the user's skills the job mentions (ADR 0018); null = not computed. */
+  skill_match_score: number | null;
+  /** The user's skills this job mentions / doesn't (ADR 0018). */
+  matched_skills: string[] | null;
+  unmatched_skills: string[] | null;
   discovered_at: string;
   scored_at: string | null;
   source: string | null;
@@ -86,6 +91,8 @@ export interface Settings {
   keyword_options: string[];
   /** Saved library of all locations to choose from (ADR 0016). Superset of `locations`. */
   location_options: string[];
+  /** Skills to match each job against (ADR 0018), passed to the actor as resumeKeywords. */
+  skills: string[];
   hours_old: number; // default 24
   results_per_query: number; // default jobs-per-role, used when a location has no override
   /** Optional per-location override of jobs-per-role: { "<location>": <count> } (ADR 0015).

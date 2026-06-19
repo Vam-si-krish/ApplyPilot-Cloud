@@ -20,6 +20,9 @@ async function client(): Promise<ApifyClient> {
 
 // ── Per-portal input builders ─────────────────────────────────────────────
 
+/** Some LinkedIn actors (e.g. cheap_scraper) reject maxItems below this floor. */
+const MIN_MAX_ITEMS = 150;
+
 function mapPublishedAt(hours: number): string {
   const seconds = hours * 3600;
   if (seconds <= 0) return '';
@@ -39,57 +42,35 @@ export function buildLinkedInSearchUrl(keyword: string, location: string, hoursO
 }
 
 /**
- * Jobs-per-role for one location (ADR 0015): the per-location override from
- * settings.location_limits, falling back to the global results_per_query.
+ * One LinkedIn run covering EVERY selected role × location (ADR 0017). All
+ * locations go in the actor's `locations` array and one `startUrls` per combo, in
+ * a single run, with `saveOnlyUniqueItems` so the actor de-duplicates — a job that
+ * matches two locations (e.g. a Boston job under both "Boston, MA" and "United
+ * States") is returned, and billed, once. `maxItems` is a single run-wide cap
+ * (`results_per_query × #combos`), floored to the actor minimum (cheap_scraper
+ * rejects < 150).
  */
-export function perLocationLimit(settings: Settings, location: string): number {
-  const v = settings.location_limits?.[location];
-  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : settings.results_per_query;
-}
-
-/**
- * LinkedIn actor input for ONE location, searching every keyword in it, capped at
- * `perRole` results per keyword. LinkedIn fans out one run per location so each
- * carries its own cap (the actor only takes a single global count per run).
- */
-function buildLinkedInInputForLocation(settings: Settings, location: string, perRole: number): Record<string, unknown> {
-  const keywords = settings.keywords.filter(Boolean);
-  const combos = keywords.map((k) => ({ keyword: k, location }));
-  const cap = perRole * Math.max(1, keywords.length);
-  return {
-    title: keywords[0] ?? '',
-    keyword: keywords,
-    keywords,
-    searchKeyword: keywords[0] ?? '',
-    location,
-    searchLocation: location,
-    rows: perRole,
-    maxItems: cap,
-    maxResults: cap,
-    publishedAt: mapPublishedAt(settings.hours_old),
-    urls: combos.map((c) => buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old)),
-    startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })),
-    searchUrl: combos[0] ? buildLinkedInSearchUrl(combos[0].keyword, combos[0].location, settings.hours_old) : '',
-    proxy: { useApifyProxy: true },
-  };
-}
-
-/** All keyword × location combos in one run (legacy single-run behaviour; kept for buildActorInput). */
 function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const keywords = settings.keywords.filter(Boolean);
   const locations = settings.locations.filter(Boolean);
+  const skills = (settings.skills ?? []).filter(Boolean);
   const combos: { keyword: string; location: string }[] = [];
-  for (const k of keywords) for (const l of locations) combos.push({ keyword: k, location: l });
+  for (const k of keywords) for (const l of locations.length ? locations : ['']) combos.push({ keyword: k, location: l });
+  const cap = Math.max(settings.results_per_query * Math.max(1, combos.length), MIN_MAX_ITEMS);
   return {
     title: keywords[0] ?? '',
     keyword: keywords,
     keywords,
     searchKeyword: keywords[0] ?? '',
+    locations, // the actor's native multi-location field
     location: locations[0] ?? '',
     searchLocation: locations[0] ?? '',
     rows: settings.results_per_query,
-    maxItems: settings.results_per_query * Math.max(1, combos.length),
-    maxResults: settings.results_per_query * Math.max(1, combos.length),
+    maxItems: cap,
+    maxResults: cap,
+    saveOnlyUniqueItems: true, // de-dupe across overlapping searches → pay once per unique job
+    // Skill-match (ADR 0018): the actor tags each job with matched/unmatched skills + a 0–100 score.
+    resumeKeywords: skills.map((s) => ({ keyword: s })),
     publishedAt: mapPublishedAt(settings.hours_old),
     urls: combos.map((c) => buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old)),
     startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })),
@@ -161,11 +142,11 @@ export interface RunSpec {
 }
 
 /**
- * Plan the actor runs for a settings config (ADR 0015). Pure (no network), so it
- * is unit-tested directly. LinkedIn fans out one run **per location**, each with
- * its own per-role cap (settings.location_limits, falling back to
- * results_per_query) — so a small market like Boston can fetch fewer than a broad
- * one like the whole US. Other portals keep a single run (one cross-product input).
+ * Plan the actor runs for a settings config (ADR 0017). Pure (no network), so it
+ * is unit-tested directly. One run **per portal** — LinkedIn searches every role ×
+ * location in a single run and de-duplicates (`saveOnlyUniqueItems`), so you pay
+ * once per unique job even when locations overlap. LinkedIn uses
+ * settings.apify_actor_id (cheap vs. standard variant).
  */
 export function planRuns(settings: Settings): RunSpec[] {
   const portals = settings.job_portals?.length ? settings.job_portals : ['linkedin'];
@@ -173,28 +154,15 @@ export function planRuns(settings: Settings): RunSpec[] {
   for (const portal of portals) {
     const config = PORTAL_CONFIG[portal];
     if (!config) continue;
-    if (portal === 'linkedin') {
-      const locations = settings.locations.filter(Boolean);
-      const locs = locations.length ? locations : [''];
-      for (const loc of locs) {
-        specs.push({
-          portal,
-          actorId: settings.apify_actor_id,
-          input: buildLinkedInInputForLocation(settings, loc, perLocationLimit(settings, loc)),
-        });
-      }
-    } else {
-      specs.push({ portal, actorId: config.actorId, input: config.buildInput(settings) });
-    }
+    const actorId = portal === 'linkedin' ? settings.apify_actor_id : config.actorId;
+    specs.push({ portal, actorId, input: config.buildInput(settings) });
   }
   return specs;
 }
 
 /**
- * Start all planned Apify runs in parallel. LinkedIn → one run per location (each
- * with its own cap); other portals → one run each. Every webhook URL carries
- * ?portal=<key> so the handler sets source correctly. LinkedIn uses
- * settings.apify_actor_id (cheap vs. standard variant).
+ * Start all planned Apify runs in parallel — one per enabled portal. Every webhook
+ * URL carries ?portal=<key> so the handler sets source correctly.
  */
 export async function startAllPortalRuns(settings: Settings, webhookUrl: string): Promise<StartedRun[]> {
   const specs = planRuns(settings);
@@ -276,6 +244,32 @@ function firstSize(item: Record<string, unknown>, keys: string[]): string | null
   return null;
 }
 
+/** First finite number among the keys, or null. */
+function firstNumber(item: Record<string, unknown>, keys: string[]): number | null {
+  for (const k of keys) {
+    const v = item[k];
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+/** A string[] from `key` — strings as-is, objects via .keyword/.name. null if the key is absent. */
+function stringArray(item: Record<string, unknown>, key: string): string[] | null {
+  const v = item[key];
+  if (!Array.isArray(v)) return null;
+  return v
+    .map((x) => {
+      if (typeof x === 'string') return x.trim();
+      if (x && typeof x === 'object') {
+        const o = x as { keyword?: unknown; name?: unknown };
+        if (typeof o.keyword === 'string') return o.keyword.trim();
+        if (typeof o.name === 'string') return o.name.trim();
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
 export interface MappedJob {
   url: string;
   title: string | null;
@@ -287,6 +281,10 @@ export interface MappedJob {
   easy_apply: boolean | null;
   /** Company headcount/size text when an actor provides it (often absent in job-search results). */
   company_size: string | null;
+  /** Skill-match outputs from the actor's resumeKeywords feature (ADR 0018); null when not provided. */
+  skill_match_score: number | null;
+  matched_skills: string[] | null;
+  unmatched_skills: string[] | null;
   source: string;
 }
 
@@ -295,6 +293,7 @@ export function mapDatasetItemToJob(item: Record<string, unknown>, source: strin
   const url = firstString(item, ['url', 'jobUrl', 'link', 'jobPostingUrl', 'job_url']);
   if (!url) return null;
   const applyUrl = firstString(item, ['applyUrl', 'applicationUrl', 'externalApplyLink', 'companyApplyUrl', 'applyLink']);
+  const skillPct = firstNumber(item, ['keywordMatchScorePercentage', 'keywordMatchScore', 'matchScorePercentage']);
   return {
     url,
     title: firstString(item, ['title', 'jobTitle', 'positionName', 'position']),
@@ -308,6 +307,9 @@ export function mapDatasetItemToJob(item: Record<string, unknown>, source: strin
     company_size: firstSize(item, [
       'companySize', 'companySizeRange', 'employeeCount', 'numEmployees', 'companyEmployeesCount', 'staffCount', 'employees',
     ]),
+    skill_match_score: skillPct == null ? null : Math.max(0, Math.min(100, Math.round(skillPct))),
+    matched_skills: stringArray(item, 'matchedKeywords'),
+    unmatched_skills: stringArray(item, 'unmatchedKeywords'),
     source,
   };
 }

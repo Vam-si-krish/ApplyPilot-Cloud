@@ -37,6 +37,10 @@ export async function PUT(req: Request) {
   if (Array.isArray(body.location_options)) {
     patch.location_options = [...new Set((body.location_options as unknown[]).map(String).filter(Boolean))];
   }
+  // Skills to match each job against (ADR 0018) — de-duped.
+  if (Array.isArray(body.skills)) {
+    patch.skills = [...new Set((body.skills as unknown[]).map(String).map((s) => s.trim()).filter(Boolean))];
+  }
   if (Number.isFinite(Number(body.hours_old))) patch.hours_old = Math.max(1, Math.round(Number(body.hours_old)));
   if (Number.isFinite(Number(body.results_per_query))) patch.results_per_query = Math.max(1, Math.round(Number(body.results_per_query)));
   // Per-location jobs-per-role overrides (ADR 0015): keep only positive-int entries.

@@ -39,9 +39,26 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           </button>
         </div>
       )}
+      {job.skill_match_score != null && (
+        <div>
+          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">
+            Skill match · {job.skill_match_score}% of your skills
+          </p>
+          <p className="text-[12px] leading-relaxed">
+            {(job.matched_skills ?? []).length > 0 && (
+              <span className="text-emerald">✓ {job.matched_skills!.join(', ')}</span>
+            )}
+            {(job.unmatched_skills ?? []).length > 0 && (
+              <span className="text-slate-muted">
+                {(job.matched_skills ?? []).length > 0 ? '  ·  ' : ''}✗ {job.unmatched_skills!.join(', ')}
+              </span>
+            )}
+          </p>
+        </div>
+      )}
       {job.score_keywords && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Matched keywords</p>
+          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Matched keywords (AI)</p>
           <p className="text-sky text-[12px] font-mono">{job.score_keywords}</p>
         </div>
       )}

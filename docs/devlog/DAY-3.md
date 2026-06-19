@@ -104,7 +104,29 @@ select from.
   location also prunes its `location_limits`. API validates the two new arrays.
 
 ### Applied to live DB
-- `0013_search_libraries.sql` — to apply/verify.
+- `0013_search_libraries.sql` — applied + verified (libraries seeded from current selection).
+
+## Fixed/changed — actor name, maxItems floor, single combined query
+- **Actor typo:** app had `cheap_scraper~linkedin-jobs-scraper` (404). Real actor is
+  `cheap_scraper~linkedin-job-scraper` (singular). Fixed the dropdown + the live DB value → "Actor not
+  found" gone.
+- **maxItems floor:** cheap_scraper rejects `maxItems < 150`. Added `MIN_MAX_ITEMS = 150` floor in the
+  input builder.
+- **Single combined query (ADR 0017, supersedes 0015):** reverted the per-location fan-out. LinkedIn now
+  runs ONE combined query over all roles × locations using the actor's `locations` array +
+  `saveOnlyUniqueItems: true`, so overlapping-location jobs are de-duped and **billed once**. One shared
+  `maxItems` cap (results_per_role × combos, floored 150). Removed the per-location UI inputs;
+  `location_limits` column/`perLocationLimit` now unused (column left in place). apify.test rewritten.
+
+## Built — Skill-match scoring (ADR 0018)
+User wanted to gauge jobs by their skills (e.g. React). Used the cheap_scraper actor's native
+`resumeKeywords` (no LLM): pass the user's skills, and each job comes back with matched/unmatched
+skills + a 0–100 `keywordMatchScorePercentage`.
+- Migration 0014: `settings.skills`; `jobs.skill_match_score/matched_skills/unmatched_skills`.
+- `buildLinkedInInput` sends `resumeKeywords`; `mapDatasetItemToJob` reads the outputs (flows through the
+  existing spread-into-upsert webhook). Null when unset / other actors.
+- UI: Settings "Skills" editor (chips + suggestions); `SkillMatchBadge` (🎯 %) on Jobs rows;
+  matched/unmatched in shared `JobDetails`. Display-only for now (sort/filter is a follow-up).
 
 ## Next
 1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
