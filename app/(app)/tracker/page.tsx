@@ -148,15 +148,35 @@ export default function TrackerPage() {
         ) : (
           <div className="flex items-end gap-1.5 h-44">
             {bars.map((b) => {
-              const h = b.count === 0 ? 2 : Math.max(6, (b.count / maxBar) * 150);
+              const hTotal = b.count === 0 ? 2 : Math.max(6, (b.count / maxBar) * 150);
+              
+              // Calculate relative heights for the stack if total > 0
+              const hEasy = b.count > 0 ? (b.easy_apply / b.count) * hTotal : 0;
+              const hCompany = b.count > 0 ? (b.company_portal / b.count) * hTotal : 0;
+              const hUnknown = b.count > 0 ? (b.unknown / b.count) * hTotal : 0;
+
               return (
                 <div key={b.key} className="flex-1 flex flex-col items-center gap-1.5 min-w-0 group">
                   <span className={`font-mono text-[10px] ${b.count > 0 ? 'text-slate-text' : 'text-transparent'}`}>{b.count}</span>
-                  <div
-                    title={`${b.label}: ${b.count}`}
-                    className={`w-full rounded-sm transition-all ${b.count > 0 ? 'bg-emerald/80 group-hover:bg-emerald' : 'bg-raised'}`}
-                    style={{ height: `${h}px` }}
-                  />
+                  
+                  {/* Stacked Bar Container */}
+                  <div 
+                    title={`${b.label}: ${b.count} (Easy Apply: ${b.easy_apply}, Portal: ${b.company_portal}, Unknown: ${b.unknown})`}
+                    className={`w-full rounded-sm overflow-hidden flex flex-col justify-end transition-all ${b.count === 0 ? 'bg-raised' : ''}`}
+                    style={{ height: `${hTotal}px` }}
+                  >
+                    {b.count > 0 && (
+                      <>
+                        {/* Unknown (top layer) */}
+                        {b.unknown > 0 && <div className="w-full bg-slate-500/80 group-hover:bg-slate-500 transition-colors" style={{ height: `${hUnknown}px` }} />}
+                        {/* Company Portal (middle layer) */}
+                        {b.company_portal > 0 && <div className="w-full bg-emerald/80 group-hover:bg-emerald transition-colors" style={{ height: `${hCompany}px` }} />}
+                        {/* Easy Apply (bottom layer) */}
+                        {b.easy_apply > 0 && <div className="w-full bg-sky/80 group-hover:bg-sky transition-colors" style={{ height: `${hEasy}px` }} />}
+                      </>
+                    )}
+                  </div>
+
                   <span className="text-slate-muted font-mono text-[9px] truncate w-full text-center">{b.label}</span>
                 </div>
               );

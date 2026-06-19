@@ -20,6 +20,9 @@ export interface Bucket {
   key: string; // stable id
   label: string; // axis label
   count: number;
+  easy_apply: number;
+  company_portal: number;
+  unknown: number;
   start: number; // ms epoch of period start (for sorting)
 }
 
@@ -50,13 +53,18 @@ function dayLabel(d: Date): string {
 }
 
 /** Pre-bucket events by the relevant period key for fast lookup. */
-function countByKey(events: AppliedEvent[], gran: Granularity): Map<string, number> {
-  const m = new Map<string, number>();
+function countByKey(events: AppliedEvent[], gran: Granularity): Map<string, { total: number; easy: number; company: number; unknown: number }> {
+  const m = new Map<string, { total: number; easy: number; company: number; unknown: number }>();
   for (const e of events) {
     const d = new Date(e.received_at);
     if (Number.isNaN(d.getTime())) continue;
     const key = periodKey(d, gran);
-    m.set(key, (m.get(key) ?? 0) + 1);
+    const curr = m.get(key) ?? { total: 0, easy: 0, company: 0, unknown: 0 };
+    curr.total += 1;
+    if (e.apply_source === 'easy_apply') curr.easy += 1;
+    else if (e.apply_source === 'company_portal') curr.company += 1;
+    else curr.unknown += 1;
+    m.set(key, curr);
   }
   return m;
 }
@@ -89,7 +97,8 @@ export function series(events: AppliedEvent[], gran: Granularity, periods: numbe
       label = `${MONTHS[start.getMonth()]} ${String(start.getFullYear()).slice(2)}`;
     }
     const key = periodKey(start, gran);
-    out.push({ key, label, count: counts.get(key) ?? 0, start: start.getTime() });
+    const data = counts.get(key) ?? { total: 0, easy: 0, company: 0, unknown: 0 };
+    out.push({ key, label, count: data.total, easy_apply: data.easy, company_portal: data.company, unknown: data.unknown, start: start.getTime() });
   }
   return out;
 }
