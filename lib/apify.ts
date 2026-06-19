@@ -38,6 +38,43 @@ export function buildLinkedInSearchUrl(keyword: string, location: string, hoursO
   return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
 }
 
+/**
+ * Jobs-per-role for one location (ADR 0015): the per-location override from
+ * settings.location_limits, falling back to the global results_per_query.
+ */
+export function perLocationLimit(settings: Settings, location: string): number {
+  const v = settings.location_limits?.[location];
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : settings.results_per_query;
+}
+
+/**
+ * LinkedIn actor input for ONE location, searching every keyword in it, capped at
+ * `perRole` results per keyword. LinkedIn fans out one run per location so each
+ * carries its own cap (the actor only takes a single global count per run).
+ */
+function buildLinkedInInputForLocation(settings: Settings, location: string, perRole: number): Record<string, unknown> {
+  const keywords = settings.keywords.filter(Boolean);
+  const combos = keywords.map((k) => ({ keyword: k, location }));
+  const cap = perRole * Math.max(1, keywords.length);
+  return {
+    title: keywords[0] ?? '',
+    keyword: keywords,
+    keywords,
+    searchKeyword: keywords[0] ?? '',
+    location,
+    searchLocation: location,
+    rows: perRole,
+    maxItems: cap,
+    maxResults: cap,
+    publishedAt: mapPublishedAt(settings.hours_old),
+    urls: combos.map((c) => buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old)),
+    startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })),
+    searchUrl: combos[0] ? buildLinkedInSearchUrl(combos[0].keyword, combos[0].location, settings.hours_old) : '',
+    proxy: { useApifyProxy: true },
+  };
+}
+
+/** All keyword × location combos in one run (legacy single-run behaviour; kept for buildActorInput). */
 function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const keywords = settings.keywords.filter(Boolean);
   const locations = settings.locations.filter(Boolean);
@@ -116,29 +153,62 @@ export interface StartedRun {
   defaultDatasetId: string;
 }
 
+/** One actor run to start: which portal/actor + the prepared input. */
+export interface RunSpec {
+  portal: string;
+  actorId: string;
+  input: Record<string, unknown>;
+}
+
 /**
- * Start one Apify actor per enabled portal in parallel.
- * LinkedIn uses settings.apify_actor_id (lets the user pick cheap vs. standard).
- * Other portals use the default actor from PORTAL_CONFIG.
- * Each webhook URL carries ?portal=<key> so the webhook handler can set source correctly.
+ * Plan the actor runs for a settings config (ADR 0015). Pure (no network), so it
+ * is unit-tested directly. LinkedIn fans out one run **per location**, each with
+ * its own per-role cap (settings.location_limits, falling back to
+ * results_per_query) — so a small market like Boston can fetch fewer than a broad
+ * one like the whole US. Other portals keep a single run (one cross-product input).
+ */
+export function planRuns(settings: Settings): RunSpec[] {
+  const portals = settings.job_portals?.length ? settings.job_portals : ['linkedin'];
+  const specs: RunSpec[] = [];
+  for (const portal of portals) {
+    const config = PORTAL_CONFIG[portal];
+    if (!config) continue;
+    if (portal === 'linkedin') {
+      const locations = settings.locations.filter(Boolean);
+      const locs = locations.length ? locations : [''];
+      for (const loc of locs) {
+        specs.push({
+          portal,
+          actorId: settings.apify_actor_id,
+          input: buildLinkedInInputForLocation(settings, loc, perLocationLimit(settings, loc)),
+        });
+      }
+    } else {
+      specs.push({ portal, actorId: config.actorId, input: config.buildInput(settings) });
+    }
+  }
+  return specs;
+}
+
+/**
+ * Start all planned Apify runs in parallel. LinkedIn → one run per location (each
+ * with its own cap); other portals → one run each. Every webhook URL carries
+ * ?portal=<key> so the handler sets source correctly. LinkedIn uses
+ * settings.apify_actor_id (cheap vs. standard variant).
  */
 export async function startAllPortalRuns(settings: Settings, webhookUrl: string): Promise<StartedRun[]> {
-  const portals = settings.job_portals?.length ? settings.job_portals : ['linkedin'];
+  const specs = planRuns(settings);
+  const apify = await client();
   const results = await Promise.all(
-    portals.map(async (portal): Promise<StartedRun | null> => {
-      const config = PORTAL_CONFIG[portal];
-      if (!config) return null;
-      const actorId = portal === 'linkedin' ? settings.apify_actor_id : config.actorId;
-      const run = await (await client())
-        .actor(actorId)
-        .start(config.buildInput(settings), {
-          webhooks: [
-            {
-              eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT', 'ACTOR.RUN.ABORTED'],
-              requestUrl: `${webhookUrl}&portal=${encodeURIComponent(portal)}`,
-            },
-          ],
-        });
+    specs.map(async (spec): Promise<StartedRun | null> => {
+      const run = await apify.actor(spec.actorId).start(spec.input, {
+        webhooks: [
+          {
+            eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT', 'ACTOR.RUN.ABORTED'],
+            requestUrl: `${webhookUrl}&portal=${encodeURIComponent(spec.portal)}`,
+          },
+        ],
+      });
       return { runId: run.id, defaultDatasetId: run.defaultDatasetId };
     }),
   );

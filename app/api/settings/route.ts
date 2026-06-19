@@ -30,8 +30,24 @@ export async function PUT(req: Request) {
   if (typeof body.timezone === 'string' && body.timezone) patch.timezone = body.timezone;
   if (Array.isArray(body.keywords)) patch.keywords = (body.keywords as unknown[]).map(String).filter(Boolean);
   if (Array.isArray(body.locations)) patch.locations = (body.locations as unknown[]).map(String).filter(Boolean);
+  // Saved libraries (ADR 0016) — de-duped, order-preserving.
+  if (Array.isArray(body.keyword_options)) {
+    patch.keyword_options = [...new Set((body.keyword_options as unknown[]).map(String).filter(Boolean))];
+  }
+  if (Array.isArray(body.location_options)) {
+    patch.location_options = [...new Set((body.location_options as unknown[]).map(String).filter(Boolean))];
+  }
   if (Number.isFinite(Number(body.hours_old))) patch.hours_old = Math.max(1, Math.round(Number(body.hours_old)));
   if (Number.isFinite(Number(body.results_per_query))) patch.results_per_query = Math.max(1, Math.round(Number(body.results_per_query)));
+  // Per-location jobs-per-role overrides (ADR 0015): keep only positive-int entries.
+  if (body.location_limits && typeof body.location_limits === 'object' && !Array.isArray(body.location_limits)) {
+    const out: Record<string, number> = {};
+    for (const [loc, raw] of Object.entries(body.location_limits as Record<string, unknown>)) {
+      const n = Number(raw);
+      if (loc && Number.isFinite(n) && n > 0) out[loc] = Math.round(n);
+    }
+    patch.location_limits = out;
+  }
   if (typeof body.llm_provider === 'string' && body.llm_provider) patch.llm_provider = body.llm_provider;
   if (typeof body.llm_model === 'string' && body.llm_model) patch.llm_model = body.llm_model;
   if (typeof body.apify_actor_id === 'string' && body.apify_actor_id) patch.apify_actor_id = body.apify_actor_id.replace(/\//g, '~');

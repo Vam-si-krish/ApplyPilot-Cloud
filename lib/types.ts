@@ -80,10 +80,17 @@ export interface Settings {
   id: number; // single-row table, always 1
   schedule_time: string; // 'HH:MM' in the user's timezone
   timezone: string; // IANA tz, e.g. 'America/New_York'
-  keywords: string[];
-  locations: string[];
+  keywords: string[]; // ACTIVE roles used by the run (a subset of keyword_options)
+  locations: string[]; // ACTIVE locations used by the run (a subset of location_options)
+  /** Saved library of all roles to choose from (ADR 0016). Superset of `keywords`. */
+  keyword_options: string[];
+  /** Saved library of all locations to choose from (ADR 0016). Superset of `locations`. */
+  location_options: string[];
   hours_old: number; // default 24
-  results_per_query: number;
+  results_per_query: number; // default jobs-per-role, used when a location has no override
+  /** Optional per-location override of jobs-per-role: { "<location>": <count> } (ADR 0015).
+   *  A location absent here falls back to results_per_query. */
+  location_limits: Record<string, number>;
   llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic'
   llm_model: string;
   apify_actor_id: string; // LinkedIn actor variant (others use PORTAL_CONFIG defaults)

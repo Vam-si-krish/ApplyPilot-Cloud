@@ -78,6 +78,34 @@ A dedicated **Tracker** tab (`/tracker`) that visualizes application momentum fr
   and a day-by-day accordion with per-day summary (companies + the AI one-liner per application).
 - Nav item added to AppShell (after Inbox).
 
+## Built — Per-location fetch limits (ADR 0015)
+Replaced the single global `results_per_query` (applied to every location equally) with optional
+per-location jobs-per-role caps.
+- Migration 0012: `settings.location_limits jsonb default '{}'` — `{ "<location>": <count> }`; absent →
+  falls back to `results_per_query`.
+- `lib/apify.ts`: new pure `planRuns(settings)` + `perLocationLimit()`. LinkedIn now fans out **one Apify
+  run per location**, each with `rows = perLocationLimit` and `maxItems = rows × #keywords` (the actor
+  only takes one global count per run, so per-location = per-run). Other portals unchanged.
+  `startAllPortalRuns` executes the plan. Unit-tested in `lib/apify.test.ts`.
+- Settings → Search Criteria: per-location "jobs per role" inputs (blank = default); global field
+  relabeled "Default jobs per role". Scope: LinkedIn only (per user — they only use LinkedIn).
+
+### Applied to live DB
+- `0012_location_limits.sql` — applied + verified (column present, default '{}').
+
+## Built — Saved search libraries (ADR 0016)
+Roles/locations were free-form tags you re-typed each time. Now there's a persistent library you
+select from.
+- Migration 0013: `keyword_options` + `location_options text[]`; seeds them from current
+  keywords/locations so nothing is lost. `keywords`/`locations` stay as the ACTIVE selection (subset);
+  run code (`planRuns`) unchanged.
+- Settings: new `LibraryPicker` — chips you click to select (highlighted = searched), × removes from
+  the library, add via input or one-click suggestions (Northeast locations + common roles). Removing a
+  location also prunes its `location_limits`. API validates the two new arrays.
+
+### Applied to live DB
+- `0013_search_libraries.sql` — to apply/verify.
+
 ## Next
 1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
    tiers and the `unknown` discipline.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, Trash2, Plus, X, Mail } from 'lucide-react';
+import { Save, CheckCircle, Trash2, Plus, X, Mail, Check } from 'lucide-react';
 import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/types';
 
 const PROVIDERS = [
@@ -15,6 +15,17 @@ const ACTORS = [
   { id: 'bebity~linkedin-jobs-scraper', label: 'Standard (bebity)' },
   { id: 'cheap_scraper~linkedin-jobs-scraper', label: 'Cheapest (cheap_scraper)' },
   { id: 'fascinating_lentil~linkedin-jobs-scraper', label: 'Alternative (fascinating_lentil)' },
+];
+
+// One-click suggestions to seed the libraries (ADR 0016). Adding one drops it into
+// the saved list; it persists and can be selected/deselected like any other.
+const KEYWORD_SUGGESTIONS = [
+  'Software Engineer', 'Backend Engineer', 'Frontend Engineer', 'Full Stack Engineer',
+  'Data Engineer', 'Machine Learning Engineer', 'DevOps Engineer', 'Platform Engineer',
+];
+const LOCATION_SUGGESTIONS = [
+  'Boston, MA', 'Cambridge, MA', 'Worcester, MA', 'Providence, RI', 'Hartford, CT',
+  'Stamford, CT', 'New York, NY', 'Manchester, NH', 'Portland, ME', 'Remote, US', 'United States',
 ];
 
 export default function SettingsPage() {
@@ -107,11 +118,91 @@ export default function SettingsPage() {
 
       {/* Search */}
       <Section title="Search Criteria">
-        <TagField label="Keywords" tags={s.keywords} onChange={(v) => patch({ keywords: v })} />
-        <TagField label="Locations" tags={s.locations} onChange={(v) => patch({ locations: v })} />
+        <p className="text-slate-muted text-[12px] mb-4">
+          Build a library of roles and locations once — they stay here. Each run searches only the ones you
+          <span className="text-sky"> select</span> (highlighted). Click to toggle; the × removes one from the library.
+        </p>
+
+        <LibraryPicker
+          label="Roles / keywords"
+          options={s.keyword_options ?? []}
+          selected={s.keywords}
+          suggestions={KEYWORD_SUGGESTIONS}
+          placeholder="Add a role…"
+          onToggle={(v) => patch({ keywords: s.keywords.includes(v) ? s.keywords.filter((x) => x !== v) : [...s.keywords, v] })}
+          onAdd={(v) =>
+            patch({
+              keyword_options: (s.keyword_options ?? []).includes(v) ? s.keyword_options : [...(s.keyword_options ?? []), v],
+              keywords: s.keywords.includes(v) ? s.keywords : [...s.keywords, v],
+            })
+          }
+          onRemove={(v) =>
+            patch({
+              keyword_options: (s.keyword_options ?? []).filter((x) => x !== v),
+              keywords: s.keywords.filter((x) => x !== v),
+            })
+          }
+        />
+
+        <LibraryPicker
+          label="Locations"
+          options={s.location_options ?? []}
+          selected={s.locations}
+          suggestions={LOCATION_SUGGESTIONS}
+          placeholder="Add a location…"
+          onToggle={(v) => patch({ locations: s.locations.includes(v) ? s.locations.filter((x) => x !== v) : [...s.locations, v] })}
+          onAdd={(v) =>
+            patch({
+              location_options: (s.location_options ?? []).includes(v) ? s.location_options : [...(s.location_options ?? []), v],
+              locations: s.locations.includes(v) ? s.locations : [...s.locations, v],
+            })
+          }
+          onRemove={(v) => {
+            const nextLimits = { ...(s.location_limits ?? {}) };
+            delete nextLimits[v];
+            patch({
+              location_options: (s.location_options ?? []).filter((x) => x !== v),
+              locations: s.locations.filter((x) => x !== v),
+              location_limits: nextLimits,
+            });
+          }}
+        />
+
+        {/* Per-location "jobs per role" overrides (ADR 0015). Blank = use the default below. */}
+        {s.locations.length > 0 && (
+          <div className="mb-2">
+            <p className="text-[11px] text-slate-muted mb-2 font-medium uppercase tracking-wider">Jobs per role, by location</p>
+            <div className="flex flex-col gap-2">
+              {s.locations.map((loc) => (
+                <div key={loc} className="flex items-center gap-3">
+                  <span className="flex-1 min-w-0 text-[13px] text-slate-text truncate">{loc}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={s.location_limits?.[loc] ?? ''}
+                    placeholder={`${s.results_per_query} (default)`}
+                    onChange={(e) => {
+                      const next = { ...(s.location_limits ?? {}) };
+                      const n = Number(e.target.value);
+                      if (e.target.value.trim() === '' || !Number.isFinite(n) || n <= 0) delete next[loc];
+                      else next[loc] = Math.round(n);
+                      patch({ location_limits: next });
+                    }}
+                    className="w-36 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-muted mt-2">
+              Each location runs as its own LinkedIn search. Leave blank to use the default. Total per location ≈ this number ×
+              your number of keywords.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4 mt-2">
           <Field label="Hours old (lookback window)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
-          <Field label="Results per query" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
+          <Field label="Default jobs per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
         </div>
       </Section>
 
@@ -772,40 +863,104 @@ function Field({
   );
 }
 
-function TagField({ label, tags, onChange }: { label: string; tags: string[]; onChange: (v: string[]) => void }) {
+/**
+ * A persistent library of options (roles or locations) with click-to-select
+ * (ADR 0016). Selected options are highlighted and are what the run actually
+ * searches; the rest stay saved for later. Add via the input or a suggestion;
+ * the × removes one from the library entirely.
+ */
+function LibraryPicker({
+  label,
+  options,
+  selected,
+  suggestions = [],
+  placeholder,
+  onToggle,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  suggestions?: string[];
+  placeholder?: string;
+  onToggle: (v: string) => void;
+  onAdd: (v: string) => void;
+  onRemove: (v: string) => void;
+}) {
   const [input, setInput] = useState('');
   function add() {
     const v = input.trim();
-    if (v && !tags.includes(v)) {
-      onChange([...tags, v]);
+    if (v) {
+      onAdd(v);
       setInput('');
     }
   }
+  const freshSuggestions = suggestions.filter((sug) => !options.includes(sug));
+
   return (
-    <div className="mb-2">
-      <p className="text-[11px] text-slate-muted mb-2 font-medium uppercase tracking-wider">{label}</p>
-      <div className="flex flex-wrap gap-2 mb-2">
-        {tags.map((t) => (
-          <span key={t} className="flex items-center gap-1.5 px-2.5 py-1 bg-sky/10 border border-sky/20 text-sky text-[12px] rounded-md">
-            {t}
-            <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-sky/50 hover:text-rose transition-colors leading-none">
-              ×
-            </button>
-          </span>
-        ))}
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] text-slate-muted font-medium uppercase tracking-wider">{label}</p>
+        <span className="text-[11px] text-slate-muted">
+          {selected.length} of {options.length} selected
+        </span>
       </div>
+
+      <div className="flex flex-wrap gap-2 mb-2.5">
+        {options.length === 0 && <span className="text-[12px] text-slate-muted">None yet — add one below.</span>}
+        {options.map((opt) => {
+          const on = selected.includes(opt);
+          return (
+            <span
+              key={opt}
+              className={`group flex items-center rounded-md border text-[12px] transition-all ${
+                on ? 'bg-sky/15 border-sky/40 text-sky' : 'bg-raised border-ink text-slate-muted hover:text-slate-text'
+              }`}
+            >
+              <button onClick={() => onToggle(opt)} className="flex items-center gap-1.5 pl-2 pr-1.5 py-1" title={on ? 'Selected — click to deselect' : 'Click to select'}>
+                {on ? <Check size={12} className="shrink-0" /> : <span className="w-3 shrink-0" />}
+                {opt}
+              </button>
+              <button
+                onClick={() => onRemove(opt)}
+                title="Remove from list"
+                className="pr-1.5 py-1 text-slate-muted/60 hover:text-rose transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          );
+        })}
+      </div>
+
       <div className="flex gap-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
-          placeholder="Add…"
-          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text"
+          placeholder={placeholder ?? 'Add…'}
+          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
         />
         <button onClick={add} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all">
           Add
         </button>
       </div>
+
+      {freshSuggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+          <span className="text-[11px] text-slate-muted">Suggestions:</span>
+          {freshSuggestions.map((sug) => (
+            <button
+              key={sug}
+              onClick={() => onAdd(sug)}
+              className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-slate-muted border border-ink border-dashed hover:text-sky hover:border-sky/40 rounded-md transition-all"
+            >
+              <Plus size={10} /> {sug}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
