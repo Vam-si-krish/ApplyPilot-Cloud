@@ -23,6 +23,8 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     auto_rotate_keys: false,
     prefilter_enabled: false,
     prefilter_threshold: 30,
+    min_skill_match: 0,
+    max_jobs_per_run: 0,
     auto_assess_enabled: true,
     auto_assess_min_score: 6,
     updated_at: '2026-06-18T00:00:00Z',
@@ -55,6 +57,13 @@ describe('planRuns — one combined, de-duplicated LinkedIn run', () => {
     // Small selection (1 role × 1 location × 50 = 50) floors to 150.
     const small = planRuns(makeSettings({ keywords: ['Software Engineer'], locations: ['United States'] }));
     expect(small[0].input.maxItems).toBe(150);
+  });
+
+  it('honors max_jobs_per_run as a hard cap (still floored to 150)', () => {
+    // 4 × 2 × 50 = 400, capped to 200.
+    expect(planRuns(makeSettings({ max_jobs_per_run: 200 }))[0].input.maxItems).toBe(200);
+    // A cap below the floor still yields 150.
+    expect(planRuns(makeSettings({ max_jobs_per_run: 50 }))[0].input.maxItems).toBe(150);
   });
 
   it('handles no locations as a single keyword-only run', () => {

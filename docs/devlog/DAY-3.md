@@ -128,6 +128,31 @@ skills + a 0–100 `keywordMatchScorePercentage`.
 - UI: Settings "Skills" editor (chips + suggestions); `SkillMatchBadge` (🎯 %) on Jobs rows;
   matched/unmatched in shared `JobDetails`. Display-only for now (sort/filter is a follow-up).
 
+## Built — Skill gate, fetch cap, bulk-over-all-matching (ADR 0019)
+Addressed token waste + workflow friction after 700-job runs.
+- **Research:** the cheap_scraper actor has NO skill filter (`resumeKeywords` only scores; all filters
+  "still count toward billing") → must filter locally.
+- Migration 0015: `settings.min_skill_match` + `max_jobs_per_run`.
+- **Skill gate:** score-batch passes `skillMatchThreshold = min_skill_match`; `scoreJobRows` marks
+  jobs below it `filtered` (no LLM). Manual score-selected bypasses it. Null score passes.
+- **Fetch cap:** `buildLinkedInInput` caps maxItems by `max_jobs_per_run` (floored 150).
+- **Jobs page:** `/api/jobs?idsOnly=true` returns all matching ids → "Select all N matching"; bulk
+  actions now use the full selection (was visible-only). Added skill-match filter, "Company: Not
+  assessed" (`company_tier IS NULL`), and Load more (list was capped at 300). Settings: skill-gate %
+  + Max jobs/run fields.
+
+## Discovered + fixed — scheduling on Netlify (ADR 0020)
+The app is deployed on **Netlify**, which **ignores vercel.json** — so the daily cron + Gmail sync were
+NEVER firing automatically (only manual /api/run). Fix:
+- `netlify/functions/daily-run.mjs` (`schedule: '0 23 * * *'` = 04:30 IST) → GET /api/run w/ CRON_SECRET.
+- `netlify/functions/gmail-sync.mjs` (`*/30 * * * *`) → GET /api/gmail/sync.
+- `appBaseUrl()` now also falls back to Netlify's `process.env.URL` (self-retrigger base URL).
+- Kept vercel.json (also 0 23) for portability; inert on Netlify.
+- Set DB `schedule_time='04:30'`, `timezone='Asia/Kolkata'` so Settings shows the real time.
+- **Needs:** Netlify env `CRON_SECRET` + `NEXT_PUBLIC_APP_URL`; active after next deploy.
+- **Caveat:** Netlify ~10s function timeout (vs Vercel's 60) — watch score-batch; lower SCORE_BATCH_SIZE
+  or use a background function if scoring stalls.
+
 ## Next
 1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
    tiers and the `unknown` discipline.

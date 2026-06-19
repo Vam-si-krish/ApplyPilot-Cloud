@@ -109,6 +109,10 @@ export interface Settings {
   prefilter_enabled: boolean;
   /** Match-percentage cut-off (0–100) for the pre-scoring filter. */
   prefilter_threshold: number;
+  /** Auto pipeline skips LLM scoring for jobs whose skill_match_score < this (ADR 0019). 0 = off. */
+  min_skill_match: number;
+  /** Hard cap on jobs fetched per run (caps actor maxItems). 0 = no cap (ADR 0019). */
+  max_jobs_per_run: number;
   /** When true, the pipeline auto-assesses companies for high-scoring jobs after scoring (ADR 0010). */
   auto_assess_enabled: boolean;
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */

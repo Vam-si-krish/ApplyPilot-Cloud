@@ -57,6 +57,8 @@ export default function JobsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
   const [companyTier, setCompanyTier] = useState('good,medium');
+  const [minSkill, setMinSkill] = useState(''); // skill-match % gate for the view
+  const [limit, setLimit] = useState(300); // page size; "Load more" raises it
   const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
 
@@ -100,11 +102,13 @@ export default function JobsPage() {
     refreshStats();
   }, [refreshStats]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const p = new URLSearchParams({ limit: '300' });
+  // Shared filter params (everything except pagination), reused by the list load
+  // and by "select all matching" (idsOnly).
+  const buildParams = useCallback(() => {
+    const p = new URLSearchParams();
     if (search) p.set('search', search);
     if (minScore) p.set('minScore', minScore);
+    if (minSkill) p.set('minSkill', minSkill);
     if (status === 'applied') p.set('applied', 'true');
     else if (status === 'shortlisted') p.set('shortlisted', 'true');
     else if (status === 'opened') p.set('opened', 'true');
@@ -116,11 +120,18 @@ export default function JobsPage() {
     if (hideOpened && status !== 'opened') p.set('excludeOpened', 'true');
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
+    return p;
+  }, [search, minScore, minSkill, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const p = buildParams();
+    p.set('limit', String(limit));
     const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
     setJobs(d.jobs ?? []);
     setTotal(d.total ?? 0);
     setLoading(false);
-  }, [search, minScore, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
+  }, [buildParams, limit]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -130,7 +141,12 @@ export default function JobsPage() {
   // Drop the selection whenever the filter set changes (the ids on screen change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, status, minScore, easyApply, companyTier, selectedRunIds]);
+  }, [search, status, minScore, minSkill, easyApply, companyTier, selectedRunIds]);
+
+  // Reset pagination when filters change.
+  useEffect(() => {
+    setLimit(300);
+  }, [search, status, minScore, minSkill, easyApply, companyTier, selectedRunIds]);
 
   // Close the runs dropdown on any click outside it (or Escape).
   useEffect(() => {
@@ -165,6 +181,7 @@ export default function JobsPage() {
     setSearch('');
     setStatus('all');
     setMinScore('6');
+    setMinSkill('');
     setCompanyTier('good,medium');
     setEasyApply(null);
     setHideApplied(true);
@@ -218,9 +235,27 @@ export default function JobsPage() {
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(jobs.map((j) => j.id)));
   }
-  /** Selected ids that are still on screen (the actionable set). */
+  /** Select EVERY job matching the current filter (not just the visible page) — for bulk actions over 300+. */
+  async function selectAllMatching() {
+    setBulkBusy(true);
+    setBulkMsg('Selecting all matching…');
+    try {
+      const p = buildParams();
+      p.set('idsOnly', 'true');
+      const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
+      const ids: string[] = d.ids ?? [];
+      setSelected(new Set(ids));
+      setBulkMsg(`Selected ${ids.length} matching job${ids.length === 1 ? '' : 's'}.`);
+    } catch {
+      setBulkMsg('Could not select all matching.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+  /** All selected ids (may include off-page rows from "select all matching"); the
+   *  bulk endpoints resolve jobs by id server-side, so off-screen ids are fine. */
   function selectedVisibleIds(): string[] {
-    return jobs.filter((j) => selected.has(j.id)).map((j) => j.id);
+    return [...selected];
   }
 
   // AI-score exactly the picked jobs (chunked to stay under the serverless timeout).
@@ -559,6 +594,19 @@ export default function JobsPage() {
           </select>
 
           <select
+            value={minSkill}
+            onChange={(e) => setMinSkill(e.target.value)}
+            title="Filter by skill match (how many of your skills the job mentions)"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any skill match</option>
+            <option value="1">Skill match ≥ 1%</option>
+            <option value="34">Skill match ≥ 34%</option>
+            <option value="67">Skill match ≥ 67%</option>
+            <option value="100">Skill match = 100%</option>
+          </select>
+
+          <select
             value={companyTier}
             onChange={(e) => setCompanyTier(e.target.value)}
             title="Filter by AI company assessment"
@@ -570,6 +618,7 @@ export default function JobsPage() {
             <option value="medium">Company: Medium</option>
             <option value="low">Company: Low</option>
             <option value="unknown">Company: Unknown</option>
+            <option value="none">Company: Not assessed</option>
           </select>
 
           <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
@@ -624,6 +673,16 @@ export default function JobsPage() {
             />
             {selected.size > 0 ? `${selected.size} selected` : `Select all (${jobs.length})`}
           </label>
+          {total > jobs.length && (
+            <button
+              onClick={selectAllMatching}
+              disabled={bulkBusy}
+              title="Select every job matching the current filter, across all pages"
+              className="text-[12px] text-sky hover:text-sky/80 underline disabled:opacity-40"
+            >
+              Select all {total} matching
+            </button>
+          )}
           {selected.size > 0 && (
             <>
               <button
@@ -796,6 +855,21 @@ export default function JobsPage() {
           </div>
         )}
       </div>
+
+      {/* Pagination: how many are shown vs match, with a Load more. */}
+      {!loading && jobs.length > 0 && (
+        <div className="flex items-center justify-center gap-3 mt-4 text-[12px] text-slate-muted">
+          <span>Showing {jobs.length} of {total}</span>
+          {jobs.length < total && (
+            <button
+              onClick={() => setLimit((n) => n + 300)}
+              className="px-3 py-1.5 text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-md transition-all"
+            >
+              Load more
+            </button>
+          )}
+        </div>
+      )}
 
       {/* "Did you apply?" dialog — fixed bottom-right, shown after returning from an external link */}
       {applyDialog && (

@@ -65,6 +65,12 @@ export async function PUT(req: Request) {
   if (Number.isFinite(Number(body.prefilter_threshold))) {
     patch.prefilter_threshold = Math.max(0, Math.min(100, Math.round(Number(body.prefilter_threshold))));
   }
+  if (Number.isFinite(Number(body.min_skill_match))) {
+    patch.min_skill_match = Math.max(0, Math.min(100, Math.round(Number(body.min_skill_match))));
+  }
+  if (Number.isFinite(Number(body.max_jobs_per_run))) {
+    patch.max_jobs_per_run = Math.max(0, Math.round(Number(body.max_jobs_per_run)));
+  }
   if (typeof body.auto_assess_enabled === 'boolean') patch.auto_assess_enabled = body.auto_assess_enabled;
   if (Number.isFinite(Number(body.auto_assess_min_score))) {
     patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));

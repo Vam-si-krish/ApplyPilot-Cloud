@@ -35,11 +35,14 @@ export interface ScoreRunOptions {
   client?: LLMClient;
   /** When set, apply the pre-filter gate at this threshold; when null/undefined, LLM-score every row. */
   prefilterThreshold?: number | null;
+  /** When set, skip LLM scoring for jobs whose skill_match_score is below this (ADR 0019). */
+  skillMatchThreshold?: number | null;
 }
 
 /** Score the given job rows in order, returning per-batch counts. */
 export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<ScoreRunResult> {
   const gate = opts.prefilterThreshold ?? null;
+  const skillGate = opts.skillMatchThreshold ?? null;
   let scored = 0;
   let filtered = 0;
   let errors = 0;
@@ -48,6 +51,17 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
     // Pre-scoring gate (ADR 0008): skip the LLM for jobs whose cheap match score
     // is below the threshold. A null prefilter_score (legacy/empty résumé) passes.
     if (gate != null && job.prefilter_score != null && job.prefilter_score < gate) {
+      await supabaseAdmin()
+        .from('jobs')
+        .update({ status: 'filtered', scored_at: new Date().toISOString() })
+        .eq('id', job.id);
+      filtered++;
+      continue;
+    }
+
+    // Skill gate (ADR 0019): skip the LLM for jobs that don't match enough of the
+    // user's skills. A null skill_match_score (no skills set / other actor) passes.
+    if (skillGate != null && job.skill_match_score != null && job.skill_match_score < skillGate) {
       await supabaseAdmin()
         .from('jobs')
         .update({ status: 'filtered', scored_at: new Date().toISOString() })

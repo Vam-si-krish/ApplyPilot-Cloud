@@ -13,6 +13,8 @@ export function appBaseUrl(): string {
   if (u) return u.replace(/\/$/, '');
   // Vercel injects VERCEL_URL (host only) for the current deployment.
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  // Netlify injects URL (full site URL) into the build + function runtime.
+  if (process.env.URL) return process.env.URL.replace(/\/$/, '');
   return 'http://localhost:3000';
 }
 

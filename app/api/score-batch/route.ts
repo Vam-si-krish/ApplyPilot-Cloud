@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     resume,
     client,
     prefilterThreshold: settings.prefilter_enabled ? settings.prefilter_threshold : null,
+    skillMatchThreshold: settings.min_skill_match > 0 ? settings.min_skill_match : null,
   });
 
   if (running) await bumpRunScored(running.id, scored, errors);

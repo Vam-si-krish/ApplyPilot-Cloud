@@ -56,7 +56,11 @@ function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const skills = (settings.skills ?? []).filter(Boolean);
   const combos: { keyword: string; location: string }[] = [];
   for (const k of keywords) for (const l of locations.length ? locations : ['']) combos.push({ keyword: k, location: l });
-  const cap = Math.max(settings.results_per_query * Math.max(1, combos.length), MIN_MAX_ITEMS);
+  // Cap total results: results-per-role × combos, optionally hard-capped by
+  // max_jobs_per_run (ADR 0019), always floored to the actor minimum (150).
+  let cap = settings.results_per_query * Math.max(1, combos.length);
+  if (settings.max_jobs_per_run > 0) cap = Math.min(cap, settings.max_jobs_per_run);
+  cap = Math.max(cap, MIN_MAX_ITEMS);
   return {
     title: keywords[0] ?? '',
     keyword: keywords,

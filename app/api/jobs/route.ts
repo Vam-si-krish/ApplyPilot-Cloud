@@ -11,6 +11,7 @@ export async function GET(req: Request) {
   const search = url.searchParams.get('search') || '';
   const minScore = url.searchParams.get('minScore');
   const maxScore = url.searchParams.get('maxScore');
+  const minSkill = url.searchParams.get('minSkill');
   const shortlisted = url.searchParams.get('shortlisted');
   const easyApply = url.searchParams.get('easyApply');
   const applied = url.searchParams.get('applied');
@@ -19,10 +20,13 @@ export async function GET(req: Request) {
   const runId = url.searchParams.get('runId');
   const recency = url.searchParams.get('recency'); // 'recent' (≤24h) | 'past' (>24h)
   const order = url.searchParams.get('order'); // 'date' → newest first (for the date-grouped Past view)
+  const idsOnly = url.searchParams.get('idsOnly') === 'true'; // return every matching id (for "select all matching")
   const limit = Math.min(Number(url.searchParams.get('limit')) || 200, 1000);
   const offset = Number(url.searchParams.get('offset')) || 0;
 
-  let q = supabaseAdmin().from('jobs').select('*', { count: 'exact' });
+  let q = idsOnly
+    ? supabaseAdmin().from('jobs').select('id')
+    : supabaseAdmin().from('jobs').select('*', { count: 'exact' });
 
   // Default 'all' view hides archived and pre-filtered jobs; pick them explicitly to see them.
   if (status === 'all') q = q.neq('status', 'archived').neq('status', 'filtered');
@@ -31,6 +35,7 @@ export async function GET(req: Request) {
   if (search) q = q.or(`title.ilike.%${search}%,company.ilike.%${search}%,location.ilike.%${search}%`);
   if (minScore !== null && minScore !== '') q = q.gte('fit_score', Number(minScore));
   if (maxScore !== null && maxScore !== '') q = q.lte('fit_score', Number(maxScore));
+  if (minSkill !== null && minSkill !== '') q = q.gte('skill_match_score', Number(minSkill));
   if (shortlisted === 'true') q = q.eq('is_shortlisted', true);
   if (easyApply === 'true') q = q.eq('easy_apply', true);
   if (easyApply === 'false') q = q.eq('easy_apply', false);
@@ -41,7 +46,9 @@ export async function GET(req: Request) {
   if (url.searchParams.get('excludeOpened') === 'true') q = q.or('clicked_at.is.null,applied_at.not.is.null');
   // 'opened' = link clicked but not yet marked applied (where the user left off).
   if (opened === 'true') q = q.not('clicked_at', 'is', null).is('applied_at', null);
-  if (companyTier) q = companyTier.includes(',') ? q.in('company_tier', companyTier.split(',')) : q.eq('company_tier', companyTier);
+  // companyTier: 'none' → not yet assessed (company_tier IS NULL); else exact / comma-list.
+  if (companyTier === 'none') q = q.is('company_tier', null);
+  else if (companyTier) q = companyTier.includes(',') ? q.in('company_tier', companyTier.split(',')) : q.eq('company_tier', companyTier);
   if (runId) {
     if (runId.includes(',')) {
       q = q.in('run_id', runId.split(','));
@@ -53,6 +60,13 @@ export async function GET(req: Request) {
   if (recency === 'recent' || recency === 'past') {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     q = recency === 'recent' ? q.gte('discovered_at', cutoff) : q.lt('discovered_at', cutoff);
+  }
+
+  // "Select all matching": return every matching id (no pagination), for bulk actions.
+  if (idsOnly) {
+    const { data, error } = await q.limit(5000);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ids: (data ?? []).map((r) => (r as { id: string }).id) });
   }
 
   // Past view groups by date → order newest-first; default view sorts by fit.

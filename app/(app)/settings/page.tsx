@@ -173,14 +173,42 @@ export default function SettingsPage() {
 
         <SkillsEditor skills={s.skills ?? []} onChange={(v) => patch({ skills: v })} />
 
-        <div className="grid grid-cols-2 gap-4 mt-2">
-          <Field label="Hours old (lookback window)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
+        {(s.skills ?? []).length > 0 && (
+          <div className="mb-4 flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3">
+            <div className="shrink-0">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={s.min_skill_match ?? 0}
+                onChange={(e) => patch({ min_skill_match: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+                className="w-20 bg-card border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text font-mono"
+              />
+            </div>
+            <div>
+              <p className="text-[13px] font-medium text-slate-text">Skip jobs below this skill match (%)</p>
+              <p className="text-[11px] text-slate-muted mt-0.5">
+                Daily runs <span className="text-emerald">won&apos;t spend an AI score</span> on jobs under this skill match — they&apos;re
+                marked Filtered. <b>0</b> = off · <b>1</b> = require at least one of your skills · with 3 skills, one match ≈ 33%.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-4 mt-2">
+          <Field label="Hours old (lookback)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
           <Field label="Results per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
+          <Field
+            label="Max jobs / run (0 = ∞)"
+            value={String(s.max_jobs_per_run ?? 0)}
+            onChange={(v) => patch({ max_jobs_per_run: Math.max(0, Number(v) || 0) })}
+            placeholder="0"
+          />
         </div>
         <p className="text-slate-muted text-[11px] mt-3">
-          All selected roles and locations run as a <span className="text-sky">single search</span> that removes duplicates, so a
-          job matching two locations is fetched (and billed) once. The cap is <span className="font-mono">results per role × roles</span>
-          {' '}(minimum 150 for the cheapest actor).
+          All selected roles and locations run as a <span className="text-sky">single de-duplicated search</span>. Total fetched ≈
+          <span className="font-mono"> results per role × roles</span>, hard-capped by <span className="font-mono">Max jobs / run</span>
+          {' '}(min 150 for the cheapest actor). Use the skill gate above to avoid AI-scoring jobs that don&apos;t fit.
         </p>
       </Section>
 
