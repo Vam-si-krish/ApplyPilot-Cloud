@@ -24,6 +24,7 @@ interface MailData {
   daily: { date: string; counts: Record<string, number> }[];
   totals: Record<string, number>;
   pending: number;
+  applySources: { easy_apply: number; company_portal: number; unknown: number };
 }
 
 // Live sync progress shown while "Sync now" runs its fetch → classify loop.
@@ -118,6 +119,7 @@ export default function InboxPage() {
   }
 
   const totals = data?.totals ?? {};
+  const src = data?.applySources ?? { easy_apply: 0, company_portal: 0, unknown: 0 };
 
   return (
     <div className="p-7 animate-slide-up">
@@ -172,6 +174,24 @@ export default function InboxPage() {
             ))}
           </div>
 
+          {/* How you applied: LinkedIn Easy Apply vs company / ATS portal (ADR 0021) */}
+          {(totals.applied ?? 0) > 0 && (
+            <div className="flex flex-wrap items-center gap-4 mb-6 bg-card border border-ink rounded-xl px-4 py-3">
+              <span className="text-[12px] text-slate-muted uppercase tracking-wider font-medium">Applied via</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky" />
+                <span className="font-display text-lg font-bold text-sky">{src.easy_apply}</span>
+                <span className="text-[12px] text-slate-muted">Easy Apply</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald" />
+                <span className="font-display text-lg font-bold text-emerald">{src.company_portal}</span>
+                <span className="text-[12px] text-slate-muted">Company portal</span>
+              </span>
+              {src.unknown > 0 && <span className="text-[12px] text-slate-muted">· {src.unknown} unspecified</span>}
+            </div>
+          )}
+
           {/* Daily history */}
           {data && data.daily.length > 0 && (
             <div className="bg-card border border-ink rounded-xl p-5 mb-6 overflow-x-auto">
@@ -218,6 +238,16 @@ export default function InboxPage() {
                   return (
                   <div key={m.id} className="flex items-start gap-3 px-5 py-3 hover:bg-raised transition-colors">
                     <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${meta.cls}`}>{meta.label}</span>
+                    {m.category === 'applied' && m.apply_source && (
+                      <span
+                        title={m.apply_source === 'easy_apply' ? 'Applied via LinkedIn Easy Apply' : 'Applied on the company / ATS portal'}
+                        className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-medium rounded border ${
+                          m.apply_source === 'easy_apply' ? 'bg-sky/10 border-sky/25 text-sky' : 'bg-emerald/10 border-emerald/25 text-emerald'
+                        }`}
+                      >
+                        {m.apply_source === 'easy_apply' ? 'Easy Apply' : 'Portal'}
+                      </span>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="text-slate-text text-[13px] font-medium truncate">{m.subject || '(no subject)'}</p>
                       <p className="text-slate-muted text-[11px] truncate">

@@ -10,6 +10,8 @@ export interface AppliedEvent {
   company: string | null;
   subject: string | null;
   summary: string | null;
+  /** How it was submitted (ADR 0021): 'easy_apply' | 'company_portal' | null. */
+  apply_source?: 'easy_apply' | 'company_portal' | null;
 }
 
 export type Granularity = 'day' | 'week' | 'month';

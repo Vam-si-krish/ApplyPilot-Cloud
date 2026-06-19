@@ -39,6 +39,15 @@ export async function GET(req: Request) {
     const totals: Record<string, number> = {};
     for (const c of CATEGORIES) totals[c] = all.filter((m) => m.category === c).length;
 
+    // Of the applications submitted (category 'applied'), how many via LinkedIn Easy
+    // Apply vs a company/ATS portal (ADR 0021).
+    const appliedMail = all.filter((m) => m.category === 'applied');
+    const applySources = {
+      easy_apply: appliedMail.filter((m) => m.apply_source === 'easy_apply').length,
+      company_portal: appliedMail.filter((m) => m.apply_source === 'company_portal').length,
+      unknown: appliedMail.filter((m) => !m.apply_source).length,
+    };
+
     return NextResponse.json({
       connected: !!conn.refresh_token,
       email: conn.email,
@@ -47,6 +56,7 @@ export async function GET(req: Request) {
       daily,
       totals,
       pending,
+      applySources,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

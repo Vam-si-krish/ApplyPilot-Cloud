@@ -19,6 +19,7 @@ interface StatsData {
   email: string | null;
   applied: AppliedEvent[];
   totals: Record<string, number>;
+  applySources?: { easy_apply: number; company_portal: number; unknown: number };
 }
 
 const GRAN: { id: Granularity; label: string; periods: number }[] = [
@@ -102,6 +103,23 @@ export default function TrackerPage() {
             </div>
           ))}
         </div>
+        {/* How those applications were submitted (ADR 0021) */}
+        {data?.applySources && (data.applySources.easy_apply + data.applySources.company_portal + data.applySources.unknown) > 0 && (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-3 border-t border-ink-subtle">
+            <span className="text-[11px] text-slate-muted uppercase tracking-wider">Applied via</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky" />
+              <span className="font-display text-lg font-bold text-sky">{data.applySources.easy_apply}</span>
+              <span className="text-slate-muted text-[12px]">Easy Apply</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald" />
+              <span className="font-display text-lg font-bold text-emerald">{data.applySources.company_portal}</span>
+              <span className="text-slate-muted text-[12px]">Company portal</span>
+            </span>
+            {data.applySources.unknown > 0 && <span className="text-[12px] text-slate-muted">· {data.applySources.unknown} unspecified</span>}
+          </div>
+        )}
       </div>
 
       {/* Volume chart with day/week/month toggle */}

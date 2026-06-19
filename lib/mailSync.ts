@@ -125,11 +125,14 @@ export async function classifyChunk(): Promise<ClassifyResult> {
 
   let classified = 0;
   for (const m of batch) {
-    const { category, summary } = await classifyEmail(
+    const { category, summary, apply_source } = await classifyEmail(
       { from: `${m.from_name ?? ''} <${m.from_email ?? ''}>`, subject: m.subject ?? '', snippet: m.snippet ?? '' },
       client,
     );
-    await setMailClassification(m.id, category, summary);
+    // Safety net: a confirmation from linkedin.com is unambiguously Easy Apply.
+    const source =
+      apply_source ?? (category === 'applied' && (m.from_email ?? '').toLowerCase().endsWith('linkedin.com') ? 'easy_apply' : null);
+    await setMailClassification(m.id, category, summary, source);
     classified++;
   }
 

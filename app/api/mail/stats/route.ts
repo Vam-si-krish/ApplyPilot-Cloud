@@ -20,23 +20,31 @@ export async function GET() {
     const conn = await getGmailConnection();
     const rows = await getClassifiedMailForStats();
 
-    const applied: AppliedEvent[] = rows
-      .filter((r) => r.category === 'applied')
-      .map((r) => ({
-        received_at: r.received_at,
-        company: r.from_name || (r.from_email ? r.from_email.split('@')[1] ?? null : null),
-        subject: r.subject,
-        summary: r.summary,
-      }));
+    const appliedRows = rows.filter((r) => r.category === 'applied');
+    const applied: AppliedEvent[] = appliedRows.map((r) => ({
+      received_at: r.received_at,
+      company: r.from_name || (r.from_email ? r.from_email.split('@')[1] ?? null : null),
+      subject: r.subject,
+      summary: r.summary,
+      apply_source: (r.apply_source as AppliedEvent['apply_source']) ?? null,
+    }));
 
     const totals: Record<string, number> = {};
     for (const c of CATEGORIES) totals[c] = rows.filter((r) => r.category === c).length;
+
+    // Easy Apply vs company/ATS portal split (ADR 0021).
+    const applySources = {
+      easy_apply: appliedRows.filter((r) => r.apply_source === 'easy_apply').length,
+      company_portal: appliedRows.filter((r) => r.apply_source === 'company_portal').length,
+      unknown: appliedRows.filter((r) => !r.apply_source).length,
+    };
 
     return NextResponse.json({
       connected: !!conn.refresh_token,
       email: conn.email,
       applied,
       totals,
+      applySources,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

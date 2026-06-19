@@ -153,6 +153,16 @@ NEVER firing automatically (only manual /api/run). Fix:
 - **Caveat:** Netlify ~10s function timeout (vs Vercel's 60) — watch score-batch; lower SCORE_BATCH_SIZE
   or use a background function if scoring stalls.
 
+## Built — Easy Apply vs company-portal segregation (ADR 0021)
+Research: confirmation sender is the signal — linkedin.com = Easy Apply; ATS/company domain
+(greenhouse/lever/workday/ashby/icims/…) = company portal.
+- Migration 0016: `mail_messages.apply_source` (easy_apply|company_portal), backfilled from sender domain.
+- `mailClassify` prompt now returns a `SOURCE:` line (AI, same call); code safety-net forces easy_apply
+  for linkedin.com applied mail. Stored via `setMailClassification`.
+- `/api/mail` + `/api/mail/stats` return an `applySources` split; **Inbox** shows an "Applied via"
+  breakdown + per-message Easy Apply/Portal tag; **Tracker** shows the split under Pipeline.
+- Test: `mailClassify.test.ts` (parser incl. SOURCE).
+
 ## Next
 1. Real daily run end-to-end: confirm score → auto-assess → recommended view populates; sanity-check
    tiers and the `unknown` discipline.

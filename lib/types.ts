@@ -146,6 +146,9 @@ export interface ApiKeyMasked {
 // ── Gmail inbox (ADR 0012) ───────────────────────────────────────────────────
 export type MailCategory = 'applied' | 'shortlisted' | 'action_needed' | 'assessment' | 'rejection' | 'other';
 
+/** How an application was submitted (ADR 0021): LinkedIn Easy Apply vs a company/ATS portal. */
+export type MailApplySource = 'easy_apply' | 'company_portal';
+
 export interface MailMessage {
   id: string;
   gmail_id: string;
@@ -157,6 +160,8 @@ export interface MailMessage {
   snippet: string | null;
   /** null while 'pending' (fetched but not yet AI-classified — ADR 0013). */
   category: MailCategory | null;
+  /** For 'applied' mail: how it was submitted (ADR 0021); null otherwise. */
+  apply_source: MailApplySource | null;
   summary: string | null;
   /** 'pending' = fetched, awaiting AI; 'classified' = category assigned. */
   status: 'pending' | 'classified';

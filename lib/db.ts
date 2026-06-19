@@ -215,11 +215,16 @@ export async function countPendingMail(): Promise<number> {
   return count ?? 0;
 }
 
-/** Write the AI category + summary for one message and mark it classified. */
-export async function setMailClassification(id: string, category: string, summary: string): Promise<void> {
+/** Write the AI category + summary (+ apply source) for one message and mark it classified. */
+export async function setMailClassification(
+  id: string,
+  category: string,
+  summary: string,
+  applySource: string | null = null,
+): Promise<void> {
   const { error } = await supabaseAdmin()
     .from('mail_messages')
-    .update({ category, summary, status: 'classified' })
+    .update({ category, summary, apply_source: applySource, status: 'classified' })
     .eq('id', id);
   if (error) throw new Error(`Failed to update mail classification: ${error.message}`);
 }
@@ -244,6 +249,7 @@ export interface MailStatRow {
   from_name: string | null;
   from_email: string | null;
   summary: string | null;
+  apply_source: string | null;
 }
 
 /** Classified mail within the last `sinceDays`, newest first — feeds the tracker. */
@@ -251,7 +257,7 @@ export async function getClassifiedMailForStats(sinceDays = 400, limit = 5000): 
   const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
   const { data, error } = await supabaseAdmin()
     .from('mail_messages')
-    .select('received_at, category, subject, from_name, from_email, summary')
+    .select('received_at, category, subject, from_name, from_email, summary, apply_source')
     .eq('status', 'classified')
     .not('received_at', 'is', null)
     .gte('received_at', since)
