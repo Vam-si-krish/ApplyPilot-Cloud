@@ -25,6 +25,10 @@ export interface Job {
   score_note: string | null;
   score_keywords: string | null;
   score_reasoning: string | null;
+  /** Per-dimension sub-scores + missing must-haves + seniority (ADR 0022); null = pre-v2 / unscored. */
+  score_breakdown: StoredScoreBreakdown | null;
+  /** Role type detected by the scorer (ADR 0022) — flags contract/staffing roles. */
+  employment_type: EmploymentType | null;
   status: JobStatus;
   is_shortlisted: boolean;
   /** UUID of the Run that discovered this job. Null for jobs before migration 0003. */
@@ -58,11 +62,31 @@ export interface ScorableJob {
   description?: string | null;
 }
 
+/** Role employment type, detected by the scorer (ADR 0022). */
+export type EmploymentType = 'full_time' | 'contract' | 'internship' | 'unknown';
+
+/** Per-dimension sub-scores from the weighted rubric (ADR 0022). */
+export interface ScoreBreakdown {
+  skills: number; // 0–40
+  experience: number; // 0–25
+  domain: number; // 0–20
+  bonus: number; // 0–10
+  logistics: number; // 0–5
+}
+
+/** What's persisted in jobs.score_breakdown — the sub-scores plus missing must-haves + seniority. */
+export type StoredScoreBreakdown = ScoreBreakdown & { missing?: string | null; seniority?: string | null };
+
 export interface ScoreResult {
   score: number;
   keywords: string;
   note: string;
   reasoning: string;
+  /** v2 rubric extras (ADR 0022); null when the model used the old format / on error. */
+  employment_type?: EmploymentType | null;
+  seniority?: string | null;
+  missing?: string | null;
+  breakdown?: ScoreBreakdown | null;
 }
 
 export interface Profile {

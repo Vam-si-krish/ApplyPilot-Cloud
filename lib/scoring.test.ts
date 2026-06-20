@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseScoreResponse, buildScoreMessages, SCORE_PROMPT } from './scoring';
 
 describe('parseScoreResponse', () => {
-  it('parses a well-formed response into all four fields', () => {
+  it('parses a well-formed response into the core fields', () => {
     const r = parseScoreResponse(
       [
         'SCORE: 8',
@@ -11,12 +11,42 @@ describe('parseScoreResponse', () => {
         'REASONING: The candidate has 5 years of React work matching the core stack.',
       ].join('\n'),
     );
-    expect(r).toEqual({
-      score: 8,
-      keywords: 'React, TypeScript, Node.js',
-      note: 'Strong frontend fit with minor backend gaps.',
-      reasoning: 'The candidate has 5 years of React work matching the core stack.',
-    });
+    expect(r.score).toBe(8);
+    expect(r.keywords).toBe('React, TypeScript, Node.js');
+    expect(r.note).toBe('Strong frontend fit with minor backend gaps.');
+    expect(r.reasoning).toBe('The candidate has 5 years of React work matching the core stack.');
+  });
+
+  it('parses the v2 rubric fields (employment, seniority, breakdown, missing)', () => {
+    const r = parseScoreResponse(
+      [
+        'SCORE: 7',
+        'EMPLOYMENT: contract',
+        'SENIORITY: strong_fit',
+        'BREAKDOWN: skills=32 experience=20 domain=15 bonus=7 logistics=4',
+        'KEYWORDS: React, Node',
+        'MISSING: Kubernetes, GraphQL',
+        'NOTE: Solid.',
+        'REASONING: ok.',
+      ].join('\n'),
+    );
+    expect(r.employment_type).toBe('contract');
+    expect(r.seniority).toBe('strong_fit');
+    expect(r.breakdown).toEqual({ skills: 32, experience: 20, domain: 15, bonus: 7, logistics: 4 });
+    expect(r.missing).toBe('Kubernetes, GraphQL');
+  });
+
+  it('treats MISSING: none as no gaps and clamps over-range sub-scores', () => {
+    const r = parseScoreResponse('SCORE: 9\nBREAKDOWN: skills=99 experience=0 domain=0 bonus=0 logistics=0\nMISSING: none');
+    expect(r.missing).toBe('');
+    expect(r.breakdown?.skills).toBe(40); // clamped to the dimension max
+  });
+
+  it('leaves v2 fields null on an old-style response', () => {
+    const r = parseScoreResponse('SCORE: 6\nKEYWORDS: x\nNOTE: y\nREASONING: z');
+    expect(r.employment_type).toBeNull();
+    expect(r.breakdown).toBeNull();
+    expect(r.missing).toBeNull();
   });
 
   it('clamps scores above 10 down to 10', () => {

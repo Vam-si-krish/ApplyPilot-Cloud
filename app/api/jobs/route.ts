@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const applied = url.searchParams.get('applied');
   const opened = url.searchParams.get('opened');
   const companyTier = url.searchParams.get('companyTier');
+  const employmentType = url.searchParams.get('employmentType'); // 'contract' | 'full_time' | …
   const runId = url.searchParams.get('runId');
   const recency = url.searchParams.get('recency'); // 'recent' (≤24h) | 'past' (>24h)
   const order = url.searchParams.get('order'); // 'date' → newest first (for the date-grouped Past view)
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
   // companyTier: 'none' → not yet assessed (company_tier IS NULL); else exact / comma-list.
   if (companyTier === 'none') q = q.is('company_tier', null);
   else if (companyTier) q = companyTier.includes(',') ? q.in('company_tier', companyTier.split(',')) : q.eq('company_tier', companyTier);
+  if (employmentType) q = q.eq('employment_type', employmentType);
   if (runId) {
     if (runId.includes(',')) {
       q = q.in('run_id', runId.split(','));

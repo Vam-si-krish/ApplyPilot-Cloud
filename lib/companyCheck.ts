@@ -19,12 +19,14 @@ export interface CompanyAssessment {
 // ── Prompt ───────────────────────────────────────────────────────────────────
 export const COMPANY_PROMPT = `You are an expert job-market analyst. Judge whether the EMPLOYER behind a job posting is a legitimate, worthwhile place to apply, or a likely time-waster.
 
-Use what you actually know about the company (reputation, size, industry standing) PLUS the details provided. Watch for time-waster / spam signals: generic staffing agencies and recruiters reposting other companies' roles, lead-generation or resume-upsell schemes, vague shell companies, and listings that exist mainly to harvest applicant data.
+Use what you actually know about the company (reputation, size, industry standing) PLUS the details provided. The 'low' tier is for genuine TIME-WASTERS / data-harvesters, namely: lead-generation or résumé-upsell schemes, vague shell companies, listings that exist mainly to harvest applicant data or drive you to a paid service, and duplicate/scraped reposts of roles that aren't really being hired.
+
+IMPORTANT — do NOT demote a company to 'low' merely because the role is a CONTRACT / C2C / temporary position, or because a staffing/recruiting firm is hiring for a REAL client role. Legitimate staffing firms and contract positions are normal and worth surfacing — judge them on legitimacy, not on the employment type. Only rate 'low' when the listing itself shows the time-waster / harvesting signals above.
 
 Rate the employer into exactly one TIER:
-- good: well-known, reputable, or clearly established employer hiring directly.
-- medium: plausible real employer but unremarkable or limited information.
-- low: likely a staffing mill / aggregator / lead-gen / spam / data-harvesting listing.
+- good: well-known, reputable, or clearly established employer (or a reputable staffing firm placing for a real client) hiring genuinely.
+- medium: plausible real employer or staffing firm but unremarkable or limited information.
+- low: likely a lead-gen / résumé-upsell / data-harvesting / shell / fake-repost listing (a real time-waster — not just "it's a contract or a recruiter").
 - unknown: you do not recognize the company and the details are insufficient to judge. DO NOT GUESS — use 'unknown' rather than inventing facts.
 
 RESPOND IN EXACTLY THIS FORMAT:

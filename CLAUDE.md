@@ -6,13 +6,16 @@ against the user's resume (via an LLM), and shows a sorted shortlist. It does
 **not** auto-apply. It is a cloud-native rewrite of the *fetch + score* half of
 `../ApplyPilot-Lite/`, keeping scoring behaviour identical.
 
-## The one rule that matters
-**Scoring behaviour is copied, not reinvented.** The `SCORE_PROMPT`, the user-message
-construction (resume + job, description truncated to 15000 chars), `temperature: 0.2`,
-`max_tokens: 512`, and the `SCORE/KEYWORDS/NOTE/REASONING` parser must stay byte-for-byte
-faithful to `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`. Exactly one LLM call
-per job; the model scores, the threshold/sort decides; a parse failure or LLM error
-yields score `0` (visible), never a fabricated score.
+## The rule that matters (scoring discipline)
+**Scoring is deliberate, never fabricated.** As of **ADR 0022** the scorer is a v2 weighted,
+must-have-aware rubric (`SCORE_PROMPT` in `lib/scoring.ts`) — it intentionally **diverges** from the
+ApplyPilot-Lite scorer (the old "copy it byte-for-byte" rule is retired; see ADR 0022). What still
+holds, non-negotiably: **exactly one LLM call per job**; the model scores 0–10 and the threshold/sort
+decides; a parse failure or LLM error yields score `0` (visible), **never a fabricated score**; output
+is line-prefixed and parsed defensively (clamped 0–10, extra fields optional). The user-message is
+still resume + job with the description truncated to 15000 chars. The scorer also reports
+`employment_type` (so contract roles are flagged, not demoted) and a sub-score `breakdown`. Eval cases
+(`evals/cases/`) are the regression net — keep them green when touching scoring.
 
 Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /api/apify-webhook
 (insert unscored) → /api/score-batch (chunked scoring loop) → user reads scored jobs`.

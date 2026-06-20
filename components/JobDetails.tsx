@@ -56,6 +56,25 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           </p>
         </div>
       )}
+      {/* Weighted-rubric breakdown (ADR 0022) */}
+      {job.score_breakdown && (
+        <div>
+          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1.5">
+            Fit breakdown{job.employment_type === 'contract' ? ' · contract role' : ''}
+            {job.score_breakdown.seniority ? ` · ${job.score_breakdown.seniority.replace(/_/g, ' ')}` : ''}
+          </p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono text-slate-muted mb-1.5">
+            <span>skills <span className="text-slate-text">{job.score_breakdown.skills}</span>/40</span>
+            <span>experience <span className="text-slate-text">{job.score_breakdown.experience}</span>/25</span>
+            <span>domain <span className="text-slate-text">{job.score_breakdown.domain}</span>/20</span>
+            <span>bonus <span className="text-slate-text">{job.score_breakdown.bonus}</span>/10</span>
+            <span>logistics <span className="text-slate-text">{job.score_breakdown.logistics}</span>/5</span>
+          </div>
+          {job.score_breakdown.missing && (
+            <p className="text-[11px] text-rose">Missing must-haves: <span className="text-slate-text">{job.score_breakdown.missing}</span></p>
+          )}
+        </div>
+      )}
       {job.score_keywords && (
         <div>
           <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Matched keywords (AI)</p>

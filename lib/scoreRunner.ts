@@ -77,6 +77,12 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
     );
     if (result.score === 0) errors++;
 
+    // Persist the weighted-rubric extras (ADR 0022): sub-scores + missing + seniority
+    // in score_breakdown, plus the detected employment type for contract flagging.
+    const breakdown = result.breakdown
+      ? { ...result.breakdown, missing: result.missing ?? null, seniority: result.seniority ?? null }
+      : null;
+
     const { error } = await supabaseAdmin()
       .from('jobs')
       .update({
@@ -84,6 +90,8 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
         score_note: result.note,
         score_keywords: result.keywords,
         score_reasoning: result.reasoning,
+        score_breakdown: breakdown,
+        employment_type: result.employment_type ?? null,
         scored_at: new Date().toISOString(),
         status: 'scored',
       })

@@ -33,6 +33,12 @@ const COMPANY_LABEL: Record<string, string> = {
   none: 'Not assessed',
 };
 
+const EMPLOYMENT_LABEL: Record<string, string> = {
+  full_time: 'Full-time',
+  contract: 'Contract',
+  internship: 'Internship',
+};
+
 interface RunSummary {
   id: string;
   started_at: string;
@@ -67,6 +73,7 @@ export default function JobsPage() {
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
   const [companyTier, setCompanyTier] = useState('good,medium');
   const [minSkill, setMinSkill] = useState(''); // skill-match % gate for the view
+  const [employmentType, setEmploymentType] = useState(''); // full_time | contract | internship
   const [limit, setLimit] = useState(300); // page size; "Load more" raises it
   const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
@@ -131,12 +138,13 @@ export default function JobsPage() {
     if (easyApply === true) p.set('easyApply', 'true');
     if (easyApply === false) p.set('easyApply', 'false');
     if (companyTier && !scoreless) p.set('companyTier', companyTier);
+    if (employmentType) p.set('employmentType', employmentType);
     if (hideApplied && status !== 'applied') p.set('excludeApplied', 'true');
     if (hideOpened && status !== 'opened') p.set('excludeOpened', 'true');
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     return p;
-  }, [search, minScore, minSkill, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
+  }, [search, minScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,12 +164,12 @@ export default function JobsPage() {
   // Drop the selection whenever the filter set changes (the ids on screen change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, status, minScore, minSkill, easyApply, companyTier, selectedRunIds]);
+  }, [search, status, minScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
 
   // Reset pagination when filters change.
   useEffect(() => {
     setLimit(300);
-  }, [search, status, minScore, minSkill, easyApply, companyTier, selectedRunIds]);
+  }, [search, status, minScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
 
   // Close the runs dropdown on any click outside it (or Escape).
   useEffect(() => {
@@ -213,6 +221,7 @@ export default function JobsPage() {
     setStatus('all');
     setMinScore('6');
     setMinSkill('');
+    setEmploymentType('');
     setCompanyTier('good,medium');
     setEasyApply(null);
     setHideApplied(true);
@@ -661,6 +670,18 @@ export default function JobsPage() {
             <option value="none">Company: Not assessed</option>
           </select>
 
+          <select
+            value={employmentType}
+            onChange={(e) => setEmploymentType(e.target.value)}
+            title="Filter by role type (contract / full-time)"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any type</option>
+            <option value="full_time">Full-time</option>
+            <option value="contract">Contract</option>
+            <option value="internship">Internship</option>
+          </select>
+
           <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
 
           <label
@@ -711,6 +732,7 @@ export default function JobsPage() {
               clear: () => setMinSkill(''),
             });
           if (companyTier && !scoreless) chips.push({ key: 'co', label: `Company: ${COMPANY_LABEL[companyTier] ?? companyTier}`, clear: () => setCompanyTier('') });
+          if (employmentType) chips.push({ key: 'em', label: EMPLOYMENT_LABEL[employmentType] ?? employmentType, clear: () => setEmploymentType('') });
           if (easyApply !== null) chips.push({ key: 'ea', label: easyApply ? 'Easy Apply' : 'External', clear: () => setEasyApply(null) });
           if (hideApplied && status !== 'applied') chips.push({ key: 'ha', label: 'Hiding applied', clear: () => setHideApplied(false) });
           if (hideOpened && status !== 'opened') chips.push({ key: 'ho', label: 'Hiding opened', clear: () => setHideOpened(false) });
@@ -861,6 +883,18 @@ export default function JobsPage() {
                         {job.company_size ? ` · ${job.company_size}` : ''}
                       </p>
                     </div>
+
+                    {/* Contract / role-type badge (ADR 0022) — flagged, not demoted */}
+                    {job.employment_type === 'contract' && (
+                      <span title="Contract / staffing role — review separately" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded">
+                        Contract
+                      </span>
+                    )}
+                    {job.employment_type === 'internship' && (
+                      <span title="Internship" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-raised border border-ink text-slate-muted rounded">
+                        Intern
+                      </span>
+                    )}
 
                     {/* Apply type badge */}
                     {job.easy_apply === true && (
