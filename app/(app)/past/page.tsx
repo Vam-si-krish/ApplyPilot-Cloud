@@ -92,7 +92,7 @@ export default function PastJobsPage() {
   const groups = groupByDate(jobs);
 
   return (
-    <div className="p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="mb-6">
         <Link href="/jobs" className="inline-flex items-center gap-1.5 text-[12px] text-slate-muted hover:text-sky mb-2 transition-colors">
           <ArrowLeft size={13} /> Back to recent jobs

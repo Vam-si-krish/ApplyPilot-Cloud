@@ -388,9 +388,12 @@ export default function JobsPage() {
   }
 
   // AI-assess the companies behind the picked jobs (chunked, like scoreSelected).
+  // Re-runs even on already-assessed jobs (overwrites the tier) — this IS the reassess path.
   async function assessSelected() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy) return;
+    // One LLM call per job — guard against an accidental huge re-run.
+    if (ids.length > 20 && !confirm(`Assess / re-assess ${ids.length} companies? This runs one AI call per job and re-rates any that were already assessed.`)) return;
     setBulkBusy(true);
     setBulkMsg('Assessing companies…');
     let assessed = 0;
@@ -473,7 +476,7 @@ export default function JobsPage() {
   }
 
   return (
-    <div className="p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Jobs</h1>
@@ -794,10 +797,10 @@ export default function JobsPage() {
               <button
                 onClick={assessSelected}
                 disabled={bulkBusy}
-                title="AI-assess the companies behind the selected jobs (spot time-wasters)"
+                title="AI-assess the selected companies — re-runs even on jobs already rated, so use this to re-assess too"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
               >
-                <Building2 size={13} /> Assess companies ({selected.size})
+                <Building2 size={13} /> Assess / re-assess ({selected.size})
               </button>
               <button
                 onClick={markAppliedSelected}

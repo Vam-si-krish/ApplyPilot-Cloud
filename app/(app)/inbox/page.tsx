@@ -122,7 +122,7 @@ export default function InboxPage() {
   const src = data?.applySources ?? { easy_apply: 0, company_portal: 0, unknown: 0 };
 
   return (
-    <div className="p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight flex items-center gap-2">

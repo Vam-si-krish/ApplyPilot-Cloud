@@ -61,7 +61,7 @@ export default function TrackerPage() {
 
   if (data && !data.connected) {
     return (
-      <div className="p-7 animate-slide-up">
+      <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
         <Header />
         <div className="bg-card border border-ink rounded-xl px-6 py-12 text-center">
           <div className="w-12 h-12 rounded-xl bg-emerald/10 border border-emerald/20 flex items-center justify-center mx-auto mb-4">
@@ -80,11 +80,11 @@ export default function TrackerPage() {
   }
 
   return (
-    <div className="p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <Header email={data?.email ?? null} total={mo.all} />
 
       {/* Momentum cards */}
-      <div className="grid grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <MomentumCard label="Today" value={mo.today} accent="text-emerald" icon={CheckCircle2} sub={streak > 0 ? `${streak}-day streak` : 'no streak yet'} />
         <MomentumCard label="This week" value={mo.week} accent="text-sky" icon={Activity} sub={`${avgPerActiveDay ? avgPerActiveDay.toFixed(1) : '0'}/active day`} />
         <MomentumCard label="This month" value={mo.month} accent="text-violet-300" icon={TrendingUp} sub={cfg.label.toLowerCase()} />

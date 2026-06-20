@@ -53,7 +53,7 @@ export default function ProfilePage() {
 
   if (!form) {
     return (
-      <div className="p-7">
+      <div className="p-4 sm:p-6 lg:p-7">
         <div className="h-8 w-40 bg-raised rounded animate-pulse mb-6" />
         <div className="grid grid-cols-2 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -72,7 +72,7 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Profile</h1>
@@ -110,12 +110,12 @@ export default function ProfilePage() {
               <Field label="LinkedIn URL" value={form.personal?.linkedin_url} onChange={(v) => set('personal.linkedin_url', v)} />
               <Field label="GitHub URL" value={form.personal?.github_url} onChange={(v) => set('personal.github_url', v)} />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Years of Experience" value={form.experience?.years_of_experience_total} onChange={(v) => set('experience.years_of_experience_total', v)} />
               <Field label="Target Role" value={form.experience?.target_role} onChange={(v) => set('experience.target_role', v)} />
               <Field label="Education Level" value={form.experience?.education_level} onChange={(v) => set('experience.education_level', v)} />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Min Salary ($)" value={form.compensation?.salary_range_min} onChange={(v) => set('compensation.salary_range_min', v)} />
               <Field label="Max Salary ($)" value={form.compensation?.salary_range_max} onChange={(v) => set('compensation.salary_range_max', v)} />
             </div>

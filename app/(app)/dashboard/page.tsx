@@ -59,7 +59,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Dashboard</h1>
@@ -86,7 +86,7 @@ export default function DashboardPage() {
         <div className="mb-6 px-4 py-3 rounded-lg border border-ink bg-card text-[13px] text-slate-text">{msg}</div>
       )}
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {cards.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-card border border-ink rounded-xl p-5 hover:border-sky/20 transition-all group">
             <div className="flex items-center justify-between mb-3">
