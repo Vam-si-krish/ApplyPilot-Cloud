@@ -76,7 +76,7 @@ export default function SettingsPage() {
 
   if (!s) {
     return (
-      <div className="p-7">
+      <div className="p-4 sm:p-6 lg:p-7">
         <div className="h-8 w-40 bg-raised rounded animate-pulse mb-6" />
         <div className="h-40 bg-card border border-ink rounded-xl animate-pulse" />
       </div>
@@ -84,7 +84,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-7 animate-slide-up max-w-3xl">
+    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Settings</h1>
@@ -195,7 +195,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-4 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
           <Field label="Hours old (lookback)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
           <Field label="Results per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
           <Field
@@ -205,11 +205,24 @@ export default function SettingsPage() {
             placeholder="0"
           />
         </div>
-        <p className="text-slate-muted text-[11px] mt-3">
-          All selected roles and locations run as a <span className="text-sky">single de-duplicated search</span>. Total fetched ≈
-          <span className="font-mono"> results per role × roles</span>, hard-capped by <span className="font-mono">Max jobs / run</span>
-          {' '}(min 150 for the cheapest actor). Use the skill gate above to avoid AI-scoring jobs that don&apos;t fit.
-        </p>
+
+        {/* Fetch strategy (ADR 0023) */}
+        <div className="mt-4">
+          <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Fetch mode</p>
+          <select
+            value={s.fetch_mode ?? 'url'}
+            onChange={(e) => patch({ fetch_mode: e.target.value as 'url' | 'keyword' })}
+            className="w-full sm:w-auto bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+          >
+            <option value="url">Precise — search exactly your role × location combos</option>
+            <option value="keyword">Broad — let the scraper expand your keywords × locations</option>
+          </select>
+          <p className="text-slate-muted text-[11px] mt-2">
+            <span className="text-sky">Precise</span> crawls one search per role×location you selected — predictable count.{' '}
+            <span className="text-sky">Broad</span> hands your keywords + locations to the scraper to cast a wider net (may surface
+            more, less predictable). Both de-duplicate and obey <span className="font-mono">Max jobs / run</span> (min 150).
+          </p>
+        </div>
       </Section>
 
       {/* LLM */}

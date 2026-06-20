@@ -137,6 +137,9 @@ export interface Settings {
   min_skill_match: number;
   /** Hard cap on jobs fetched per run (caps actor maxItems). 0 = no cap (ADR 0019). */
   max_jobs_per_run: number;
+  /** How the LinkedIn actor is driven (ADR 0023): 'url' = precise per-combo searches;
+   *  'keyword' = actor-native keyword×location expansion (broader). */
+  fetch_mode: 'url' | 'keyword';
   /** When true, the pipeline auto-assesses companies for high-scoring jobs after scoring (ADR 0010). */
   auto_assess_enabled: boolean;
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */

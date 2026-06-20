@@ -42,13 +42,16 @@ export function buildLinkedInSearchUrl(keyword: string, location: string, hoursO
 }
 
 /**
- * One LinkedIn run covering EVERY selected role × location (ADR 0017). All
- * locations go in the actor's `locations` array and one `startUrls` per combo, in
- * a single run, with `saveOnlyUniqueItems` so the actor de-duplicates — a job that
- * matches two locations (e.g. a Boston job under both "Boston, MA" and "United
- * States") is returned, and billed, once. `maxItems` is a single run-wide cap
- * (`results_per_query × #combos`), floored to the actor minimum (cheap_scraper
- * rejects < 150).
+ * Build the LinkedIn actor input (ADR 0023). Two selectable fetch strategies, both
+ * sharing a HARD global `maxItems` cap, dedup, skill-match, and the look-back window:
+ *
+ *  - 'url' (default, precise): hand the actor EXACTLY one `startUrls` per role×location
+ *    (window baked into the URL's f_TPR). Predictable count; no actor-side expansion.
+ *  - 'keyword' (broad): send `keyword[]` + `locations[]` and let the actor build one
+ *    search per pair ("each location is combined with every keyword"). Wider reach.
+ *
+ * Critically, we never send BOTH startUrls AND keyword/locations — doing so makes the
+ * actor double-fetch (its own searches on top of ours) and was the ~1200-job blowup.
  */
 function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const keywords = settings.keywords.filter(Boolean);
@@ -56,31 +59,28 @@ function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const skills = (settings.skills ?? []).filter(Boolean);
   const combos: { keyword: string; location: string }[] = [];
   for (const k of keywords) for (const l of locations.length ? locations : ['']) combos.push({ keyword: k, location: l });
-  // Cap total results: results-per-role × combos, optionally hard-capped by
-  // max_jobs_per_run (ADR 0019), always floored to the actor minimum (150).
+
+  // Total cap = Max jobs/run when set (the hard total limit); otherwise
+  // results-per-role × #combos. Always floored to the actor minimum (150).
   let cap = settings.results_per_query * Math.max(1, combos.length);
-  if (settings.max_jobs_per_run > 0) cap = Math.min(cap, settings.max_jobs_per_run);
+  if (settings.max_jobs_per_run > 0) cap = settings.max_jobs_per_run;
   cap = Math.max(cap, MIN_MAX_ITEMS);
-  return {
-    title: keywords[0] ?? '',
-    keyword: keywords,
-    keywords,
-    searchKeyword: keywords[0] ?? '',
-    locations, // the actor's native multi-location field
-    location: locations[0] ?? '',
-    searchLocation: locations[0] ?? '',
-    rows: settings.results_per_query,
-    maxItems: cap,
-    maxResults: cap,
-    saveOnlyUniqueItems: true, // de-dupe across overlapping searches → pay once per unique job
+
+  const base = {
+    maxItems: cap, // hard global cap on the whole run
+    saveOnlyUniqueItems: true,
     // Skill-match (ADR 0018): the actor tags each job with matched/unmatched skills + a 0–100 score.
     resumeKeywords: skills.map((s) => ({ keyword: s })),
     publishedAt: mapPublishedAt(settings.hours_old),
-    urls: combos.map((c) => buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old)),
-    startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })),
-    searchUrl: combos[0] ? buildLinkedInSearchUrl(combos[0].keyword, combos[0].location, settings.hours_old) : '',
     proxy: { useApifyProxy: true },
   };
+
+  if (settings.fetch_mode === 'keyword') {
+    // Broad: actor builds one search per keyword × location pair (no startUrls).
+    return { ...base, keyword: keywords, locations };
+  }
+  // Precise (default): crawl exactly the searches we define, one per role × location.
+  return { ...base, startUrls: combos.map((c) => ({ url: buildLinkedInSearchUrl(c.keyword, c.location, settings.hours_old) })) };
 }
 
 function buildIndeedInput(settings: Settings): Record<string, unknown> {

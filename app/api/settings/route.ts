@@ -71,6 +71,7 @@ export async function PUT(req: Request) {
   if (Number.isFinite(Number(body.max_jobs_per_run))) {
     patch.max_jobs_per_run = Math.max(0, Math.round(Number(body.max_jobs_per_run)));
   }
+  if (body.fetch_mode === 'url' || body.fetch_mode === 'keyword') patch.fetch_mode = body.fetch_mode;
   if (typeof body.auto_assess_enabled === 'boolean') patch.auto_assess_enabled = body.auto_assess_enabled;
   if (Number.isFinite(Number(body.auto_assess_min_score))) {
     patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));

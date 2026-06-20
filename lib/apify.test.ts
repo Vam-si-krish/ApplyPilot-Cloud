@@ -25,6 +25,7 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     prefilter_threshold: 30,
     min_skill_match: 0,
     max_jobs_per_run: 0,
+    fetch_mode: 'url',
     auto_assess_enabled: true,
     auto_assess_min_score: 6,
     updated_at: '2026-06-18T00:00:00Z',
@@ -32,19 +33,20 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
   };
 }
 
-describe('planRuns — one combined, de-duplicated LinkedIn run', () => {
-  it('covers every role × location in a single run', () => {
+describe('planRuns — one URL-driven LinkedIn run (ADR 0023)', () => {
+  it('covers every role × location via startUrls (no actor-side keyword/locations expansion)', () => {
     const specs = planRuns(makeSettings());
     expect(specs).toHaveLength(1);
     const run = specs[0];
     expect(run.portal).toBe('linkedin');
     expect(run.actorId).toBe('cheap_scraper~linkedin-job-scraper');
 
-    // All selected locations ride in the actor's multi-location field…
-    expect(run.input.locations).toEqual(['United States', 'Boston, MA']);
-    // …and there's one search URL per role × location (4 × 2 = 8).
-    expect((run.input.urls as string[]).length).toBe(8);
+    // One startUrls entry per role × location (4 × 2 = 8) …
     expect((run.input.startUrls as { url: string }[]).length).toBe(8);
+    // … and we DON'T send keyword/locations arrays (which would double-fetch).
+    expect(run.input.locations).toBeUndefined();
+    expect(run.input.keyword).toBeUndefined();
+    expect(run.input.urls).toBeUndefined();
   });
 
   it('de-duplicates so overlapping locations are billed once', () => {
@@ -59,9 +61,11 @@ describe('planRuns — one combined, de-duplicated LinkedIn run', () => {
     expect(small[0].input.maxItems).toBe(150);
   });
 
-  it('honors max_jobs_per_run as a hard cap (still floored to 150)', () => {
-    // 4 × 2 × 50 = 400, capped to 200.
+  it('treats max_jobs_per_run as the HARD total cap (overrides the combos product)', () => {
+    // 4 × 2 × 50 = 400, but the user's hard cap wins → 200.
     expect(planRuns(makeSettings({ max_jobs_per_run: 200 }))[0].input.maxItems).toBe(200);
+    // The cap holds even when combos would imply far more (this was the 1200-job bug).
+    expect(planRuns(makeSettings({ max_jobs_per_run: 500 }))[0].input.maxItems).toBe(500);
     // A cap below the floor still yields 150.
     expect(planRuns(makeSettings({ max_jobs_per_run: 50 }))[0].input.maxItems).toBe(150);
   });
@@ -69,7 +73,7 @@ describe('planRuns — one combined, de-duplicated LinkedIn run', () => {
   it('handles no locations as a single keyword-only run', () => {
     const specs = planRuns(makeSettings({ locations: [] }));
     expect(specs).toHaveLength(1);
-    expect(specs[0].input.locations).toEqual([]);
+    expect((specs[0].input.startUrls as { url: string }[]).length).toBe(4); // 4 roles, blank location
   });
 
   it('keeps non-LinkedIn portals as their own single run', () => {
@@ -81,6 +85,15 @@ describe('planRuns — one combined, de-duplicated LinkedIn run', () => {
   it('passes the user skills to the actor as resumeKeywords', () => {
     const input = planRuns(makeSettings())[0].input;
     expect(input.resumeKeywords).toEqual([{ keyword: 'React' }, { keyword: 'TypeScript' }]);
+  });
+
+  it("'keyword' fetch mode uses keyword/locations (not startUrls) — no double-fetch", () => {
+    const input = planRuns(makeSettings({ fetch_mode: 'keyword' }))[0].input;
+    expect(input.keyword).toEqual(['Software Engineer', 'Data Engineer', 'ML Engineer', 'Backend Engineer']);
+    expect(input.locations).toEqual(['United States', 'Boston, MA']);
+    expect(input.startUrls).toBeUndefined();
+    // Same hard cap applies in both modes.
+    expect(planRuns(makeSettings({ fetch_mode: 'keyword', max_jobs_per_run: 500 }))[0].input.maxItems).toBe(500);
   });
 });
 
