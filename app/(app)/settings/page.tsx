@@ -401,6 +401,21 @@ export default function SettingsPage() {
         </p>
       </Section>
 
+      {/* Résumé Worker */}
+      <Section title="Résumé Worker">
+        <p className="text-slate-muted text-[12px] mb-4">
+          Configure the URL for your local Puppeteer worker. This replaces the hardcoded environment variable so you don't have to redeploy when your tunnel URL changes.
+        </p>
+        <div className="grid grid-cols-1 gap-4">
+          <Field 
+            label="Worker URL" 
+            value={s.resume_worker_url ?? ''} 
+            onChange={(v) => patch({ resume_worker_url: v })} 
+            placeholder="https://mission-julia-direction-omissions.trycloudflare.com" 
+          />
+        </div>
+      </Section>
+
       <SaveBtn onClick={save} loading={saving} />
     </div>
   );

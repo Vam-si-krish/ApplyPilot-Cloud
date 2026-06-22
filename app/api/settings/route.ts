@@ -76,6 +76,10 @@ export async function PUT(req: Request) {
   if (Number.isFinite(Number(body.auto_assess_min_score))) {
     patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));
   }
+  if (typeof body.resume_worker_url === 'string') {
+    patch.resume_worker_url = body.resume_worker_url;
+  }
+  if (body.resume_worker_url === null) patch.resume_worker_url = null;
 
   const { error } = await supabaseAdmin().from('settings').update(patch).eq('id', 1);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

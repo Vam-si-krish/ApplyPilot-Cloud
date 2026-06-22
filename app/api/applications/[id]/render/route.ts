@@ -9,12 +9,14 @@
  * during local testing) and RESUME_WORKER_SECRET (matches the worker's WORKER_SECRET).
  */
 import { NextResponse } from 'next/server';
+import { getSettings } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  const url = process.env.RESUME_WORKER_URL;
+  const settings = await getSettings().catch(() => null);
+  const url = settings?.resume_worker_url || process.env.RESUME_WORKER_URL;
   const secret = process.env.RESUME_WORKER_SECRET;
   if (!url || !secret) {
     return NextResponse.json(

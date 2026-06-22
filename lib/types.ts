@@ -147,6 +147,7 @@ export interface Settings {
   auto_assess_enabled: boolean;
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */
   auto_assess_min_score: number;
+  resume_worker_url: string | null;
   updated_at: string;
 }
 
