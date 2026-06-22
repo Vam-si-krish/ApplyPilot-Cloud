@@ -16,7 +16,7 @@ import { renderHtml } from './templates.js';
 // Ceiling is 1.0 so the exact spec font sizes are used whenever the content fits a
 // single page (the design is tuned to those sizes); we only ever shrink — never
 // inflate above the spec. Floor keeps it readable if a job's content runs long.
-const SCALE_FLOOR = 0.82;
+const SCALE_FLOOR = 0.78;
 const SCALE_CEIL = 1.0;
 
 let _browser = null;

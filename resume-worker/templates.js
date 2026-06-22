@@ -33,15 +33,16 @@ function esc(s) {
 }
 
 function contactLine(b) {
+  // Location first, then phone, email, profiles (LinkedIn/GitHub), portfolio — pipe-separated.
   const parts = [];
-  if (b.email) parts.push(esc(b.email));
-  if (b.phone) parts.push(esc(b.phone));
   if (b.location) parts.push(esc(b.location));
-  if (b.url) parts.push(esc(b.url));
+  if (b.phone) parts.push(esc(b.phone));
+  if (b.email) parts.push(esc(b.email));
   for (const p of b.profiles || []) {
     if (p.url) parts.push(esc(p.url));
   }
-  return parts.join('&nbsp;&nbsp;·&nbsp;&nbsp;');
+  if (b.url) parts.push(esc(b.url));
+  return parts.join('&nbsp;&nbsp;|&nbsp;&nbsp;');
 }
 
 function section(title, inner) {
@@ -91,13 +92,14 @@ function projectEntry(p) {
 function eduEntry(e) {
   const right = [e.startDate, e.endDate].filter(Boolean).join(' – ');
   const degree = [e.studyType, e.area].filter(Boolean).join(', ');
+  // Degree first (bold), institution below (italic) — matches the reference.
   return `
     <div class="entry edu">
       <div class="entry-head">
-        <span class="entry-title">${esc(e.institution || '')}</span>
+        <span class="entry-title">${esc(degree)}${e.score ? ` · ${esc(e.score)}` : ''}</span>
         <span class="entry-meta">${esc(right)}</span>
       </div>
-      ${degree || e.score ? `<div class="entry-sub"><span class="entry-role">${esc(degree)}${e.score ? ` · ${esc(e.score)}` : ''}</span></div>` : ''}
+      ${e.institution ? `<div class="entry-sub"><span class="entry-role">${esc(e.institution)}</span></div>` : ''}
     </div>`;
 }
 
@@ -156,7 +158,7 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
     color: #444444;
     margin-bottom: 3pt;
   }
-  header { text-align: center; margin-bottom: 0; }
+  header { text-align: center; margin-bottom: 3pt; }
   section { margin-top: 0; }
   h2 {
     font-size: 11.5pt;
@@ -165,21 +167,21 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
     text-align: left;
     color: #1a1a1a;
     border-bottom: 0.8pt solid #1a1a1a;
-    margin-top: 1.5pt;
+    margin-top: 5.5pt;
     padding-bottom: 0.5pt;
-    margin-bottom: 2pt;
+    margin-bottom: 3pt;
     text-transform: uppercase;
   }
-  .summary { 
+  .summary {
     font-size: 9.8pt;
-    line-height: 10.3pt;
+    line-height: 12pt;
     font-weight: normal;
     text-align: left;
-    margin-bottom: 0.5pt;
+    margin-bottom: 1pt;
   }
-  .entry { margin-bottom: 0.5pt; }
-  .entry-head { display: flex; justify-content: space-between; align-items: baseline; padding-top: 1pt; gap: 0.5em; }
-  .entry-sub { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; }
+  .entry { margin-bottom: 5pt; }
+  .entry-head { display: flex; justify-content: space-between; align-items: baseline; padding-top: 0; gap: 0.5em; }
+  .entry-sub { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; margin-bottom: 1.5pt; }
   .entry-title { font-size: 10.5pt; line-height: 13pt; font-weight: bold; color: #1a1a1a; }
   .entry-role { font-size: 10pt; line-height: 12pt; font-weight: normal; font-style: italic; color: #1a1a1a; }
   .entry-loc { font-size: 10pt; line-height: 12pt; font-weight: normal; font-style: italic; color: #444444; white-space: nowrap; }
@@ -187,24 +189,23 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
   ul { list-style: disc; margin: 0; padding-left: 12pt; }
   li {
     font-size: 9.5pt;
-    line-height: 9.5pt;
-    margin-bottom: 1.2pt;
+    line-height: 11.5pt;
+    margin-bottom: 2.4pt;
     padding-left: 1pt;
     text-align: left;
   }
   li::marker { color: #1a1a1a; }
   ul.skills { margin-top: 0; }
-  ul.skills li { font-size: 9.8pt; line-height: 10.4pt; margin-bottom: 0.4pt; padding-left: 1pt; }
+  ul.skills li { font-size: 9.8pt; line-height: 12pt; margin-bottom: 1.5pt; padding-left: 1pt; }
   .skill-group { font-weight: bold; color: #1a1a1a; }
-  .edu { padding-top: 0.8pt; padding-bottom: 0.8pt; }
-  .edu .entry-title { font-size: 9.8pt; line-height: 10.3pt; font-weight: bold; }
-  .edu .entry-role { font-size: 9.8pt; font-weight: normal; font-style: normal; }
+  .edu { margin-bottom: 6pt; }
+  .edu .entry-title { font-size: 10.5pt; line-height: 13pt; font-weight: bold; }
+  .edu .entry-role { font-size: 9.8pt; line-height: 12pt; font-weight: normal; font-style: italic; color: #444444; }
 </style>
 </head>
 <body>
   <header>
     <div class="name">${esc(b.name || '')}</div>
-    ${b.label ? `<div class="label">${esc(b.label)}</div>` : ''}
     <div class="contact">${contactLine(b)}</div>
   </header>
   ${body}
