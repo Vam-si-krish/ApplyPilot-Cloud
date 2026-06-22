@@ -8,8 +8,17 @@ const PROVIDERS = [
   { id: 'gemini', label: 'Google Gemini', model: 'gemini-2.0-flash' },
   { id: 'openai', label: 'OpenAI', model: 'gpt-4o-mini' },
   { id: 'deepseek', label: 'DeepSeek', model: 'deepseek-chat' },
-  { id: 'anthropic', label: 'Anthropic Claude', model: 'claude-haiku-4-5-20251001' },
+  { id: 'anthropic', label: 'Anthropic Claude', model: 'claude-sonnet-4-6' },
 ];
+
+// Known models per provider (datalist suggestions; the field stays editable).
+const MODELS: Record<string, string[]> = {
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'],
+  anthropic: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8'],
+  gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+};
+const defaultModel = (provider: string) => MODELS[provider]?.[0] ?? '';
 
 const ACTORS = [
   { id: 'bebity~linkedin-jobs-scraper', label: 'Standard (bebity)' },
@@ -225,32 +234,32 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* LLM */}
-      <Section title="Scoring Provider">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Provider</p>
-            <select
-              value={s.llm_provider}
-              onChange={(e) => {
-                const prov = PROVIDERS.find((p) => p.id === e.target.value);
-                patch({ llm_provider: e.target.value, llm_model: prov?.model ?? s.llm_model });
-              }}
-              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Field label="Model" value={s.llm_model} onChange={(v) => patch({ llm_model: v })} />
-        </div>
-        <p className="text-slate-muted text-[11px] mt-3">
-          The key for the selected provider is taken from the <span className="text-sky">API Keys</span> section below (active key).
-          Environment variables are used only as a fallback when no key is stored there.
+      {/* AI Models — per task (ADR 0025) */}
+      <Section title="AI Models">
+        <p className="text-slate-muted text-[12px] mb-4">
+          Choose a model per task. <span className="text-sky">Scoring</span> runs on every fetched job (high volume) — pick a
+          cheap, consistent model. <span className="text-sky">Tailoring</span> rewrites your résumé for each job — pick a premium
+          model. Each task uses the <span className="text-emerald">active key</span> for its provider (set in API Keys below);
+          environment variables are only a fallback.
         </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <TaskModel
+            title="Scoring"
+            hint="High volume · cheap & consistent (e.g. GPT-4o-mini)"
+            provider={s.score_provider ?? 'openai'}
+            model={s.score_model ?? 'gpt-4o-mini'}
+            onProvider={(prov) => patch({ score_provider: prov, score_model: defaultModel(prov) })}
+            onModel={(v) => patch({ score_model: v })}
+          />
+          <TaskModel
+            title="Tailoring"
+            hint="Quality · truthful rewriting (e.g. Claude Sonnet 4.6)"
+            provider={s.tailor_provider ?? 'anthropic'}
+            model={s.tailor_model ?? 'claude-sonnet-4-6'}
+            onProvider={(prov) => patch({ tailor_provider: prov, tailor_model: defaultModel(prov) })}
+            onModel={(v) => patch({ tailor_model: v })}
+          />
+        </div>
       </Section>
 
       {/* Pre-scoring filter */}
@@ -922,6 +931,56 @@ function SkillsEditor({ skills, onChange }: { skills: string[]; onChange: (v: st
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One task's provider + model (ADR 0025). Model is a free text field with
+ *  per-provider suggestions via a datalist, so any model name still works. */
+function TaskModel({
+  title,
+  hint,
+  provider,
+  model,
+  onProvider,
+  onModel,
+}: {
+  title: string;
+  hint: string;
+  provider: string;
+  model: string;
+  onProvider: (v: string) => void;
+  onModel: (v: string) => void;
+}) {
+  const listId = `models-${title.toLowerCase()}`;
+  return (
+    <div className="bg-raised border border-ink rounded-lg p-3.5">
+      <p className="text-[13px] font-medium text-slate-text">{title}</p>
+      <p className="text-[11px] text-slate-muted mb-3">{hint}</p>
+      <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Provider</p>
+      <select
+        value={provider}
+        onChange={(e) => onProvider(e.target.value)}
+        className="w-full bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text mb-3"
+      >
+        {PROVIDERS.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+      <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Model</p>
+      <input
+        list={listId}
+        value={model}
+        onChange={(e) => onModel(e.target.value)}
+        className="w-full bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono placeholder:text-slate-muted"
+      />
+      <datalist id={listId}>
+        {(MODELS[provider] ?? []).map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
     </div>
   );
 }

@@ -7,7 +7,7 @@
  */
 import { NextResponse } from 'next/server';
 import { getResumeText, getSettings, saveBaseResume } from '@/lib/db';
-import { buildScoringClient } from '@/lib/scoreRunner';
+import { buildTailoringClient } from '@/lib/scoreRunner';
 import { parseResumeText } from '@/lib/resumeParse';
 
 export const runtime = 'nodejs';
@@ -17,7 +17,7 @@ export async function POST() {
   try {
     const resumeText = await getResumeText();
     const settings = await getSettings();
-    const client = await buildScoringClient(settings);
+    const client = await buildTailoringClient(settings);
     const doc = await parseResumeText(resumeText, client);
     await saveBaseResume(doc);
     return NextResponse.json({ ok: true, base_resume: doc });

@@ -125,8 +125,14 @@ export interface Settings {
   /** Optional per-location override of jobs-per-role: { "<location>": <count> } (ADR 0015).
    *  A location absent here falls back to results_per_query. */
   location_limits: Record<string, number>;
-  llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic'
+  llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic' — global fallback
   llm_model: string;
+  /** Per-task models (ADR 0025). Scoring is high-volume → cheap; tailoring is
+   *  quality → premium. Null falls back to llm_provider/llm_model. */
+  score_provider: string; // default 'openai'
+  score_model: string; // default 'gpt-4o-mini'
+  tailor_provider: string; // default 'anthropic'
+  tailor_model: string; // default 'claude-sonnet-4-6'
   apify_actor_id: string; // LinkedIn actor variant (others use PORTAL_CONFIG defaults)
   job_portals: string[]; // e.g. ['linkedin', 'indeed', 'glassdoor']
   auto_scrape_enabled: boolean;

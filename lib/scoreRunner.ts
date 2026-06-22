@@ -13,15 +13,37 @@ import { getActiveApiKey, isApiKeyProvider } from './credentials';
 import { supabaseAdmin } from './supabase';
 import type { Job, Settings } from './types';
 
+/** Which LLM is used for which kind of work (ADR 0025). */
+export type LlmTask = 'score' | 'tailor';
+
+/** Provider+model for a task, falling back to the global llm_* when unset. */
+function taskProviderModel(settings: Settings, task: LlmTask): { provider: string; model: string } {
+  if (task === 'tailor') {
+    return { provider: settings.tailor_provider || settings.llm_provider, model: settings.tailor_model || settings.llm_model };
+  }
+  return { provider: settings.score_provider || settings.llm_provider, model: settings.score_model || settings.llm_model };
+}
+
 /**
- * Build the LLM client from the active vault key for the configured provider
- * (ADR 0006). Returns undefined when no key resolves, so scoreJob falls back to
- * the env-detected singleton.
+ * Build the LLM client for a task from the active vault key for that task's
+ * provider (ADR 0006/0025). Returns undefined when no key resolves, so the caller
+ * falls back to the env-detected singleton.
  */
+export async function buildClientForTask(settings: Settings, task: LlmTask): Promise<LLMClient | undefined> {
+  const { provider, model } = taskProviderModel(settings, task);
+  if (!isApiKeyProvider(provider)) return undefined;
+  const key = await getActiveApiKey(provider);
+  return key ? makeClient(provider, model, key) : undefined;
+}
+
+/** Scoring / company-assessment client (cheap, high-volume task). */
 export async function buildScoringClient(settings: Settings): Promise<LLMClient | undefined> {
-  if (!isApiKeyProvider(settings.llm_provider)) return undefined;
-  const key = await getActiveApiKey(settings.llm_provider);
-  return key ? makeClient(settings.llm_provider, settings.llm_model, key) : undefined;
+  return buildClientForTask(settings, 'score');
+}
+
+/** Tailoring / résumé-parse client (quality task). */
+export async function buildTailoringClient(settings: Settings): Promise<LLMClient | undefined> {
+  return buildClientForTask(settings, 'tailor');
 }
 
 export interface ScoreRunResult {

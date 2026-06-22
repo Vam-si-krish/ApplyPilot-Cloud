@@ -10,7 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { getApplicationWithJob, getBaseResume, getSettings, updateApplication } from '@/lib/db';
-import { buildScoringClient } from '@/lib/scoreRunner';
+import { buildTailoringClient } from '@/lib/scoreRunner';
 import { tailorResume, TailorSignals } from '@/lib/resumeTailor';
 
 export const runtime = 'nodejs';
@@ -42,7 +42,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     };
 
     const settings = await getSettings();
-    const client = await buildScoringClient(settings);
+    const client = await buildTailoringClient(settings);
 
     try {
       const tailored = await tailorResume(base, job, signals, client);

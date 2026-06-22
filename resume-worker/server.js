@@ -65,6 +65,27 @@ app.post('/generate', async (req, res) => {
   }
 });
 
+// Render arbitrary résumé JSON to a PDF and return the bytes directly — no DB row.
+// Used by the manual "paste a JD → download a résumé" flow (ADR 0024).
+app.post('/render-inline', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  const resume = req.body && req.body.resume;
+  const template = (req.body && req.body.template) || 'classic';
+  if (!resume || typeof resume !== 'object') return res.status(400).json({ error: 'resume required' });
+
+  try {
+    const { pdf, pages, scale, tooLong } = await renderResumePdf(resume, template);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('X-Resume-Pages', String(pages));
+    res.setHeader('X-Resume-Scale', String(scale));
+    res.setHeader('X-Resume-Too-Long', String(tooLong));
+    res.send(pdf);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 const server = app.listen(PORT, () => {
   console.log(`résumé worker listening on :${PORT}`);
 });
