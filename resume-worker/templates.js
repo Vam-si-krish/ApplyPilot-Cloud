@@ -95,9 +95,9 @@ function eduEntry(e) {
 function skillsBlock(skills) {
   const rows = (skills || [])
     .filter((s) => (s.keywords || []).length)
-    .map((s) => `<div class="skill-row">${s.name ? `<span class="skill-group">${esc(s.name)}:</span> ` : ''}${esc((s.keywords || []).join(', '))}</div>`)
+    .map((s) => `<li>${s.name ? `<span class="skill-group">${esc(s.name)}:</span> ` : ''}${esc((s.keywords || []).join(', '))}</li>`)
     .join('');
-  return rows;
+  return rows ? `<ul class="skills">${rows}</ul>` : '';
 }
 
 export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
@@ -110,8 +110,8 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
 
   const body = [
     section('Summary', b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''),
-    section('Experience', work),
-    section('Skills', skills),
+    section('Technical Skills', skills),
+    section('Professional Experience', work),
     section('Projects', projects),
     section('Education', edu),
   ].join('');
@@ -183,7 +183,8 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
     text-align: left;
   }
   li::marker { color: #1a1a1a; }
-  .skill-row { font-size: 9.8pt; line-height: 10.4pt; margin-bottom: 0; text-align: left; }
+  ul.skills { margin-top: 0; }
+  ul.skills li { font-size: 9.8pt; line-height: 10.4pt; margin-bottom: 0.4pt; padding-left: 1pt; }
   .skill-group { font-weight: bold; color: #1a1a1a; }
   .edu { padding-top: 0.8pt; padding-bottom: 0.8pt; }
   .edu .entry-title { font-size: 9.8pt; line-height: 10.3pt; font-weight: bold; }

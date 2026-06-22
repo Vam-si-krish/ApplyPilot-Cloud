@@ -13,9 +13,11 @@ import { PDFDocument } from 'pdf-lib';
 import { renderHtml } from './templates.js';
 
 // Scale bounds. base font = 10.5pt * scale, so floor 0.86 ≈ 9.0pt (readable floor).
-const SCALE_FLOOR = 0.86;
-const SCALE_CEIL = 1.12;
-const PAGE_MARGIN_IN = 0.45; // scaled with the document
+// Ceiling is 1.0 so the exact spec font sizes are used whenever the content fits a
+// single page (the design is tuned to those sizes); we only ever shrink — never
+// inflate above the spec. Floor keeps it readable if a job's content runs long.
+const SCALE_FLOOR = 0.82;
+const SCALE_CEIL = 1.0;
 
 let _browser = null;
 
