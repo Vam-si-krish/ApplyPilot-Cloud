@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
-import type { ApplicationWithJob, ApplicationStatus } from '@/lib/types';
+import ResumeFields from '@/components/ResumeFields';
+import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 
 type View = 'list' | 'base';
 
@@ -20,6 +21,13 @@ export default function ApplicationsPage() {
   const [view, setView] = useState<View>('list');
   const [apps, setApps] = useState<ApplicationWithJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [genId, setGenId] = useState<string | null>(null); // application currently generating
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Local editable draft of the expanded application's tailored résumé.
+  const [draft, setDraft] = useState<ResumeDoc | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,6 +43,16 @@ export default function ApplicationsPage() {
     load();
   }, [load]);
 
+  function toggleExpand(a: ApplicationWithJob) {
+    if (expanded === a.id) {
+      setExpanded(null);
+      setDraft(null);
+    } else {
+      setExpanded(a.id);
+      setDraft(a.tailored_resume ? structuredClone(a.tailored_resume) : null);
+    }
+  }
+
   async function patch(id: string, body: Record<string, unknown>) {
     await fetch(`/api/applications/${id}`, {
       method: 'PATCH',
@@ -47,7 +65,48 @@ export default function ApplicationsPage() {
   async function remove(id: string) {
     if (!confirm('Remove this application?')) return;
     await fetch(`/api/applications/${id}`, { method: 'DELETE' });
+    if (expanded === id) setExpanded(null);
     load();
+  }
+
+  async function generate(a: ApplicationWithJob) {
+    if (genId) return;
+    setGenId(a.id);
+    setMsg(null);
+    try {
+      const r = await fetch(`/api/applications/${a.id}/generate`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) {
+        setMsg(`Generation failed: ${d.error || 'unknown error'}`);
+      } else {
+        setMsg('Tailored résumé generated — review and edit below.');
+        setExpanded(a.id);
+        setDraft(d.tailored_resume ? structuredClone(d.tailored_resume) : null);
+      }
+      load();
+    } catch {
+      setMsg('Generation failed.');
+    } finally {
+      setGenId(null);
+      setTimeout(() => setMsg(null), 6000);
+    }
+  }
+
+  async function saveDraft(id: string) {
+    if (!draft) return;
+    setSavingDraft(true);
+    try {
+      await fetch(`/api/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tailored_resume: draft }),
+      });
+      setMsg('Saved.');
+      load();
+    } finally {
+      setSavingDraft(false);
+      setTimeout(() => setMsg(null), 3000);
+    }
   }
 
   return (
@@ -77,6 +136,8 @@ export default function ApplicationsPage() {
         ))}
       </div>
 
+      {msg && <div className="mb-3 text-[12px] text-slate-muted animate-fade-in">{msg}</div>}
+
       {view === 'base' ? (
         <BaseResumeEditor />
       ) : loading ? (
@@ -100,49 +161,98 @@ export default function ApplicationsPage() {
         <div className="bg-card border border-ink rounded-xl overflow-hidden divide-y divide-ink-subtle">
           {apps.map((a) => {
             const job = a.job;
+            const open = expanded === a.id;
+            const generating = genId === a.id || a.status === 'generating';
             return (
-              <div key={a.id} className="flex items-center gap-4 px-5 py-3 hover:bg-raised transition-colors">
-                <span className={`shrink-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded border ${STATUS_STYLE[a.status]}`}>
-                  {a.status}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-slate-text text-[13px] font-medium truncate">{job?.title ?? 'Job removed'}</p>
-                  <p className="text-slate-muted text-[11px] truncate">
-                    {job?.company ?? '—'}
-                    {job?.location ? ` · ${job.location}` : ''}
-                    {typeof job?.fit_score === 'number' ? ` · fit ${job.fit_score}/10` : ''}
-                  </p>
-                </div>
-                <span className="hidden sm:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
-                  <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
-                </span>
-                {a.applied_at ? (
-                  <span title={`Applied ${new Date(a.applied_at).toLocaleDateString()}`} className="text-emerald shrink-0">
-                    <CheckCircle2 size={15} />
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => patch(a.id, { status: 'applied' })}
-                    title="Mark as applied"
-                    className="text-slate-muted hover:text-emerald shrink-0"
-                  >
-                    <CheckCircle2 size={15} />
+              <div key={a.id}>
+                <div className="flex items-center gap-3 px-5 py-3 hover:bg-raised transition-colors">
+                  <button onClick={() => toggleExpand(a)} className="text-slate-muted hover:text-sky shrink-0">
+                    {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                   </button>
-                )}
-                {job && (
-                  <a
-                    href={job.application_url || job.url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open posting"
-                    className="text-slate-muted hover:text-sky shrink-0"
+                  <span className={`shrink-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded border ${STATUS_STYLE[a.status]}`}>
+                    {a.status}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-slate-text text-[13px] font-medium truncate">{job?.title ?? 'Job removed'}</p>
+                    <p className="text-slate-muted text-[11px] truncate">
+                      {job?.company ?? '—'}
+                      {job?.location ? ` · ${job.location}` : ''}
+                      {typeof job?.fit_score === 'number' ? ` · fit ${job.fit_score}/10` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => generate(a)}
+                    disabled={!!genId || !job}
+                    title="Generate a job-tailored résumé from your base résumé (truthful reframing)"
+                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all shrink-0"
                   >
-                    <ExternalLink size={15} />
-                  </a>
+                    <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate' : 'Generate'}
+                  </button>
+                  <span className="hidden md:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
+                    <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
+                  </span>
+                  {a.applied_at ? (
+                    <span title={`Applied ${new Date(a.applied_at).toLocaleDateString()}`} className="text-emerald shrink-0">
+                      <CheckCircle2 size={15} />
+                    </span>
+                  ) : (
+                    <button onClick={() => patch(a.id, { status: 'applied' })} title="Mark as applied" className="text-slate-muted hover:text-emerald shrink-0">
+                      <CheckCircle2 size={15} />
+                    </button>
+                  )}
+                  {job && (
+                    <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" title="Open posting" className="text-slate-muted hover:text-sky shrink-0">
+                      <ExternalLink size={15} />
+                    </a>
+                  )}
+                  <button onClick={() => remove(a.id)} title="Remove application" className="text-slate-muted hover:text-rose shrink-0">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+
+                {open && (
+                  <div className="px-5 pb-5 pt-1 bg-base/40">
+                    {a.status === 'failed' && a.error && (
+                      <div className="flex items-start gap-2 px-3 py-2 mb-3 text-[12px] text-rose bg-rose/10 border border-rose/30 rounded-lg">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" /> {a.error}
+                      </div>
+                    )}
+                    {/* Mobile generate button (the row one is hidden on small screens) */}
+                    <button
+                      onClick={() => generate(a)}
+                      disabled={!!genId || !job}
+                      className="sm:hidden mb-3 flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+                    >
+                      <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate résumé' : 'Generate résumé'}
+                    </button>
+
+                    {draft ? (
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[12px] text-slate-muted">
+                            Tailored résumé — edit freely. PDF export arrives with the résumé worker (ADR 0024).
+                          </p>
+                        </div>
+                        <ResumeFields value={draft} onChange={setDraft} />
+                        <div className="flex items-center gap-3 mt-4">
+                          <button
+                            onClick={() => saveDraft(a.id)}
+                            disabled={savingDraft}
+                            className="flex items-center gap-2 px-4 py-2 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
+                          >
+                            <Save size={14} /> {savingDraft ? 'Saving…' : 'Save changes'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[12px] text-slate-muted py-2">
+                        No tailored résumé yet. Click <span className="text-violet-300">Generate</span> to reframe your base
+                        résumé for <span className="text-slate-text">{job?.title ?? 'this job'}</span>.{' '}
+                        {' '}Make sure your <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> is set first.
+                      </p>
+                    )}
+                  </div>
                 )}
-                <button onClick={() => remove(a.id)} title="Remove application" className="text-slate-muted hover:text-rose shrink-0">
-                  <Trash2 size={15} />
-                </button>
               </div>
             );
           })}
@@ -151,8 +261,8 @@ export default function ApplicationsPage() {
 
       {view === 'list' && apps.length > 0 && (
         <p className="text-[11px] text-slate-muted mt-4">
-          Tailored-résumé generation arrives once the résumé worker is connected (ADR 0024). For now, manage your shortlist and
-          keep the <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> current.
+          Generation reframes your real experience for each job (never fabricated). Keep your{' '}
+          <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> current for the best results.
         </p>
       )}
     </div>

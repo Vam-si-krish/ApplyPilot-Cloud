@@ -26,12 +26,27 @@ What landed:
   `AppShell` (Briefcase→Jobs, **FileText→Applications**). **Add to Applications (N)** bulk button on the Jobs
   selection toolbar (violet), calls `POST /api/applications`.
 
+## ✅ Also shipped this session: Phase 2 (AI tailoring) — migration 0019 APPLIED to the live DB
+- **Migration `0019` is applied** to the live DB (verified: `profile.base_resume`, `applications` table +
+  status CHECK, `resumes` bucket). The Applications tab works in prod once deployed.
+- **`lib/resumeTailor.ts`** — `TAILOR_PROMPT` + `tailorResume()` (one LLM call) + the pure `mergeTailored()`:
+  TWO layers of anti-fabrication. The prompt forbids inventing; `mergeTailored` enforces it structurally —
+  employers/titles/dates/education and the SET of skills come from the BASE résumé (aligned by index), the
+  model may only rephrase summary/highlights and re-order. Invented skills are dropped; if the model returns
+  no real skills, fall back to base. Unit-tested in `lib/resumeTailor.test.ts` (8 cases).
+- **`POST /api/applications/[id]/generate`** — loads the application's job + `base_resume` + scoring-v2 signals
+  (`score_breakdown.missing`, `matched_skills`, `unmatched_skills`, `score_keywords`), tailors, writes
+  `tailored_resume` + status `ready` (or `failed`+`error`). Serverless-safe (one LLM call).
+- **UI**: per-application **Generate/Regenerate** button + an expandable, editable tailored-résumé panel.
+  Refactored the editor body into a shared **`components/ResumeFields.tsx`** used by both the base editor and
+  the per-application editor. Save edits via `PATCH /api/applications/[id]` (`tailored_resume`, normalized).
+- **Local e2e verified** (dev server + real DB + DeepSeek): login → `/api/base-resume/parse` (parsed the
+  user's real résumé: 3 roles w/ correct dates, 9 skill groups, 2 degrees) → add Alignerr job to Applications
+  → generate. Result: **employers/dates preserved verbatim, ZERO invented skills**, summary/bullets reframed
+  to the job. A sample application + the parsed `base_resume` are left in the live DB as a working example.
+- **Total checks:** `typecheck` ✅, `test` ✅ (97 pass), `build` ✅.
+
 ## ▶ NEXT: continue ADR 0024
-- **Phase 2 — AI tailoring** (`lib/resumeTailor.ts`, runnable in a Netlify route + the worker, unit-tested):
-  base résumé JSON + job description + the scoring-v2 signals we store (`score_breakdown.missing`,
-  `score_keywords`) → tailored `ResumeDoc` (rephrase REAL bullets to surface the job's keywords, never
-  fabricate). Wire a "Generate" action on an application that writes `tailored_resume` + flips status. Add an
-  in-app per-job tweak editor (reuse `BaseResumeEditor`'s sub-components against `applications.tailored_resume`).
 - **Phase 3 — MacBook worker** (`resume-worker/`, Node/Express + Puppeteer): HTML/CSS templates +
   auto-fit-to-one-page (binary-search font/line-height/margins, ~9.5pt floor) + ATS-readable + upload PDF to
   the `resumes` bucket + set the row `ready`/`pdf_path`. `POST /generate` (id), `GET /health`, Bearer `WORKER_SECRET`.
@@ -39,9 +54,9 @@ What landed:
   app polls the application row; preview/download via signed URL.
 
 ## ⚠ OPEN ITEMS / GOTCHAS (carried from Day 5 — still open)
-1. **APPLY MIGRATION `0019`** to the live DB (psql, with the user's explicit approval) before the Applications
-   tab works in prod. Until then `/api/base-resume` and `/api/applications` return 500 (the UI degrades
-   gracefully — empty states, no crash).
+1. ✅ **DONE — migration `0019` applied** to the live DB (2026-06-22). The user granted standing DB access:
+   apply migrations via psql + push when sensible, only check in for *big* changes. Password still in the
+   gitignored `.claude/settings.json` (never commit/echo it).
 2. **DEPLOY:** app is on **Netlify** (ignores `vercel.json`). Everything committed only goes live on
    **push → Netlify build**. Day-5 work (500 cap, fetch modes, scoring v2, contract flags, mobile, reassess,
    4:30 IST schedule via `netlify/functions/`) + this Phase-1 work are all **undeployed**.
@@ -56,5 +71,5 @@ What landed:
    psql (password in gitignored `.claude/settings.json` — never echo or commit it). Résumé/PII must not enter
    committed files.
 
-## Migrations applied to the live DB through Day 5
-0011–0018 (see DAY-5). **Pending:** `0019_resume_applications.sql` (this session).
+## Migrations applied to the live DB
+0011–0018 (see DAY-5) · **`0019_resume_applications.sql` applied 2026-06-22** (this session). None pending.

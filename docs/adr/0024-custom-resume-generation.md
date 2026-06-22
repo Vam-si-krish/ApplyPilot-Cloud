@@ -1,12 +1,15 @@
 # ADR 0024 — Custom (per-job) résumé generation + "Applications" section
 
-**Status:** accepted · **Date:** 2026-06-22 · **Phase 1 implemented (2026-06-22); Phases 2–4 pending.**
+**Status:** accepted · **Date:** 2026-06-22 · **Phases 1–2 implemented (2026-06-22); Phases 3–4 pending.**
 
-> **Phase 1 is built** (migration `0019_resume_applications.sql`, `applications` table +
-> `profile.base_resume` + `resumes` bucket; the **Applications** tab; **Add to Applications** on Jobs;
-> the **base-résumé editor** with one-time LLM parse of `resume_text` → JSON Resume). Still pending:
-> apply migration `0019` to the live DB, then build Phase 2 (AI tailoring), Phase 3 (MacBook worker),
-> Phase 4 (Cloudflare Tunnel). See the "Build phases" section and `docs/devlog/DAY-6.md`.
+> **Phases 1–2 are built & verified** (migration `0019` applied to the live DB; Applications tab; base-résumé
+> editor with one-time LLM parse; **AI tailoring** — truthful per-job reframing via `lib/resumeTailor.ts` +
+> `POST /api/applications/[id]/generate`, with a structural anti-fabrication merge and an in-app editor).
+> A local end-to-end run (parse → add → generate, against the real DB + DeepSeek) confirmed: employers/dates
+> preserved verbatim, zero invented skills, summary/bullets reframed to the job. Still pending: **Phase 3**
+> (MacBook worker — Puppeteer PDF + auto-fit-to-one-page) and **Phase 4** (Cloudflare Tunnel + Netlify→worker
+> wiring). Decision (2026-06-22): run the worker **on this dev laptop first**, prove the pipeline, then move
+> the same worker to the always-on server laptop. See "Build phases" and `docs/devlog/DAY-6.md`.
 
 ## Goal
 After shortlisting jobs, generate a **job-tailored résumé** for each, manage them in a new
@@ -84,10 +87,16 @@ Worker render steps:
    parse of `resume_text` → JSON Resume. Supporting code: `lib/resume.ts` (pure normalize/extract helpers),
    `lib/resumeParse.ts` (the parse call), `db.ts` helpers, routes `/api/base-resume`,
    `/api/base-resume/parse`, `/api/applications`, `/api/applications/[id]`, tests `lib/resume.test.ts`.
-   **Action still required:** apply migration `0019` to the live DB (psql, with the user's approval).
-2. **AI tailoring** module (truthful, structured) — runnable in the worker (and locally for tests).
+   Migration `0019` has been applied to the live DB (2026-06-22).
+2. ✅ **DONE (in this repo):** **AI tailoring** — `lib/resumeTailor.ts` (`TAILOR_PROMPT`, `tailorResume`,
+   and the pure `mergeTailored` that structurally enforces truthfulness: factual fields + the skill SET come
+   from the base, the model may only rephrase/reorder); `POST /api/applications/[id]/generate`; the
+   Applications tab's per-row Generate/Regenerate + an editable tailored-résumé panel (shared `ResumeFields`
+   component). Tests: `lib/resumeTailor.test.ts`. Verified end-to-end locally against the live DB + DeepSeek.
 3. **MacBook worker:** scaffold `resume-worker/` (Node/Express + Puppeteer + auto-fit renderer + 2–3
-   templates + Supabase upload). Endpoints: `POST /generate` (id) , `GET /health`.
+   templates + Supabase upload). Endpoints: `POST /generate` (id) , `GET /health`. **Run on the dev laptop
+   first** (prove the pipeline), then deploy the same worker to the always-on server laptop. The worker can
+   reuse `lib/resumeTailor.ts` so it tailors + renders in one call, or accept already-tailored JSON.
 4. **Cloudflare Tunnel** + wire Netlify → worker URL; env + secrets.
 
 ## MacBook worker setup (guide the user later)

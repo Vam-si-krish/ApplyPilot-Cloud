@@ -1,6 +1,6 @@
 /** Server-side data access helpers over the service-role Supabase client. */
 import { supabaseAdmin } from './supabase';
-import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, ApplicationWithJob } from './types';
+import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob } from './types';
 
 export async function getSettings(): Promise<Settings> {
   const { data, error } = await supabaseAdmin().from('settings').select('*').eq('id', 1).single();
@@ -61,6 +61,26 @@ export async function addApplications(jobIds: string[]): Promise<number> {
     .select('id');
   if (error) throw new Error(`Failed to add applications: ${error.message}`);
   return data?.length ?? 0;
+}
+
+/** One application joined with its job (used by the generate route). */
+export async function getApplicationWithJob(id: string): Promise<ApplicationWithJob | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('applications')
+    .select('*, job:jobs(*)')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load application: ${error.message}`);
+  return (data as ApplicationWithJob) ?? null;
+}
+
+/** Patch an application row (stamps updated_at). */
+export async function updateApplication(id: string, patch: Partial<Application>): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from('applications')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`Failed to update application: ${error.message}`);
 }
 
 export async function createRun(apifyRunId: string | null): Promise<Run> {
