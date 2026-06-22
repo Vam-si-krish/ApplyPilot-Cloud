@@ -45,11 +45,13 @@ ABSOLUTE RULES (truthfulness — non-negotiable):
 
 GOAL: make the candidate's genuine, relevant experience obvious for THIS job — surface matching keywords that are truly theirs, lead with the most relevant bullets, and tune the summary to the role.
 
-LENGTH — target a ONE-PAGE résumé (this is a hard goal):
-- Most recent / most relevant role: keep the 4–5 strongest, most job-relevant bullets. Older roles: 2–3 each.
-- Total bullets across ALL roles: about 10–12, never more than 13. Choose the highest-impact, most job-relevant ones and DROP the rest (prune the list — don't just shorten every bullet).
-- Consolidate skills into AT MOST 6 groups, most job-relevant first; drop groups irrelevant to this job.
-- Keep the summary to 2–3 lines. Do not pad.
+LENGTH & DETAIL — DO NOT arbitrarily cut down details or skills:
+- Retain as much rich detail and context as possible from the base résumé to make the application as strong as possible.
+- Most recent / most relevant role: expand and keep all strong, relevant bullets (do not limit them). Older roles: preserve important details rather than aggressively pruning.
+- Do NOT arbitrarily cap the total number of bullets. Keep all high-impact bullets and reframe them for maximum alignment with the job.
+- ALWAYS preserve all quantifiable metrics (e.g., latency reduction, user scale, performance gains) from the base résumé. Highlight these metrics strongly.
+- Keep all relevant skills and skill groups intact. Do not drop skill groups just to save space.
+- Make the summary highly detailed and compelling (e.g., 4-5 lines). Do not aggressively shorten it.
 
 Output ONLY a JSON object (no markdown/commentary), the SAME shape as the input base résumé:
 {

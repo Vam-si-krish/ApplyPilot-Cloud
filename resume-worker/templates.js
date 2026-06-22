@@ -121,54 +121,73 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
 <head>
 <meta charset="utf-8" />
 <style>
-  :root { --scale: ${scale}; --base: calc(var(--scale) * 10.5pt); --accent: ${theme.accent}; --rule: ${theme.rule}; --muted: ${theme.muted}; }
+  :root { --scale: ${scale}; --accent: ${theme.accent}; --rule: ${theme.rule}; --muted: ${theme.muted}; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { background: #fff; }
   body {
-    font-family: ${theme.bodyFont};
-    font-size: var(--base);
-    line-height: 1.28;
-    color: #111;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #1a1a1a;
     -webkit-font-smoothing: antialiased;
+    text-align: left;
+    zoom: var(--scale);
   }
   .name {
-    font-family: ${theme.headFont};
-    font-size: 2.05em;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    color: var(--accent);
-    line-height: 1.05;
+    font-size: 18pt;
+    line-height: 20pt;
+    font-weight: bold;
+    text-align: center;
+    color: #1a1a1a;
   }
-  .label { font-size: 1.05em; color: var(--muted); margin-top: 0.15em; font-weight: 600; }
-  .contact { font-size: 0.86em; color: var(--muted); margin-top: 0.45em; }
-  header { margin-bottom: 0.65em; }
-  section { margin-top: 0.65em; }
+  .label { font-size: 11pt; color: #444; text-align: center; font-weight: bold; margin-top: 2pt; }
+  .contact {
+    font-size: 9.5pt;
+    line-height: 12pt;
+    font-weight: normal;
+    text-align: center;
+    color: #444444;
+    margin-bottom: 3pt;
+  }
+  header { text-align: center; margin-bottom: 0; }
+  section { margin-top: 0; }
   h2 {
-    font-family: ${theme.headFont};
-    font-size: 0.86em;
+    font-size: 11.5pt;
+    line-height: 13pt;
+    font-weight: bold;
+    text-align: left;
+    color: #1a1a1a;
+    border-bottom: 0.8pt solid #1a1a1a;
+    margin-top: 1.5pt;
+    padding-bottom: 0.5pt;
+    margin-bottom: 2pt;
     text-transform: uppercase;
-    letter-spacing: 1.4px;
-    color: var(--accent);
-    border-bottom: 1.3px solid var(--rule);
-    padding-bottom: 0.15em;
-    margin-bottom: 0.38em;
   }
-  .summary { text-align: justify; }
-  .entry { margin-bottom: 0.48em; }
-  .entry:last-child { margin-bottom: 0; }
-  .entry-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; }
-  .entry-sub { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; margin-top: 0.02em; }
-  .entry-title { font-weight: 700; }
-  .entry-role { font-style: italic; color: #222; }
-  .entry-meta { font-size: 0.85em; color: var(--muted); white-space: nowrap; }
-  /* Native list markers (no positioned ::before) keep the PDF text stream in
-     visual order → ATS parsers read bullets under their role, not dumped at the end. */
-  ul { list-style: square; margin: 0.22em 0 0 0; padding-left: 1.05em; }
-  li { margin-bottom: 0.13em; padding-left: 0.15em; text-align: justify; }
-  li::marker { color: var(--accent); font-size: 0.8em; }
-  .skill-row { margin-bottom: 0.16em; }
-  .skill-group { font-weight: 700; color: #1a1a1a; }
-  .edu .entry-role { font-style: normal; }
+  .summary { 
+    font-size: 9.8pt;
+    line-height: 10.3pt;
+    font-weight: normal;
+    text-align: left;
+    margin-bottom: 0.5pt;
+  }
+  .entry { margin-bottom: 0.5pt; }
+  .entry-head { display: flex; justify-content: space-between; align-items: baseline; padding-top: 1pt; gap: 0.5em; }
+  .entry-sub { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; }
+  .entry-title { font-size: 10.5pt; line-height: 13pt; font-weight: bold; color: #1a1a1a; }
+  .entry-role { font-size: 10.5pt; line-height: 13pt; font-weight: bold; color: #1a1a1a; font-style: normal; }
+  .entry-meta { font-size: 10pt; line-height: 13pt; font-weight: bold; color: #444444; white-space: nowrap; }
+  ul { list-style: disc; margin: 0; padding-left: 12pt; }
+  li {
+    font-size: 9.5pt;
+    line-height: 9.5pt;
+    margin-bottom: 1.2pt;
+    padding-left: 1pt;
+    text-align: left;
+  }
+  li::marker { color: #1a1a1a; }
+  .skill-row { font-size: 9.8pt; line-height: 10.4pt; margin-bottom: 0; text-align: left; }
+  .skill-group { font-weight: bold; color: #1a1a1a; }
+  .edu { padding-top: 0.8pt; padding-bottom: 0.8pt; }
+  .edu .entry-title { font-size: 9.8pt; line-height: 10.3pt; font-weight: bold; }
+  .edu .entry-role { font-size: 9.8pt; font-weight: normal; }
 </style>
 </head>
 <body>

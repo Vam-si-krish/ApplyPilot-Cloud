@@ -40,12 +40,11 @@ export async function closeBrowser() {
 async function renderAtScale(page, resume, template, scale) {
   const html = renderHtml(resume, { template, scale });
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  const marginIn = (PAGE_MARGIN_IN * (0.8 + 0.2 * scale)).toFixed(3) + 'in';
   const pdf = await page.pdf({
     format: 'Letter',
     printBackground: true,
     preferCSSPageSize: false,
-    margin: { top: marginIn, bottom: marginIn, left: marginIn, right: marginIn },
+    margin: { top: '0.4in', bottom: '0.38in', left: '0.75in', right: '0.75in' },
   });
   const doc = await PDFDocument.load(pdf);
   return { pdf, pages: doc.getPageCount() };
