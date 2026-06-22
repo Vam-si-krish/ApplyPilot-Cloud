@@ -45,9 +45,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     const client = await buildTailoringClient(settings);
 
     try {
-      const tailored = await tailorResume(base, job, signals, client);
-      await updateApplication(id, { tailored_resume: tailored, status: 'ready', error: null });
-      return NextResponse.json({ ok: true, status: 'ready', tailored_resume: tailored });
+      const { resume: tailored, changes } = await tailorResume(base, job, signals, client);
+      await updateApplication(id, { tailored_resume: tailored, tailor_changes: changes, status: 'ready', error: null });
+      return NextResponse.json({ ok: true, status: 'ready', tailored_resume: tailored, changes });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await updateApplication(id, { status: 'failed', error: msg });

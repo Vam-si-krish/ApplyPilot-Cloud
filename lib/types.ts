@@ -288,6 +288,14 @@ export interface ResumeDoc {
   projects: ResumeProject[];
 }
 
+/** What the AI added/embellished beyond the base résumé (ADR 0026) — surfaced for the user to review/confirm. */
+export interface TailorChanges {
+  /** Skills in the tailored résumé that weren't in the base (added or quick-to-learn). */
+  addedSkills: string[];
+  /** The model's own notes on notable invented/embellished points it introduced. */
+  notes: string[];
+}
+
 /** Application lifecycle (ADR 0024): queued → generating → ready → applied; failed = render/AI error. */
 export type ApplicationStatus = 'queued' | 'generating' | 'ready' | 'applied' | 'failed';
 
@@ -298,6 +306,8 @@ export interface Application {
   status: ApplicationStatus;
   template: string;
   tailored_resume: ResumeDoc | null;
+  /** What the AI added/embellished vs the base résumé (ADR 0026); null = none/old. */
+  tailor_changes: TailorChanges | null;
   pdf_path: string | null;
   error: string | null;
   created_at: string;

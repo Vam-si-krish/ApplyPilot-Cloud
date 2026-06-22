@@ -1,25 +1,26 @@
 /**
- * Per-job résumé tailoring (ADR 0024, Phase 2). ONE LLM call that reframes the
- * user's REAL base résumé toward a specific job — it never fabricates.
+ * Per-job résumé tailoring (ADR 0024 → loosened in ADR 0026). ONE LLM call that
+ * rewrites the user's résumé to win interviews for a specific job and pass ATS
+ * keyword screening.
  *
- * Two layers of anti-fabrication discipline (same spirit as the scorer):
- *   1. The prompt forbids inventing skills, employers, dates, titles, or metrics.
- *   2. `mergeTailored` enforces it structurally: factual fields (names, companies,
- *      dates, education, and the SET of skills) are taken from the base résumé, not
- *      the model. The model may only rephrase summary/highlights and re-order what
- *      already exists. So even a misbehaving model cannot add a job, a degree, or a
- *      skill the user doesn't actually have.
+ * This is the user's OWN résumé and they opt in (with a review/confirm step), so
+ * tailoring is allowed to ENHANCE — add adjacent / quick-to-learn skills the job
+ * wants, expand real experience in depth, and invent plausible supporting points.
+ * The line we DO hold (verifiable identity facts that a background check would
+ * catch): employer names, job titles, employment dates, and education are anchored
+ * to the base résumé — `mergeTailored` restores them even if the model changed them.
  *
- * Pure (`mergeTailored`) + one call (`tailorResume`) — runnable in a Netlify route
- * now and in the MacBook worker later; unit-tested directly.
+ * Everything the AI adds beyond the base (new skills + its self-reported invented
+ * points) is returned as `changes` so the UI can show it for confirmation before
+ * the résumé is used.
  */
 import { getClient, LLMClient, ChatMessage } from './llm';
 import { normalizeResume, extractJsonObject } from './resume';
-import type { ResumeDoc, ResumeWork, ResumeProject, ResumeSkill } from './types';
+import type { ResumeDoc, ResumeWork, ResumeProject, TailorChanges } from './types';
 
 /** Scoring-v2 signals we already store, fed to the tailorer so it targets the right keywords. */
 export interface TailorSignals {
-  /** Must-haves the scorer flagged as missing (do NOT invent these — only surface real, related strengths). */
+  /** Must-haves the job wants that the candidate may lack — candidates for plausible additions. */
   missing?: string | null;
   /** The user's skills this job mentions (genuine matches — lead with these). */
   matched?: string[] | null;
@@ -35,117 +36,145 @@ export interface TailorJob {
   full_description?: string | null;
 }
 
-export const TAILOR_PROMPT = `You are an expert résumé editor. Tailor the candidate's REAL résumé to a specific job. You REFRAME truthfully — you are not a writer of fiction.
+/** Tailored résumé + the disclosure of what was added/embellished. */
+export interface TailorResult {
+  resume: ResumeDoc;
+  changes: TailorChanges;
+}
 
-ABSOLUTE RULES (truthfulness — non-negotiable):
-- Use ONLY what is in the base résumé. NEVER invent or add: skills, technologies, employers, job titles, dates, degrees, certifications, or metrics/numbers that aren't already there.
-- Do NOT claim a skill the candidate doesn't list just because the job wants it. If the job needs something they lack, simply emphasize their closest REAL strengths instead.
-- Keep every company name, job title, and date EXACTLY as given. Keep all education exactly as given.
-- You MAY: rewrite the summary, rephrase existing bullet points to foreground the job's real requirements and keywords the candidate genuinely has, and re-order skills/bullets by relevance. Keep the same number of work entries.
+export const TAILOR_PROMPT = `You are an expert résumé writer helping the candidate LAND INTERVIEWS for a specific job, and optimizing the résumé to pass ATS keyword screening (aim for a strong keyword match with the posting).
 
-GOAL: make the candidate's genuine, relevant experience obvious for THIS job — surface matching keywords that are truly theirs, lead with the most relevant bullets, and tune the summary to the role.
+You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
+- Rewrite and EXPAND bullet points to foreground the job's requirements and keywords, adding plausible detail, metrics, and scenarios consistent with the candidate's real roles (e.g., if they touched WebSockets, describe real-time features in depth).
+- ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
+- Reorder/regroup skills and reframe the summary to match the role.
 
-LENGTH & DETAIL — DO NOT arbitrarily cut down details or skills:
-- Retain as much rich detail and context as possible from the base résumé to make the application as strong as possible.
-- Most recent / most relevant role: expand and keep all strong, relevant bullets (do not limit them). Older roles: preserve important details rather than aggressively pruning.
-- Do NOT arbitrarily cap the total number of bullets. Keep all high-impact bullets and reframe them for maximum alignment with the job.
-- ALWAYS preserve all quantifiable metrics (e.g., latency reduction, user scale, performance gains) from the base résumé. Highlight these metrics strongly.
-- Keep all relevant skills and skill groups intact. Do not drop skill groups just to save space.
-- Make the summary highly detailed and compelling (e.g., 4-5 lines). Do not aggressively shorten it.
+HARD LIMITS — never change these verifiable facts (a background check would catch them):
+- Employer / company names, job titles, and employment dates: keep EXACTLY as the base résumé.
+- Education: institutions, degrees, and dates: keep EXACTLY. Do not invent new jobs, employers, or degrees.
 
-Output ONLY a JSON object (no markdown/commentary), the SAME shape as the input base résumé:
+STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority — it must hold up in an interview.
+
+DISCLOSURE — also report what you changed: include a top-level "_changes" array of short strings listing (a) every skill you ADDED that wasn't in the base résumé, and (b) any notable points/scenarios you INVENTED or significantly embellished. Be honest and specific here.
+
+Output ONLY a JSON object (no markdown/commentary), the SAME shape as the base résumé PLUS "_changes":
 {
   "basics": { "name":"", "label":"", "email":"", "phone":"", "url":"", "location":"", "summary":"", "profiles":[{"network":"","url":""}] },
   "work": [ { "name":"", "position":"", "location":"", "startDate":"", "endDate":"", "highlights":["",""] } ],
   "education": [ { "institution":"", "area":"", "studyType":"", "startDate":"", "endDate":"", "score":"" } ],
   "skills": [ { "name":"", "keywords":["",""] } ],
-  "projects": [ { "name":"", "description":"", "url":"", "highlights":[] } ]
+  "projects": [ { "name":"", "description":"", "url":"", "highlights":[] } ],
+  "_changes": ["Added Kubernetes (adjacent to your Docker/CI experience)", "Expanded WebSockets into a detailed real-time-collaboration bullet"]
 }
-Keep work entries in the same order and count as the base résumé.`;
+Keep work entries in the same order and count, with the same companies, titles, and dates as the base résumé.`;
 
 export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: TailorSignals): ChatMessage[] {
   const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
   const user =
-    `BASE RÉSUMÉ (the only source of truth — JSON):\n${JSON.stringify(base)}\n\n` +
+    `BASE RÉSUMÉ (the candidate's real experience — anchor employers/titles/dates/education to this — JSON):\n${JSON.stringify(base)}\n\n` +
     `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
     `JOB DESCRIPTION:\n${desc}\n\n` +
-    `SIGNALS (from our scorer — guidance, not facts to claim):\n` +
+    `SIGNALS (from our scorer):\n` +
     `- Job keywords: ${signals.keywords || 'N/A'}\n` +
     `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(', ') : 'N/A'}\n` +
     `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(', ') : 'N/A'}\n` +
-    `- Requirements the candidate may be missing (do NOT fake these; emphasize closest real strengths): ${signals.missing || 'N/A'}`;
+    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}`;
   return [
     { role: 'system', content: TAILOR_PROMPT },
     { role: 'user', content: user },
   ];
 }
 
-/** Lowercased set of every skill keyword present in the base résumé (the truth boundary for skills). */
-function baseSkillSet(base: ResumeDoc): Set<string> {
+/** Lowercased set of every skill keyword in a résumé. */
+function skillSet(doc: ResumeDoc): Set<string> {
   const set = new Set<string>();
-  for (const g of base.skills) for (const k of g.keywords) set.add(k.toLowerCase());
+  for (const g of doc.skills) for (const k of g.keywords) set.add(k.toLowerCase());
   return set;
 }
 
 /**
- * Merge the model's tailored draft onto the base résumé so only safe, reframed
- * content survives. Factual fields come from `base`; the model may only change
- * wording (summary, label, highlights) and ordering. Invented skills are dropped.
- * Pure — no I/O. Never throws.
+ * Merge the model's draft onto the base, anchoring verifiable facts while keeping
+ * the AI's enhancements (ADR 0026). Employers, titles, dates, and education come
+ * from the BASE (the model can't change where you worked or your degree). Summary,
+ * bullets, and the SKILL SET may be enhanced. Pure — never throws.
  */
 export function mergeTailored(base: ResumeDoc, tailored: ResumeDoc): ResumeDoc {
-  // basics: keep identity from base; accept only reworded summary + label.
+  // basics: keep identity (name/email/phone/url/location/profiles); take reworded summary + label.
   const basics = {
     ...base.basics,
     summary: tailored.basics.summary?.trim() || base.basics.summary,
     label: tailored.basics.label?.trim() || base.basics.label,
   };
 
-  // work: align by index; keep all factual fields, take rephrased highlights only.
+  // work: anchor company/title/dates/location to base; take the (possibly enhanced) bullets.
   const work: ResumeWork[] = base.work.map((b, i) => {
     const t = tailored.work[i];
-    const highlights = t && t.highlights.length ? t.highlights : b.highlights;
-    return { ...b, highlights };
+    return { ...b, highlights: t && t.highlights.length ? t.highlights : b.highlights };
   });
 
-  // skills: allow re-grouping/re-ordering, but DROP any keyword not in the base set.
-  const allowed = baseSkillSet(base);
-  let skills: ResumeSkill[] = tailored.skills
-    .map((g) => ({ name: g.name, keywords: g.keywords.filter((k) => allowed.has(k.toLowerCase())) }))
-    .filter((g) => g.keywords.length > 0);
-  // If the model returned no real (base-backed) skills, fall back to the base unchanged.
+  // skills: keep the model's groups AS-IS (additions allowed); fall back to base if empty.
+  let skills = tailored.skills.filter((g) => g.keywords.length > 0);
   if (skills.length === 0) skills = base.skills;
 
-  // projects: align by index; keep factual fields, take rephrased highlights.
+  // projects: anchor name/url to base; take enhanced highlights.
   const projects: ResumeProject[] = base.projects.map((b, i) => {
     const t = tailored.projects[i];
     return { ...b, highlights: t && t.highlights.length ? t.highlights : b.highlights };
   });
 
-  // education: never tailored — copy verbatim.
+  // education: verifiable — copy verbatim from base.
   return { basics, work, education: base.education, skills, projects };
 }
 
+/** Skills present in the merged résumé that weren't in the base (what the AI added). */
+export function addedSkills(base: ResumeDoc, merged: ResumeDoc): string[] {
+  const had = skillSet(base);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const g of merged.skills) {
+    for (const k of g.keywords) {
+      const lk = k.toLowerCase();
+      if (!had.has(lk) && !seen.has(lk)) {
+        seen.add(lk);
+        out.push(k);
+      }
+    }
+  }
+  return out;
+}
+
+/** Pull the model's self-reported "_changes" notes out of the raw JSON. */
+function extractChangeNotes(json: unknown): string[] {
+  if (json && typeof json === 'object' && Array.isArray((json as { _changes?: unknown })._changes)) {
+    return ((json as { _changes: unknown[] })._changes)
+      .filter((x): x is string => typeof x === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 /**
- * Produce a tailored résumé for a job. One LLM call (low temperature). The result
- * is normalized then merged onto the base so it can only ever contain truthful,
- * reframed content. Throws on empty base, an unparseable reply, or an LLM error —
- * the caller marks the application 'failed' rather than persisting a fabrication.
+ * Produce a tailored résumé for a job (ADR 0026). One LLM call. Returns the merged
+ * résumé plus `changes` (added skills + the model's invented-point notes) so the UI
+ * can show it for review/confirmation. Throws on empty base / unparseable reply.
  */
 export async function tailorResume(
   base: ResumeDoc,
   job: TailorJob,
   signals: TailorSignals,
   client?: LLMClient,
-): Promise<ResumeDoc> {
+): Promise<TailorResult> {
   if (!base || base.work.length === 0) {
     throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
   }
   const llm = client ?? getClient();
-  const response = await llm.chat(buildTailorMessages(base, job, signals), { maxTokens: 4000, temperature: 0.2 });
+  const response = await llm.chat(buildTailorMessages(base, job, signals), { maxTokens: 4000, temperature: 0.35 });
   const json = extractJsonObject(response);
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
-  return mergeTailored(base, normalizeResume(json));
+  const notes = extractChangeNotes(json);
+  const resume = mergeTailored(base, normalizeResume(json));
+  return { resume, changes: { addedSkills: addedSkills(base, resume), notes } };
 }

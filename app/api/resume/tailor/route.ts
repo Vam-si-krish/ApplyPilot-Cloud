@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
     const settings = await getSettings();
     const client = await buildTailoringClient(settings);
-    const resume = await tailorResume(
+    const { resume, changes } = await tailorResume(
       base,
       {
         title: typeof body.title === 'string' ? body.title : null,
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       {}, // no scoring signals in the manual flow
       client,
     );
-    return NextResponse.json({ ok: true, resume });
+    return NextResponse.json({ ok: true, resume, changes });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

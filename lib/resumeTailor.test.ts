@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeTailored, buildTailorMessages, TAILOR_PROMPT } from './resumeTailor';
+import { mergeTailored, addedSkills, buildTailorMessages, TAILOR_PROMPT } from './resumeTailor';
 import type { ResumeDoc } from './types';
 
 function base(): ResumeDoc {
@@ -15,7 +15,7 @@ function base(): ResumeDoc {
   };
 }
 
-describe('mergeTailored — structural anti-fabrication', () => {
+describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026)', () => {
   it('keeps employers, titles, and dates from the base even if the model changes them', () => {
     const tailored: ResumeDoc = {
       ...base(),
@@ -31,16 +31,16 @@ describe('mergeTailored — structural anti-fabrication', () => {
     expect(out.work[0].highlights).toEqual(['Reframed bullet']); // wording accepted
   });
 
-  it('drops skills the candidate does not actually have (invented by the model)', () => {
+  it('KEEPS added skills the model introduces (enhancement allowed)', () => {
     const tailored: ResumeDoc = {
       ...base(),
-      skills: [{ name: 'Frontend', keywords: ['React', 'Kubernetes', 'Rust'] }], // Kubernetes/Rust invented
+      skills: [{ name: 'Frontend', keywords: ['React', 'Kubernetes', 'Rust'] }], // Kubernetes/Rust added
     };
     const out = mergeTailored(base(), tailored);
-    expect(out.skills[0].keywords).toEqual(['React']);
+    expect(out.skills[0].keywords).toEqual(['React', 'Kubernetes', 'Rust']);
   });
 
-  it('allows re-ordering/regrouping of real skills', () => {
+  it('allows re-ordering/regrouping of skills', () => {
     const tailored: ResumeDoc = {
       ...base(),
       skills: [
@@ -55,10 +55,14 @@ describe('mergeTailored — structural anti-fabrication', () => {
     ]);
   });
 
-  it('falls back to base skills when the model returns only invented ones', () => {
-    const tailored: ResumeDoc = { ...base(), skills: [{ name: 'X', keywords: ['Fortran'] }] };
-    const out = mergeTailored(base(), tailored);
+  it('falls back to base skills only when the model returns no skills at all', () => {
+    const out = mergeTailored(base(), { ...base(), skills: [] });
     expect(out.skills).toEqual(base().skills);
+  });
+
+  it('addedSkills reports what the AI introduced beyond the base', () => {
+    const merged = mergeTailored(base(), { ...base(), skills: [{ name: 'Frontend', keywords: ['React', 'Kubernetes', 'WebSockets'] }] });
+    expect(addedSkills(base(), merged)).toEqual(['Kubernetes', 'WebSockets']); // React was already in base
   });
 
   it('accepts a reworded summary/label but keeps identity fields', () => {

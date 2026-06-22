@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
+import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
+import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 
-type View = 'list' | 'base';
+type View = 'list' | 'base' | 'manual';
 
 const STATUS_STYLE: Record<ApplicationStatus, string> = {
   queued: 'bg-raised border-ink text-slate-muted',
@@ -122,6 +124,8 @@ export default function ApplicationsPage() {
   // Ask the résumé worker to render the tailored résumé to a one-page PDF.
   async function renderPdf(a: ApplicationWithJob) {
     if (rendering) return;
+    // Make the user confirm anything the AI added/embellished before producing the PDF.
+    if (!confirmTailorChanges(a.tailor_changes)) return;
     setRendering(a.id);
     setMsg('Rendering PDF…');
     try {
@@ -165,6 +169,7 @@ export default function ApplicationsPage() {
       <div className="flex gap-1 mb-5 border-b border-ink">
         {([
           { id: 'list' as View, label: 'Applications' },
+          { id: 'manual' as View, label: 'Quick Generate' },
           { id: 'base' as View, label: 'Base résumé' },
         ]).map((t) => (
           <button
@@ -181,7 +186,9 @@ export default function ApplicationsPage() {
 
       {msg && <div className="mb-3 text-[12px] text-slate-muted animate-fade-in">{msg}</div>}
 
-      {view === 'base' ? (
+      {view === 'manual' ? (
+        <ManualGenerate />
+      ) : view === 'base' ? (
         <BaseResumeEditor />
       ) : loading ? (
         <div className="bg-card border border-ink rounded-xl px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
@@ -271,10 +278,11 @@ export default function ApplicationsPage() {
 
                     {draft ? (
                       <>
+                        <div className="mb-3">
+                          <ChangesReview changes={a.tailor_changes} />
+                        </div>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[12px] text-slate-muted">
-                            Tailored résumé — edit freely. PDF export arrives with the résumé worker (ADR 0024).
-                          </p>
+                          <p className="text-[12px] text-slate-muted">Tailored résumé — edit freely, then create the PDF.</p>
                         </div>
                         <ResumeFields value={draft} onChange={setDraft} />
                         <div className="flex items-center gap-3 mt-4">

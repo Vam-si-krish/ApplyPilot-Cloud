@@ -27,7 +27,9 @@ export async function POST(req: Request) {
   const filename = (typeof body.filename === 'string' && body.filename) || 'resume.pdf';
 
   const settings = await getSettings().catch(() => null);
-  const url = settings?.resume_worker_url || process.env.RESUME_WORKER_URL;
+  // Prefer the local env var (set in dev → localhost, no tunnel needed); fall back
+  // to the stored tunnel URL in production where the env var isn't set.
+  const url = process.env.RESUME_WORKER_URL || settings?.resume_worker_url;
   const secret = process.env.RESUME_WORKER_SECRET;
   if (!url || !secret) {
     return NextResponse.json(
