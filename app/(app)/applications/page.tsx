@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ResumeFields from '@/components/ResumeFields';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
@@ -28,6 +28,7 @@ export default function ApplicationsPage() {
   // Local editable draft of the expanded application's tailored résumé.
   const [draft, setDraft] = useState<ResumeDoc | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [rendering, setRendering] = useState<string | null>(null); // application currently rendering a PDF
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,6 +107,48 @@ export default function ApplicationsPage() {
     } finally {
       setSavingDraft(false);
       setTimeout(() => setMsg(null), 3000);
+    }
+  }
+
+  async function setTemplate(id: string, template: string) {
+    setApps((prev) => prev.map((x) => (x.id === id ? { ...x, template } : x)));
+    await fetch(`/api/applications/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template }),
+    });
+  }
+
+  // Ask the résumé worker to render the tailored résumé to a one-page PDF.
+  async function renderPdf(a: ApplicationWithJob) {
+    if (rendering) return;
+    setRendering(a.id);
+    setMsg('Rendering PDF…');
+    try {
+      const r = await fetch(`/api/applications/${a.id}/render`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) {
+        setMsg(`PDF render failed: ${d.error || 'unknown error'}`);
+      } else {
+        setMsg(d.tooLong ? 'PDF ready — content was long, trimmed to one page (consider shortening).' : `PDF ready (1 page).`);
+      }
+      load();
+    } catch {
+      setMsg('PDF render failed.');
+    } finally {
+      setRendering(null);
+      setTimeout(() => setMsg(null), 7000);
+    }
+  }
+
+  // Open the generated PDF via a short-lived signed URL.
+  async function downloadPdf(id: string) {
+    try {
+      const d = await fetch(`/api/applications/${id}/pdf`).then((r) => r.json());
+      if (d.url) window.open(d.url, '_blank', 'noopener');
+      else setMsg(d.error || 'No PDF available.');
+    } catch {
+      setMsg('Could not open the PDF.');
     }
   }
 
@@ -242,6 +285,37 @@ export default function ApplicationsPage() {
                           >
                             <Save size={14} /> {savingDraft ? 'Saving…' : 'Save changes'}
                           </button>
+                        </div>
+
+                        {/* PDF — render a polished one-page, ATS-readable PDF via the résumé worker */}
+                        <div className="mt-5 pt-4 border-t border-ink-subtle flex flex-wrap items-center gap-3">
+                          <span className="text-[12px] text-slate-muted">PDF:</span>
+                          <select
+                            value={a.template || 'classic'}
+                            onChange={(e) => setTemplate(a.id, e.target.value)}
+                            title="Résumé template"
+                            className="px-2.5 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+                          >
+                            <option value="classic">Classic (serif)</option>
+                            <option value="modern">Modern (sans)</option>
+                          </select>
+                          <button
+                            onClick={() => renderPdf(a)}
+                            disabled={rendering === a.id}
+                            title="Render the tailored résumé to a one-page PDF (saves the latest edits first is recommended)"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+                          >
+                            <FileDown size={13} /> {rendering === a.id ? 'Rendering…' : a.pdf_path ? 'Re-render PDF' : 'Create PDF'}
+                          </button>
+                          {a.pdf_path && (
+                            <button
+                              onClick={() => downloadPdf(a.id)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-md transition-all"
+                            >
+                              <Download size={13} /> Download PDF
+                            </button>
+                          )}
+                          <span className="text-[11px] text-slate-muted">Re-render after edits to refresh the PDF.</span>
                         </div>
                       </>
                     ) : (

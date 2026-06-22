@@ -46,12 +46,32 @@ What landed:
   to the job. A sample application + the parsed `base_resume` are left in the live DB as a working example.
 - **Total checks:** `typecheck` ✅, `test` ✅ (97 pass), `build` ✅.
 
-## ▶ NEXT: continue ADR 0024
-- **Phase 3 — MacBook worker** (`resume-worker/`, Node/Express + Puppeteer): HTML/CSS templates +
-  auto-fit-to-one-page (binary-search font/line-height/margins, ~9.5pt floor) + ATS-readable + upload PDF to
-  the `resumes` bucket + set the row `ready`/`pdf_path`. `POST /generate` (id), `GET /health`, Bearer `WORKER_SECRET`.
-- **Phase 4 — Cloudflare Tunnel**: expose the worker (e.g. `worker.vamsikrish.com`); Netlify route POSTs to it;
-  app polls the application row; preview/download via signed URL.
+## ✅ Also shipped this session: Phase 3 (the résumé worker) — verified end-to-end locally
+- **`resume-worker/`** (isolated package, Node/Express + Puppeteer): `templates.js` (`classic` serif + `modern`
+  sans — single-column, semantic `<h2>` sections, native list markers so the PDF **text stream matches reading
+  order**), `render.js` (**auto-fit-to-one-page**: binary-search the largest `--scale` that renders a single
+  page, using the real PDF page count via `pdf-lib`; ≈9pt floor; returns `tooLong` instead of spilling to page
+  2), `supabase.js`, `server.js` (`POST /generate` + `GET /health`, Bearer `WORKER_SECRET`), `render-sample.js`,
+  README. `npm install` pulls a headless Chromium (~150 MB) into `resume-worker/node_modules` (NOT the Next app).
+- **App side**: `POST /api/applications/[id]/render` (proxies to the worker — Puppeteer can't run serverless),
+  `GET /api/applications/[id]/pdf` (signed URL from the private `resumes` bucket), and the Applications UI now
+  has a template selector + **Create/Re-render PDF** + **Download PDF**.
+- **Tailoring tuned for one page**: `TAILOR_PROMPT` now caps total bullets (~10–13) and consolidates skills
+  (≤6 groups) so the content fits one page; auto-fit is the safety net.
+- **Verified locally end-to-end** (Next on :3000 + worker on :8787, live DB + DeepSeek): generate → render →
+  upload → signed-URL download produced a clean **single-page** PDF (scale ≈0.88) — real employers/dates, zero
+  invented skills, summary tailored to the job, selectable text in correct order. Read back the PDF to confirm.
+- **Env**: `resume-worker/.env` (gitignored) holds `WORKER_SECRET` + Supabase service role; `.env.local` got
+  `RESUME_WORKER_URL=http://localhost:8787` + `RESUME_WORKER_SECRET` (both gitignored). For Netlify (Phase 4)
+  these become the tunnel URL + the same secret.
+
+## ▶ NEXT: Phase 4 (the only thing left for ADR 0024)
+- **Cloudflare Tunnel**: install `cloudflared` on the always-on server laptop, copy `resume-worker/`, `npm
+  install`, set `.env`, run worker + tunnel under launchd (auto-restart on boot), route a subdomain (e.g.
+  `worker.vamsikrish.com → localhost:8787`). Put `RESUME_WORKER_URL` (the tunnel URL) + `RESUME_WORKER_SECRET`
+  into the **Netlify** env. Then the deployed app can render PDFs. Until then, rendering only works locally.
+- **To run the full pipeline locally** in a fresh session: `cd resume-worker && npm start` (worker on :8787),
+  then `npm run dev` at the repo root. The Applications tab's Generate → Create PDF → Download then works.
 
 ## ⚠ OPEN ITEMS / GOTCHAS (carried from Day 5 — still open)
 1. ✅ **DONE — migration `0019` applied** to the live DB (2026-06-22). The user granted standing DB access:
