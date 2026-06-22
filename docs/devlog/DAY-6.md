@@ -66,10 +66,11 @@ What landed:
   these become the tunnel URL + the same secret.
 
 ## ▶ NEXT: Phase 4 (the only thing left for ADR 0024)
-- **Cloudflare Tunnel**: install `cloudflared` on the always-on server laptop, copy `resume-worker/`, `npm
-  install`, set `.env`, run worker + tunnel under launchd (auto-restart on boot), route a subdomain (e.g.
-  `worker.vamsikrish.com → localhost:8787`). Put `RESUME_WORKER_URL` (the tunnel URL) + `RESUME_WORKER_SECRET`
-  into the **Netlify** env. Then the deployed app can render PDFs. Until then, rendering only works locally.
+- **Cloudflare Tunnel**: a turnkey kit is committed — `resume-worker/SETUP.md` (step-by-step) +
+  `resume-worker/install-service.sh` (generates/loads the launchd plist so the worker runs on boot). On the
+  server laptop: copy `resume-worker/`, `npm install`, set `.env`, `./install-service.sh`, then
+  `cloudflared` named tunnel → `worker.vamsikrish.com → localhost:8787`. Put `RESUME_WORKER_URL` (tunnel URL) +
+  `RESUME_WORKER_SECRET` into the **Netlify** env. Then the deployed app renders PDFs; until then, only local.
 - **To run the full pipeline locally** in a fresh session: `cd resume-worker && npm start` (worker on :8787),
   then `npm run dev` at the repo root. The Applications tab's Generate → Create PDF → Download then works.
 
@@ -83,13 +84,18 @@ What landed:
 3. **SECURITY:** `.claude/settings.json` (DB password) was committed to the **public** repo history. Untracked +
    gitignored now, but the secret remains in history → **rotate the Supabase DB password** (also reused as the
    user's default signup password → rotate that too).
-4. **BUG (unresolved):** ">24h jobs appear on the main page when no filter is selected." Code verified correct
-   (`buildParams` always sends `recency=recent`; API filters `discovered_at >= now()-24h`). Almost certainly a
-   **data** cause (same posting re-inserted as a new row — de-dup is by exact `url`). Needs a read-only DB
-   diagnostic (user must approve), then likely tighten de-dup.
-5. **DB-access etiquette:** explicit user approval before ANY Supabase access. Migrations applied manually via
-   psql (password in gitignored `.claude/settings.json` — never echo or commit it). Résumé/PII must not enter
-   committed files.
+4. **BUG (diagnosed 2026-06-22 — it's deploy lag, not data):** ">24h jobs appear on the main page." Ran the
+   read-only diagnostic on the live DB: data is **clean** — sharp 24h cutoff (1273 rows ≤24h, oldest ≈23.7h;
+   3003 older) and the API filters exactly that column. So the live site is just running **older code**;
+   **deploying fixes it.**
+   - **Separate data-quality follow-up (NOT the same bug):** duplicates — 104 (title,company) groups / ~461 rows
+     (~357 extra) within 24h, because de-dup is by exact `url` (varies across fetches / keyword×location combos).
+     Repeats clutter the list. Recommended (own task): de-dup the webhook insert by normalized URL or
+     `(title, company, location)` within a recent window + a one-off cleanup. Deferred — care not to drop
+     legitimately distinct postings.
+5. **DB-access etiquette:** the user granted standing DB access this session (psql + push when sensible; ask only
+   for *big* changes). Password lives in gitignored `.claude/settings.json` — never echo or commit it. Résumé/PII
+   must not enter committed files.
 
 ## Migrations applied to the live DB
 0011–0018 (see DAY-5) · **`0019_resume_applications.sql` applied 2026-06-22** (this session). None pending.
