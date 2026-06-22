@@ -1,6 +1,6 @@
 /** Server-side data access helpers over the service-role Supabase client. */
 import { supabaseAdmin } from './supabase';
-import type { Settings, Profile, Run, Job, GmailConnection, MailMessage } from './types';
+import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, ApplicationWithJob } from './types';
 
 export async function getSettings(): Promise<Settings> {
   const { data, error } = await supabaseAdmin().from('settings').select('*').eq('id', 1).single();
@@ -18,6 +18,49 @@ export async function getResumeText(): Promise<string> {
   const { data, error } = await supabaseAdmin().from('profile').select('resume_text').eq('id', 1).single();
   if (error) throw new Error(`Failed to load resume: ${error.message}`);
   return (data?.resume_text as string) || '';
+}
+
+// ── Base résumé + Applications (ADR 0024) ────────────────────────────────────
+
+/** The structured base résumé (JSON Resume), or null if not parsed yet. */
+export async function getBaseResume(): Promise<ResumeDoc | null> {
+  const { data, error } = await supabaseAdmin().from('profile').select('base_resume').eq('id', 1).single();
+  if (error) throw new Error(`Failed to load base résumé: ${error.message}`);
+  return (data?.base_resume as ResumeDoc | null) ?? null;
+}
+
+/** Persist the structured base résumé. */
+export async function saveBaseResume(doc: ResumeDoc): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from('profile')
+    .update({ base_resume: doc, updated_at: new Date().toISOString() })
+    .eq('id', 1);
+  if (error) throw new Error(`Failed to save base résumé: ${error.message}`);
+}
+
+/** All applications joined with their job, newest first. */
+export async function listApplications(): Promise<ApplicationWithJob[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('applications')
+    .select('*, job:jobs(*)')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`Failed to list applications: ${error.message}`);
+  return (data ?? []) as ApplicationWithJob[];
+}
+
+/**
+ * Queue an application for each given job (idempotent — ignores jobs already in
+ * Applications via the unique job_id). Returns how many new rows were created.
+ */
+export async function addApplications(jobIds: string[]): Promise<number> {
+  if (jobIds.length === 0) return 0;
+  const rows = jobIds.map((job_id) => ({ job_id, status: 'queued' }));
+  const { data, error } = await supabaseAdmin()
+    .from('applications')
+    .upsert(rows, { onConflict: 'job_id', ignoreDuplicates: true })
+    .select('id');
+  if (error) throw new Error(`Failed to add applications: ${error.message}`);
+  return data?.length ?? 0;
 }
 
 export async function createRun(apifyRunId: string | null): Promise<Run> {

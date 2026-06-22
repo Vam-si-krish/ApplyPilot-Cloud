@@ -102,6 +102,9 @@ export interface Profile {
   assistant_profile: Record<string, unknown>;
   resume_text: string;
   resume_pdf_path: string | null;
+  /** Editable base résumé as structured JSON Resume (ADR 0024); null until parsed
+   *  from resume_text. Source of truth for per-job tailoring. */
+  base_resume: ResumeDoc | null;
   updated_at: string;
 }
 
@@ -214,6 +217,90 @@ export interface GmailStatus {
   connected: boolean;
   email: string | null;
   last_synced_at: string | null;
+}
+
+// ── Résumé & Applications (ADR 0024) ─────────────────────────────────────────
+// A focused subset of the JSON Resume schema (jsonresume.org). We edit/render
+// these fields; any extra fields on stored data are tolerated and ignored.
+
+export interface ResumeBasics {
+  name?: string;
+  /** Headline under the name, e.g. "Senior Frontend Engineer". */
+  label?: string;
+  email?: string;
+  phone?: string;
+  /** Portfolio / personal site. */
+  url?: string;
+  /** Flattened "City, Region" (JSON Resume's nested location is collapsed to this). */
+  location?: string;
+  summary?: string;
+  /** External profiles (LinkedIn, GitHub, …). */
+  profiles?: { network?: string; url?: string }[];
+}
+
+export interface ResumeWork {
+  /** Company / employer name. */
+  name?: string;
+  position?: string;
+  location?: string;
+  url?: string;
+  startDate?: string;
+  endDate?: string; // '' or 'Present'
+  /** Bullet points — what per-job tailoring rewrites (truthfully). */
+  highlights: string[];
+}
+
+export interface ResumeEducation {
+  institution?: string;
+  area?: string; // field of study
+  studyType?: string; // degree
+  startDate?: string;
+  endDate?: string;
+  score?: string;
+}
+
+export interface ResumeSkill {
+  /** Group name, e.g. "Frontend", "Languages". */
+  name?: string;
+  keywords: string[];
+}
+
+export interface ResumeProject {
+  name?: string;
+  description?: string;
+  url?: string;
+  highlights: string[];
+}
+
+/** The structured base/tailored résumé we edit and (later) render to PDF. */
+export interface ResumeDoc {
+  basics: ResumeBasics;
+  work: ResumeWork[];
+  education: ResumeEducation[];
+  skills: ResumeSkill[];
+  projects: ResumeProject[];
+}
+
+/** Application lifecycle (ADR 0024): queued → generating → ready → applied; failed = render/AI error. */
+export type ApplicationStatus = 'queued' | 'generating' | 'ready' | 'applied' | 'failed';
+
+/** One job the user is preparing/applying to, with its tailored résumé + PDF. */
+export interface Application {
+  id: string;
+  job_id: string;
+  status: ApplicationStatus;
+  template: string;
+  tailored_resume: ResumeDoc | null;
+  pdf_path: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  applied_at: string | null;
+}
+
+/** Application joined with its job — what the Applications tab lists. */
+export interface ApplicationWithJob extends Application {
+  job: Job | null;
 }
 
 export type RunStatus = 'running' | 'succeeded' | 'failed';

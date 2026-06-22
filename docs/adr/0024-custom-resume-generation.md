@@ -1,6 +1,12 @@
 # ADR 0024 — Custom (per-job) résumé generation + "Applications" section
 
-**Status:** accepted (plan) · **Date:** 2026-06-22 · **Not yet implemented — this is the spec to build from.**
+**Status:** accepted · **Date:** 2026-06-22 · **Phase 1 implemented (2026-06-22); Phases 2–4 pending.**
+
+> **Phase 1 is built** (migration `0019_resume_applications.sql`, `applications` table +
+> `profile.base_resume` + `resumes` bucket; the **Applications** tab; **Add to Applications** on Jobs;
+> the **base-résumé editor** with one-time LLM parse of `resume_text` → JSON Resume). Still pending:
+> apply migration `0019` to the live DB, then build Phase 2 (AI tailoring), Phase 3 (MacBook worker),
+> Phase 4 (Cloudflare Tunnel). See the "Build phases" section and `docs/devlog/DAY-6.md`.
 
 ## Goal
 After shortlisting jobs, generate a **job-tailored résumé** for each, manage them in a new
@@ -72,9 +78,13 @@ Worker render steps:
 4. App polls the row → shows status, **preview, download, edit (base + per-job tweaks), Mark applied**.
 
 ## Build phases
-1. **In this repo (testable now):** migration (`profile.base_resume` + `applications` + `resumes` bucket),
-   **Applications** tab, **"Add to Applications"** action on Jobs, **base-résumé editor** (+ one-time parse
-   of `resume_text` → JSON Resume).
+1. ✅ **DONE (in this repo):** migration `0019` (`profile.base_resume` jsonb + `applications` table +
+   `resumes` Storage bucket), **Applications** tab (`app/(app)/applications/`), **"Add to Applications"**
+   bulk action on Jobs, **base-résumé editor** (`components/BaseResumeEditor.tsx`) with a one-time LLM
+   parse of `resume_text` → JSON Resume. Supporting code: `lib/resume.ts` (pure normalize/extract helpers),
+   `lib/resumeParse.ts` (the parse call), `db.ts` helpers, routes `/api/base-resume`,
+   `/api/base-resume/parse`, `/api/applications`, `/api/applications/[id]`, tests `lib/resume.test.ts`.
+   **Action still required:** apply migration `0019` to the live DB (psql, with the user's approval).
 2. **AI tailoring** module (truthful, structured) — runnable in the worker (and locally for tests).
 3. **MacBook worker:** scaffold `resume-worker/` (Node/Express + Puppeteer + auto-fit renderer + 2–3
    templates + Supabase upload). Endpoints: `POST /generate` (id) , `GET /health`.

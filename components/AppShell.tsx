@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Briefcase, History, Bot, Mail, TrendingUp, User, Settings as SettingsIcon, Zap, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Briefcase, History, Bot, Mail, TrendingUp, User, Settings as SettingsIcon, FileText, Zap, LogOut, Menu, X } from 'lucide-react';
 
 // Ported from ApplyPilot-Lite/ui/src/components/Layout.tsx (ADR 0002). No
 // LinkedIn/Pipeline tabs — Cloud fetches via Apify on a schedule, not manually.
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/jobs', label: 'Jobs', icon: Briefcase },
+  { to: '/applications', label: 'Applications', icon: FileText },
   { to: '/past', label: 'Past Jobs', icon: History },
   { to: '/inbox', label: 'Inbox', icon: Mail },
   { to: '/tracker', label: 'Tracker', icon: TrendingUp },

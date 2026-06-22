@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
@@ -421,6 +421,30 @@ export default function JobsPage() {
     }
   }
 
+  // Queue the selected jobs into the Applications section (idempotent server-side).
+  async function addToApplications() {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkMsg('Adding to Applications…');
+    try {
+      const d = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      }).then((r) => r.json());
+      const added = d.added ?? 0;
+      const dupes = ids.length - added;
+      setBulkMsg(`Added ${added} to Applications${dupes > 0 ? ` (${dupes} already there)` : ''}.`);
+      setSelected(new Set());
+    } catch {
+      setBulkMsg('Could not add to Applications.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 6000);
+    }
+  }
+
   async function deleteSelected() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy) return;
@@ -801,6 +825,14 @@ export default function JobsPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
               >
                 <Building2 size={13} /> Assess / re-assess ({selected.size})
+              </button>
+              <button
+                onClick={addToApplications}
+                disabled={bulkBusy}
+                title="Add the selected jobs to Applications to prepare a tailored résumé"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+              >
+                <FileText size={13} /> Add to Applications ({selected.size})
               </button>
               <button
                 onClick={markAppliedSelected}
