@@ -50,17 +50,26 @@ function section(title, inner) {
 }
 
 function workEntry(w) {
-  const right = [w.startDate, w.endDate].filter(Boolean).join(' – ');
+  const date = [w.startDate, w.endDate].filter(Boolean).join(' – ');
+  // Company + date on line 1 (bold); position + location on line 2 (italic).
+  // If the location is embedded in the title as "… (USA)", pull it out to the right.
+  let position = w.position || '';
+  let location = w.location || '';
+  const m = position.match(/\s*\(([^)]+)\)\s*$/);
+  if (!location && m) {
+    location = m[1];
+    position = position.replace(/\s*\([^)]+\)\s*$/, '').trim();
+  }
   const bullets = (w.highlights || []).filter(Boolean).map((h) => `<li>${esc(h)}</li>`).join('');
   return `
     <div class="entry">
       <div class="entry-head">
         <span class="entry-title">${esc(w.name || '')}</span>
-        <span class="entry-meta">${esc(w.location || '')}</span>
+        <span class="entry-meta">${esc(date)}</span>
       </div>
       <div class="entry-sub">
-        <span class="entry-role">${esc(w.position || '')}</span>
-        <span class="entry-meta">${esc(right)}</span>
+        <span class="entry-role">${esc(position)}</span>
+        <span class="entry-loc">${esc(location)}</span>
       </div>
       ${bullets ? `<ul>${bullets}</ul>` : ''}
     </div>`;
@@ -172,7 +181,8 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
   .entry-head { display: flex; justify-content: space-between; align-items: baseline; padding-top: 1pt; gap: 0.5em; }
   .entry-sub { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; }
   .entry-title { font-size: 10.5pt; line-height: 13pt; font-weight: bold; color: #1a1a1a; }
-  .entry-role { font-size: 10.5pt; line-height: 13pt; font-weight: bold; color: #1a1a1a; font-style: normal; }
+  .entry-role { font-size: 10pt; line-height: 12pt; font-weight: normal; font-style: italic; color: #1a1a1a; }
+  .entry-loc { font-size: 10pt; line-height: 12pt; font-weight: normal; font-style: italic; color: #444444; white-space: nowrap; }
   .entry-meta { font-size: 10pt; line-height: 13pt; font-weight: bold; color: #444444; white-space: nowrap; }
   ul { list-style: disc; margin: 0; padding-left: 12pt; }
   li {
@@ -188,7 +198,7 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
   .skill-group { font-weight: bold; color: #1a1a1a; }
   .edu { padding-top: 0.8pt; padding-bottom: 0.8pt; }
   .edu .entry-title { font-size: 9.8pt; line-height: 10.3pt; font-weight: bold; }
-  .edu .entry-role { font-size: 9.8pt; font-weight: normal; }
+  .edu .entry-role { font-size: 9.8pt; font-weight: normal; font-style: normal; }
 </style>
 </head>
 <body>

@@ -46,7 +46,7 @@ async function renderAtScale(page, resume, template, scale) {
     format: 'Letter',
     printBackground: true,
     preferCSSPageSize: false,
-    margin: { top: '0.4in', bottom: '0.38in', left: '0.75in', right: '0.75in' },
+    margin: { top: '0.4in', bottom: '0.38in', left: '0.5in', right: '0.5in' },
   });
   const doc = await PDFDocument.load(pdf);
   return { pdf, pages: doc.getPageCount() };
