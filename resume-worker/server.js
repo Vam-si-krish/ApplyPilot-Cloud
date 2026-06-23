@@ -9,8 +9,19 @@
  */
 import 'dotenv/config';
 import express from 'express';
-import { getApplication, updateApplication, uploadPdf } from './supabase.js';
+import {
+  getApplication,
+  getApplicationWithJob,
+  getBaseResume,
+  getSettings,
+  getActiveApiKey,
+  updateApplication,
+  uploadPdf,
+} from './supabase.js';
 import { renderResumePdf, getBrowser, closeBrowser } from './render.js';
+import { makeClient, tailorResume } from './tailor.js';
+
+const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -62,6 +73,68 @@ app.post('/generate', async (req, res) => {
     const msg = e instanceof Error ? e.message : String(e);
     await updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
     res.status(500).json({ error: msg });
+  }
+});
+
+/**
+ * POST /tailor {id} → run the one-shot LLM résumé tailoring for an application and
+ * write tailored_resume + tailor_changes + status. This lives on the worker (not a
+ * Netlify route) because the LLM call can take 30–90s — far over Netlify's ~26s
+ * function ceiling. Cheap preconditions are checked synchronously and returned as
+ * errors; the slow LLM call then runs in the background, responding 202 right away
+ * so the caller (and the platform) never wait on it. The UI polls the row status.
+ */
+app.post('/tailor', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  const id = req.body && req.body.id;
+  if (!id || typeof id !== 'string') return res.status(400).json({ error: 'id required' });
+
+  try {
+    const appRow = await getApplicationWithJob(id);
+    if (!appRow) return res.status(404).json({ error: 'application not found' });
+    if (!appRow.job) return res.status(409).json({ error: 'the job for this application was removed' });
+
+    const base = await getBaseResume();
+    if (!base || !Array.isArray(base.work) || base.work.length === 0) {
+      return res.status(409).json({ error: 'No base résumé yet — build it under Applications → Base résumé first.' });
+    }
+
+    const settings = await getSettings();
+    const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
+    const model = (settings.tailor_model || settings.llm_model || '').trim();
+    if (!LLM_PROVIDERS.has(provider)) {
+      return res.status(409).json({ error: `Tailoring provider "${provider || '(unset)'}" is not a supported LLM provider.` });
+    }
+    const key = await getActiveApiKey(provider);
+    if (!key) {
+      return res.status(409).json({ error: `No active ${provider} API key — add one under Settings → AI tokens.` });
+    }
+
+    const job = appRow.job;
+    const signals = {
+      missing: (appRow.job.score_breakdown && appRow.job.score_breakdown.missing) || null,
+      matched: job.matched_skills || null,
+      unmatched: job.unmatched_skills || null,
+      keywords: job.score_keywords || null,
+    };
+
+    // All preconditions met — mark generating, ack, then do the slow LLM call async.
+    await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
+    res.status(202).json({ ok: true, status: 'generating' });
+
+    const client = makeClient(provider, model, key);
+    tailorResume(base, job, signals, client)
+      .then(({ resume, changes }) =>
+        updateApplication(id, { tailored_resume: resume, tailor_changes: changes, status: 'ready', error: null }),
+      )
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        return updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
+      });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!res.headersSent) res.status(500).json({ error: msg });
   }
 });
 

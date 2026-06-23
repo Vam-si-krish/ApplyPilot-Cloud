@@ -22,6 +22,7 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     tailor_provider: 'anthropic',
     tailor_model: 'claude-sonnet-4-6',
     resume_worker_url: null,
+    resume_worker_secret: null,
     apify_actor_id: 'cheap_scraper~linkedin-job-scraper',
     job_portals: ['linkedin'],
     auto_scrape_enabled: true,

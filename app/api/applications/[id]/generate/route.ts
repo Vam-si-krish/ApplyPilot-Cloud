@@ -1,59 +1,54 @@
 /**
- * POST /api/applications/[id]/generate — produce a job-tailored résumé for one
- * application (ADR 0024, Phase 2). One LLM call (serverless-safe) that reframes the
- * base résumé toward the job using the scoring-v2 signals we already store; the
- * result is merged onto the base so it can only contain truthful, real content.
+ * POST /api/applications/[id]/generate — kick off a job-tailored résumé for one
+ * application (ADR 0024 Phase 2; moved to the worker per ADR 0027). The tailoring
+ * is ONE LLM call that can take 30–90s — over Netlify's ~26s function ceiling — so
+ * this route just proxies to the résumé worker (same Cloudflare Tunnel as /render)
+ * and returns immediately. The worker marks the row 'generating', runs the call,
+ * then writes tailored_resume + status 'ready'/'failed'; the UI polls for the result.
  *
- * Writes tailored_resume + status 'ready' on success, or status 'failed' + error
- * on any failure — never persists a fabricated résumé. (PDF rendering happens later
- * in the MacBook worker; this route produces the structured content.)
+ * Session-gated. Never persists a fabricated résumé (the worker merges onto the base).
  */
 import { NextResponse } from 'next/server';
-import { getApplicationWithJob, getBaseResume, getSettings, updateApplication } from '@/lib/db';
-import { buildTailoringClient } from '@/lib/scoreRunner';
-import { tailorResume, TailorSignals } from '@/lib/resumeTailor';
+import { getSettings } from '@/lib/db';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const id = params.id;
+  const settings = await getSettings().catch(() => null);
+  // The UI-configured value wins (so editing it in Settings takes effect without a
+  // redeploy); the env var is the fallback/bootstrap default.
+  const url = settings?.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL;
+  const secret = settings?.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET;
+  if (!url || !secret) {
+    return NextResponse.json(
+      { error: 'Résumé worker not configured — set RESUME_WORKER_URL and RESUME_WORKER_SECRET.' },
+      { status: 503 },
+    );
+  }
+
   try {
-    const app = await getApplicationWithJob(id);
-    if (!app) return NextResponse.json({ error: 'application not found' }, { status: 404 });
-    if (!app.job) return NextResponse.json({ error: 'the job for this application was removed' }, { status: 409 });
-
-    const base = await getBaseResume();
-    if (!base || base.work.length === 0) {
-      return NextResponse.json(
-        { error: 'No base résumé yet — build it under Applications → Base résumé first.' },
-        { status: 409 },
-      );
+    const r = await fetch(`${url.replace(/\/$/, '')}/tailor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ id }),
+      // The worker acks (202) before the LLM call runs, so this returns in ~1s.
+      signal: AbortSignal.timeout(20_000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      return NextResponse.json({ error: data.error || `worker error (${r.status})` }, { status: r.status });
     }
-
-    await updateApplication(id, { status: 'generating', error: null });
-
-    const job = app.job;
-    const signals: TailorSignals = {
-      missing: job.score_breakdown?.missing ?? null,
-      matched: job.matched_skills ?? null,
-      unmatched: job.unmatched_skills ?? null,
-      keywords: job.score_keywords ?? null,
-    };
-
-    const settings = await getSettings();
-    const client = await buildTailoringClient(settings);
-
-    try {
-      const { resume: tailored, changes } = await tailorResume(base, job, signals, client);
-      await updateApplication(id, { tailored_resume: tailored, tailor_changes: changes, status: 'ready', error: null });
-      return NextResponse.json({ ok: true, status: 'ready', tailored_resume: tailored, changes });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await updateApplication(id, { status: 'failed', error: msg });
-      return NextResponse.json({ error: msg, status: 'failed' }, { status: 500 });
-    }
+    // 202 from the worker: generation started; the client polls the row for the result.
+    return NextResponse.json({ ok: true, status: data.status || 'generating' }, { status: 202 });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    const msg =
+      e instanceof Error && e.name === 'TimeoutError'
+        ? 'The résumé worker did not respond — is it running?'
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

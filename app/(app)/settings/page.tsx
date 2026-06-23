@@ -44,6 +44,9 @@ export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // New worker secret to set (write-only). Empty = leave the saved one unchanged;
+  // s.resume_worker_secret holds only a masked preview from the GET.
+  const [workerSecret, setWorkerSecret] = useState('');
 
   useEffect(() => {
     fetch('/api/settings')
@@ -71,11 +74,20 @@ export default function SettingsPage() {
     if (!s) return;
     setSaving(true);
     try {
+      // Only send a new worker secret when one was typed; otherwise the masked value
+      // in `s` is sent and the server ignores it (so the saved secret is preserved).
+      const newSecret = workerSecret.trim();
+      const body = newSecret ? { ...s, resume_worker_secret: newSecret } : s;
       await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(s),
+        body: JSON.stringify(body),
       });
+      // Reflect the newly-set secret as a masked preview and clear the input.
+      if (newSecret) {
+        patch({ resume_worker_secret: `••••••${newSecret.slice(-4)}` });
+        setWorkerSecret('');
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -413,15 +425,32 @@ export default function SettingsPage() {
       {/* Résumé Worker */}
       <Section title="Résumé Worker">
         <p className="text-slate-muted text-[12px] mb-4">
-          Configure the URL for your local Puppeteer worker. This replaces the hardcoded environment variable so you don't have to redeploy when your tunnel URL changes.
+          The URL and shared secret for your local Puppeteer worker (résumé tailoring + PDF rendering).
+          What you set here takes precedence over the <span className="font-mono text-sky">RESUME_WORKER_URL</span> /
+          <span className="font-mono text-sky"> RESUME_WORKER_SECRET</span> env vars, so you can change the tunnel URL
+          without a redeploy. The secret must match the worker's <span className="font-mono text-sky">WORKER_SECRET</span>.
         </p>
         <div className="grid grid-cols-1 gap-4">
-          <Field 
-            label="Worker URL" 
-            value={s.resume_worker_url ?? ''} 
-            onChange={(v) => patch({ resume_worker_url: v })} 
-            placeholder="https://mission-julia-direction-omissions.trycloudflare.com" 
+          <Field
+            label="Worker URL"
+            value={s.resume_worker_url ?? ''}
+            onChange={(v) => patch({ resume_worker_url: v })}
+            placeholder="https://mission-julia-direction-omissions.trycloudflare.com"
           />
+          <div>
+            <Field
+              label="Worker secret"
+              type="password"
+              value={workerSecret}
+              onChange={setWorkerSecret}
+              placeholder={s.resume_worker_secret ? 'Saved — type a new value to replace it' : 'Set the shared worker secret'}
+            />
+            <p className="text-slate-muted text-[11px] mt-1.5">
+              {s.resume_worker_secret
+                ? `A secret is saved (${s.resume_worker_secret}). Leave blank to keep it; enter a new value to replace it.`
+                : 'No secret saved — the RESUME_WORKER_SECRET env var is used if set.'}
+            </p>
+          </div>
         </div>
       </Section>
 
@@ -999,16 +1028,19 @@ function Field({
   value,
   onChange,
   placeholder,
+  type = 'text',
 }: {
   label: string;
   value: unknown;
   onChange: (v: string) => void;
   placeholder?: string;
+  type?: string;
 }) {
   return (
     <div>
       <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">{label}</p>
       <input
+        type={type}
         value={(value as string) ?? ''}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}

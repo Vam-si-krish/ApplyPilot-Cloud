@@ -1,6 +1,112 @@
 /** Server-side data access helpers over the service-role Supabase client. */
 import { supabaseAdmin } from './supabase';
-import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob } from './types';
+import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
+
+// ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
+
+/** Stale-heartbeat window: a chain whose heartbeat is older than this is presumed
+ *  dead (crashed function) and its lock can be re-acquired. Must exceed the worst
+ *  case for one batch (5 LLM calls with rate-limit back-off). */
+const SCORING_STALE_MS = 120_000;
+
+/** Current scoring session row (id=1), or null if the table is empty. */
+export async function getScoringState(): Promise<ScoringState | null> {
+  const { data, error } = await supabaseAdmin().from('scoring_state').select('*').eq('id', 1).maybeSingle();
+  if (error) throw new Error(`Failed to load scoring state: ${error.message}`);
+  return (data as ScoringState) ?? null;
+}
+
+/**
+ * Atomically acquire the scoring lock (compare-and-swap). Succeeds only when no
+ * chain is active OR the active one's heartbeat is stale. A single-row conditional
+ * UPDATE is atomic in Postgres, so exactly one of N concurrent callers wins —
+ * which is what stops duplicate scoring. Returns true if this caller acquired it.
+ */
+export async function acquireScoringLock(total: number, token: string): Promise<boolean> {
+  const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - SCORING_STALE_MS).toISOString();
+  const { data, error } = await supabaseAdmin()
+    .from('scoring_state')
+    .update({
+      active: true, stop_requested: false, rescan_requested: false,
+      token, total, done: 0, errors: 0, started_at: now, heartbeat: now, updated_at: now,
+    })
+    .eq('id', 1)
+    .or(`active.eq.false,heartbeat.lt.${staleBefore}`)
+    .select('id');
+  if (error) throw new Error(`Failed to acquire scoring lock: ${error.message}`);
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Validate that `token` still owns the active session and refresh its heartbeat,
+ * returning the current row (or null if superseded). Used at the top of each
+ * continuation batch — also how a stop is detected (st.stop_requested).
+ */
+export async function touchScoringSession(token: string): Promise<ScoringState | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabaseAdmin()
+    .from('scoring_state')
+    .update({ heartbeat: now, updated_at: now })
+    .eq('id', 1).eq('active', true).eq('token', token)
+    .select('*').maybeSingle();
+  if (error) throw new Error(`Failed to touch scoring session: ${error.message}`);
+  return (data as ScoringState) ?? null;
+}
+
+/** Write live progress (done/errors) for the owning session and refresh heartbeat. */
+export async function updateScoringProgress(token: string, done: number, errors: number, total?: number): Promise<void> {
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { done, errors, heartbeat: now, updated_at: now };
+  if (total != null) patch.total = total;
+  const { error } = await supabaseAdmin().from('scoring_state').update(patch).eq('id', 1).eq('token', token);
+  if (error) throw new Error(`Failed to update scoring progress: ${error.message}`);
+}
+
+/** Release the lock (mark idle). Scoped to the owning token so a superseding chain isn't clobbered. */
+export async function releaseScoringLock(token: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin()
+    .from('scoring_state')
+    .update({ active: false, stop_requested: false, rescan_requested: false, token: null, heartbeat: now, updated_at: now })
+    .eq('id', 1).eq('token', token);
+  if (error) throw new Error(`Failed to release scoring lock: ${error.message}`);
+}
+
+/** Request a stop of the active session (the chain halts after its current batch). */
+export async function requestScoringStop(): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from('scoring_state')
+    .update({ stop_requested: true, updated_at: new Date().toISOString() })
+    .eq('id', 1).eq('active', true);
+  if (error) throw new Error(`Failed to request scoring stop: ${error.message}`);
+}
+
+/** Flag that new unscored rows arrived while a chain held the lock (avoids orphans). */
+export async function requestScoringRescan(): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from('scoring_state')
+    .update({ rescan_requested: true, updated_at: new Date().toISOString() })
+    .eq('id', 1).eq('active', true);
+  if (error) throw new Error(`Failed to request scoring rescan: ${error.message}`);
+}
+
+/** Atomically read-and-clear the rescan flag for the owning session. */
+export async function consumeScoringRescan(token: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin()
+    .from('scoring_state')
+    .update({ rescan_requested: false, updated_at: new Date().toISOString() })
+    .eq('id', 1).eq('token', token).eq('rescan_requested', true)
+    .select('id');
+  if (error) throw new Error(`Failed to consume scoring rescan: ${error.message}`);
+  return (data?.length ?? 0) > 0;
+}
+
+/** True when the active session's heartbeat is stale (presumed-dead chain). */
+export function isScoringStale(s: ScoringState | null): boolean {
+  if (!s || !s.active || !s.heartbeat) return false;
+  return Date.now() - new Date(s.heartbeat).getTime() > SCORING_STALE_MS;
+}
 
 export async function getSettings(): Promise<Settings> {
   const { data, error } = await supabaseAdmin().from('settings').select('*').eq('id', 1).single();

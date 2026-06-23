@@ -19,13 +19,19 @@ export function appBaseUrl(): string {
 }
 
 /**
- * Fire-and-forget POST to /api/score-batch to continue the scoring loop without
+ * Fire-and-forget POST to /api/score-batch to drive the scoring loop without
  * blocking the caller. Authenticated with CRON_SECRET.
+ *
+ * No `token` → a START: tries to acquire the single-flight lock (ADR 0028); if a
+ * chain is already active it no-ops, so duplicate triggers (multi-portal webhooks,
+ * the manual button, overlapping runs) can't double-score. With a `token` → a
+ * CONTINUE of that owning session's loop.
  */
-export function triggerScoreBatch(): void {
+export function triggerScoreBatch(token?: string): void {
   const secret = process.env.CRON_SECRET || '';
+  const qs = token ? `?token=${encodeURIComponent(token)}` : '';
   // Intentionally not awaited — we want the current invocation to return.
-  void fetch(`${appBaseUrl()}/api/score-batch`, {
+  void fetch(`${appBaseUrl()}/api/score-batch${qs}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}` },
   }).catch(() => {

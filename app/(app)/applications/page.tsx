@@ -72,19 +72,45 @@ export default function ApplicationsPage() {
     load();
   }
 
+  // Fetch a single application's current row from the list endpoint (used to poll
+  // for the worker's async tailoring result).
+  async function fetchApp(id: string): Promise<ApplicationWithJob | null> {
+    const d = await fetch('/api/applications').then((r) => r.json());
+    return (d.applications ?? []).find((x: ApplicationWithJob) => x.id === id) ?? null;
+  }
+
   async function generate(a: ApplicationWithJob) {
     if (genId) return;
     setGenId(a.id);
-    setMsg(null);
+    setMsg('Generating tailored résumé… this can take up to a minute.');
     try {
+      // The generate route hands off to the worker and returns 202 immediately;
+      // the worker writes the result to the row, so we poll the row for status.
       const r = await fetch(`/api/applications/${a.id}/generate`, { method: 'POST' });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       if (!r.ok) {
         setMsg(`Generation failed: ${d.error || 'unknown error'}`);
-      } else {
+        load();
+        return;
+      }
+
+      // Poll until the worker marks the row ready/failed (cap ~3 min).
+      const deadline = Date.now() + 180_000;
+      let row: ApplicationWithJob | null = null;
+      while (Date.now() < deadline) {
+        await new Promise((res) => setTimeout(res, 2500));
+        row = await fetchApp(a.id).catch(() => null);
+        if (row && (row.status === 'ready' || row.status === 'failed')) break;
+      }
+
+      if (row?.status === 'ready') {
         setMsg('Tailored résumé generated — review and edit below.');
         setExpanded(a.id);
-        setDraft(d.tailored_resume ? structuredClone(d.tailored_resume) : null);
+        setDraft(row.tailored_resume ? structuredClone(row.tailored_resume) : null);
+      } else if (row?.status === 'failed') {
+        setMsg(`Generation failed: ${row.error || 'unknown error'}`);
+      } else {
+        setMsg('Still generating — refresh in a moment to see the result.');
       }
       load();
     } catch {

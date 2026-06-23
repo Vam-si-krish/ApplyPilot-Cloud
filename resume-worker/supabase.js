@@ -20,6 +20,52 @@ export async function getApplication(id) {
   return data;
 }
 
+/** Load an application joined with its job (the tailoring path needs the job text + signals). */
+export async function getApplicationWithJob(id) {
+  const { data, error } = await client().from('applications').select('*, job:jobs(*)').eq('id', id).maybeSingle();
+  if (error) throw new Error(`load application: ${error.message}`);
+  return data;
+}
+
+/** Settings row (id=1) — holds the per-task LLM provider/model (ADR 0025). */
+export async function getSettings() {
+  const { data, error } = await client().from('settings').select('*').eq('id', 1).single();
+  if (error) throw new Error(`load settings: ${error.message}`);
+  return data;
+}
+
+/** The structured base résumé (JSON Resume), or null if not parsed yet. */
+export async function getBaseResume() {
+  const { data, error } = await client().from('profile').select('base_resume').eq('id', 1).single();
+  if (error) throw new Error(`load base résumé: ${error.message}`);
+  return data?.base_resume ?? null;
+}
+
+/**
+ * The active vault key for a provider (ADR 0006), with the worker's own env var as
+ * a fallback — mirrors lib/credentials.getActiveApiKey. Keys are stored plaintext
+ * in api_keys, reachable only via the service role.
+ */
+const PROVIDER_ENV = {
+  gemini: 'GEMINI_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+};
+export async function getActiveApiKey(provider) {
+  const { data, error } = await client()
+    .from('api_keys')
+    .select('key_value')
+    .eq('provider', provider)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (error) throw new Error(`load active ${provider} key: ${error.message}`);
+  const fromDb = (data?.key_value || '').trim();
+  if (fromDb) return fromDb;
+  const fromEnv = (process.env[PROVIDER_ENV[provider]] || '').trim();
+  return fromEnv || null;
+}
+
 export async function updateApplication(id, patch) {
   const { error } = await client()
     .from('applications')

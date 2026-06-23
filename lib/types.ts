@@ -154,6 +154,29 @@ export interface Settings {
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */
   auto_assess_min_score: number;
   resume_worker_url: string | null;
+  /** Shared Bearer secret for the worker (ADR 0027). Server-only; the settings GET
+   *  masks it. Falls back to the RESUME_WORKER_SECRET env var when unset. */
+  resume_worker_secret: string | null;
+  updated_at: string;
+}
+
+/**
+ * Single-flight scoring session (ADR 0028). One row (id=1) is the mutex + live
+ * progress for the chunked scorer. `active` + a fresh `heartbeat` means a chain is
+ * running; `stop_requested` halts it after the current batch; `total`/`done` drive
+ * the progress bar.
+ */
+export interface ScoringState {
+  id: number;
+  active: boolean;
+  stop_requested: boolean;
+  rescan_requested: boolean;
+  token: string | null;
+  total: number;
+  done: number;
+  errors: number;
+  started_at: string | null;
+  heartbeat: string | null;
   updated_at: string;
 }
 

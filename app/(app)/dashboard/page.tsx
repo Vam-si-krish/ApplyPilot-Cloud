@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FileSearch, FileText, Star, AlarmClock, Play, RefreshCw } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
+import ScoringPanel from '@/components/ScoringPanel';
 import type { Job, Run } from '@/lib/types';
 
 interface Stats {
@@ -85,6 +86,9 @@ export default function DashboardPage() {
       {msg && (
         <div className="mb-6 px-4 py-3 rounded-lg border border-ink bg-card text-[13px] text-slate-text">{msg}</div>
       )}
+
+      {/* Live AI fit-scoring progress + Stop (ADR 0028). */}
+      <ScoringPanel onActivity={load} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {cards.map(({ label, value, icon: Icon, color }) => (

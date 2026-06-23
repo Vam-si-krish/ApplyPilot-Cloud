@@ -8,6 +8,7 @@ import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 import SkillMatchBadge from '@/components/SkillMatchBadge';
 import JobsLegend from '@/components/JobsLegend';
+import ScoringPanel from '@/components/ScoringPanel';
 import type { Job } from '@/lib/types';
 
 const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
@@ -84,10 +85,10 @@ export default function JobsPage() {
   const [showRunsDropdown, setShowRunsDropdown] = useState(false);
   const runsDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Manual scoring re-trigger (recovers a stalled auto-loop).
+  // Count of jobs still waiting to score (drives nothing visible now — the
+  // ScoringPanel shows live progress + start/stop; kept for stats refreshes).
   const [unscoredCount, setUnscoredCount] = useState(0);
-  const [scoring, setScoring] = useState(false);
-  const [scoreMsg, setScoreMsg] = useState<string | null>(null);
+  void unscoredCount;
 
   // Bulk selection: pick specific jobs and score/archive just those.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -476,29 +477,6 @@ export default function JobsPage() {
     await patch(job.id, { applied_at: new Date().toISOString() });
   }
 
-  // Kick the chunked scorer for any jobs still unscored (recovers a stalled loop).
-  async function scoreUnscored() {
-    setScoring(true);
-    setScoreMsg(null);
-    try {
-      const d = await fetch('/api/score-start', { method: 'POST' }).then((r) => r.json());
-      if (d.started) {
-        setScoreMsg(`Scoring ${d.unscored} job${d.unscored === 1 ? '' : 's'}… runs in the background.`);
-        setTimeout(() => {
-          load();
-          refreshStats();
-        }, 4000);
-      } else {
-        setScoreMsg('No unscored jobs to score.');
-      }
-    } catch {
-      setScoreMsg('Could not start scoring.');
-    } finally {
-      setScoring(false);
-      setTimeout(() => setScoreMsg(null), 8000);
-    }
-  }
-
   return (
     <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="flex items-start justify-between mb-6">
@@ -511,20 +489,11 @@ export default function JobsPage() {
             </Link>
           </p>
         </div>
-        {unscoredCount > 0 && (
-          <div className="flex items-center gap-3">
-            {scoreMsg && <span className="text-[12px] text-slate-muted animate-fade-in">{scoreMsg}</span>}
-            <button
-              onClick={scoreUnscored}
-              disabled={scoring}
-              title="Score every job still waiting (resumes a stalled run)"
-              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
-            >
-              <Sparkles size={14} /> {scoring ? 'Starting…' : `Score unscored (${unscoredCount})`}
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Live AI fit-scoring progress + Start/Stop (ADR 0028). Replaces the old
+          "Score unscored" button: single-flight, shows progress, stoppable. */}
+      <ScoringPanel onActivity={() => { load(); refreshStats(); }} />
 
       {/* Run selector */}
       <div className="flex flex-wrap items-center gap-3 mb-4">

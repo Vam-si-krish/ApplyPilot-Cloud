@@ -99,3 +99,60 @@ What landed:
 
 ## Migrations applied to the live DB
 0011–0018 (see DAY-5) · **`0019_resume_applications.sql` applied 2026-06-22** (this session). None pending.
+
+---
+
+## 2026-06-23 — Fixed: Generate 502'd on Netlify (tailoring moved to the worker, ADR 0027)
+**Symptom:** `POST /api/applications/[id]/generate` returned **502 Bad Gateway** (Netlify, `text/plain`).
+**Root cause:** the route ran the tailoring LLM call inline (~4000 tokens, 30–90s). Netlify hard-caps
+synchronous functions at ~26s; `export const maxDuration = 60` is a *Vercel* setting Netlify ignores. So
+the platform killed the function mid-call → 502 (not our JSON error path). Started failing once a real vault
+key made the call actually run. No synchronous approach fits.
+**Fix (ADR 0027):** offloaded tailoring to the always-on `resume-worker` (no serverless timeout), same path
+`/render` already uses.
+- `resume-worker/tailor.js` — hand-kept port of `lib/resumeTailor.ts` + `lib/llm.ts` + `lib/resume.ts`
+  (**keep in sync by hand**; ADR 0026 rules + `mergeTailored` anchoring unchanged).
+- `resume-worker/supabase.js` — added `getApplicationWithJob`, `getSettings`, `getBaseResume`,
+  `getActiveApiKey` (vault key is plaintext in `api_keys`, env fallback).
+- `resume-worker/server.js` — new `POST /tailor {id}`: validates preconditions sync (fast 4xx), marks
+  `generating`, **acks 202**, runs the LLM call in the background, writes `tailored_resume` + `tailor_changes`
+  + `ready`/`failed`.
+- `app/api/applications/[id]/generate/route.ts` — now a thin proxy to `/tailor`, returns 202 immediately.
+- `app/(app)/applications/page.tsx` — `generate()` polls the row (2.5s, ~3 min cap) instead of awaiting.
+- typecheck ✅ · 95 tests ✅ · worker `node --check` ✅.
+**Carryover:** generation now needs the worker online (PDF already did). Worker needs
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` in its `.env` (it already does for PDF). Undeployed like the rest.
+
+### Follow-up — Worker URL/secret configurable from the UI (Settings → Résumé Worker)
+- **Migration `0022_resume_worker_secret.sql` — APPLIED to live DB & verified** (2026-06-23): adds
+  `settings.resume_worker_secret TEXT`. (`resume_worker_url` already existed via `0020_resume_worker_url.sql`.)
+- **Secret is write-only to the browser:** settings GET returns a **masked** preview (`maskKey`), never the raw
+  value; PUT ignores any value containing `•` (the echoed mask) and treats blank as "leave unchanged" — so
+  saving other settings never wipes the secret.
+- **Precedence fixed (was an env-override footgun):** all three worker routes now resolve
+  `settings?.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL` (and same for the secret) — the
+  **UI value wins**, env is the fallback. Previously env silently overrode the UI value.
+- UI: Settings → Résumé Worker now has a password-type "Worker secret" field with saved-status helper text;
+  must match the worker's `WORKER_SECRET`. typecheck ✅ · 95 tests ✅ · build ✅.
+- **Still undeployed** — goes live on push → Netlify. Migration is already applied, so deploy is safe (column exists).
+
+---
+
+## 2026-06-23 — Fit scoring: single-flight lock + progress bar + Stop (ADR 0028)
+**Reviewed the whole scoring pipeline** (`/api/run` → apify-webhook → score-batch self-loop → assess).
+Two findings + fixes:
+- **Duplicate scoring (real bug):** `getUnscoredBatch` had no claim — rows stayed `unscored` across the LLM
+  call, so concurrent chains (one webhook per portal, the manual button, overlapping runs) scored the same
+  jobs 2–3× (idempotent write hid it). **Fixed** with a single-flight mutex.
+- **The "continuous call" the user saw** = `GET /api/stats` every 10s from `AppShell` (every page) + dashboard.
+  Harmless polling, not the scorer; gave no real progress/stopped signal.
+- **`scoring_state` table (migration 0023 — APPLIED to live DB & verified)**: singleton row, atomic CAS
+  acquire (`UPDATE … WHERE active=false OR heartbeat<now()-120s`) = exactly one chain; token-scoped
+  continuation; `stop_requested`; `total`/`done` progress; `rescan_requested` to avoid orphaning late-arriving
+  rows.
+- **score-batch rewritten**: `?token` distinguishes START (acquire lock, no-op if busy) vs CONTINUE (drive
+  owning session). `triggerScoreBatch(token?)` carries it. New `/api/score-status` + `/api/score-stop`.
+- **UI**: `components/ScoringPanel.tsx` (mirrors the Gmail SyncProgressPanel) on **Dashboard + Jobs** — live
+  `done/total` bar, Stop (halts after current batch, scored work kept), Start when jobs wait, "Done" flash.
+  Polls 2.5s active / 12s idle. Replaced the old "Score unscored" button on Jobs.
+- typecheck ✅ · 95 tests ✅ · build ✅. **Undeployed** — goes live on push (migration already applied → safe).
