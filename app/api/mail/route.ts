@@ -9,7 +9,7 @@ import type { MailCategory, MailMessage } from '@/lib/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CATEGORIES: MailCategory[] = ['applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
+const CATEGORIES: MailCategory[] = ['recruiter', 'applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
 
 export async function GET(req: Request) {
   const category = new URL(req.url).searchParams.get('category');

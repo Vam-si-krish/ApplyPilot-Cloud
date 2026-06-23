@@ -828,7 +828,7 @@ function GmailSection() {
   return (
     <Section title="Gmail Inbox (AI)">
       <p className="text-slate-muted text-[12px] mb-4">
-        Connect Gmail to auto-classify incoming job mail (applied · shortlisted · action needed · assessment · rejection) and
+        Connect Gmail to auto-classify incoming job mail (recruiter outreach · applied · shortlisted · action needed · assessment · rejection) and
         track a daily history. Read-only access. Results show under the <span className="text-sky">Inbox</span> tab.
       </p>
 

@@ -6,20 +6,21 @@
 import { getClient, ChatMessage, LLMClient } from './llm';
 import type { MailCategory, MailApplySource } from './types';
 
-const CATEGORIES: MailCategory[] = ['applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
+const CATEGORIES: MailCategory[] = ['recruiter', 'applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
 const SOURCES: MailApplySource[] = ['easy_apply', 'company_portal'];
 
-export const MAIL_CLASSIFY_PROMPT = `You triage a job-seeker's incoming email into exactly ONE category, from the sender, subject, and snippet.
+export const MAIL_CLASSIFY_PROMPT = `You ARE an active job-seeker reading your own inbox. Read each email the way a person hunting for a job would and decide: what does this mean for my search, and do I need to act? Then put it in exactly ONE category, using the sender, subject, and snippet.
 
-Categories:
-- applied: confirmation that an application was received ("thanks for applying", "we received your application", auto-acknowledgements).
-- shortlisted: positive progress — recruiter wants to move forward, interview invite, "next steps", phone screen, "we'd like to schedule".
-- action_needed: they need information or a decision from the applicant to proceed (reply with availability, confirm details, fill a form, schedule a time) — but it is NOT a coding test / take-home.
+Categories (a job-seeker's mental buckets):
+- recruiter: a recruiter, sourcer, hiring manager, or staffing/consulting firm is PROACTIVELY reaching out to YOU about a NEW role or opportunity that you did NOT apply for — introducing a job, asking if you're interested/available, asking for your updated resume, rate, work authorization, or to set up an intro call. This is a real human opening a new door. A genuine personal outreach about a specific role is recruiter even when it asks you to reply (the new opportunity is what defines it). This is one of the MOST important things in the inbox — never bury it in "other".
+- applied: confirmation that an application YOU submitted was received ("thanks for applying", "we received your application", auto-acknowledgements).
+- shortlisted: positive progress on a role you ARE already in the pipeline for — interview invite, "next steps", phone screen, "we'd like to schedule", moving forward.
+- action_needed: an application/process ALREADY in motion needs information or a decision from you to proceed (reply with availability, confirm details, fill a form, schedule a time) — but it is NOT a coding test/take-home and NOT a brand-new recruiter introduction (that's "recruiter").
 - assessment: an assignment, take-home project, coding test, online assessment (HackerRank/Codility), or screening questions to COMPLETE.
 - rejection: not moving forward / position filled / "decided to pursue other candidates".
-- other: anything not clearly job-application related (newsletters, alerts, promotions, generic mail).
+- other: NOT a personal step in your job search. Automated job-alert digests and "N new jobs matching your search" emails, newsletters, promotions, marketing, course/webinar ads, social notifications, generic mail — even when they come from LinkedIn/Indeed/job boards. A bulk blast or an automated alert is "other", not "recruiter".
 
-Pick the single best category. If it isn't clearly about a job application, use "other".
+Decide from the job-seeker's point of view, not by keywords alone. The key question for "recruiter" vs "other": is a real person opening a NEW opportunity to ME specifically (recruiter), or is this an automated/bulk message (other)? When a recruiter email is a genuine personal outreach about a specific role, choose "recruiter" even if it also asks you to do something.
 
 Also report HOW the application was submitted, judging mainly by the SENDER:
 - easy_apply: you applied WITHIN a job board / aggregator and the confirmation comes from that platform — LinkedIn (linkedin.com), Indeed (indeed.com), Glassdoor (glassdoor.com), ZipRecruiter, Monster, Dice, Wellfound/AngelList, SimplyHired, CareerBuilder, etc. (e.g. LinkedIn "Easy Apply", "Indeed Apply").
@@ -27,7 +28,7 @@ Also report HOW the application was submitted, judging mainly by the SENDER:
 - none: the email is not a job application you submitted (newsletters, alerts, generic mail).
 
 RESPOND IN EXACTLY THIS FORMAT, nothing else:
-CATEGORY: [applied|shortlisted|action_needed|assessment|rejection|other]
+CATEGORY: [recruiter|applied|shortlisted|action_needed|assessment|rejection|other]
 SOURCE: [easy_apply|company_portal|none]
 SUMMARY: [one short sentence — what it is and any deadline/action]`;
 

@@ -13,6 +13,12 @@ describe('parseMailResponse', () => {
     expect(parseMailResponse('CATEGORY: applied\nSOURCE: company_portal\nSUMMARY: x').apply_source).toBe('company_portal');
   });
 
+  it('recognizes the recruiter category (inbound outreach, no application)', () => {
+    const r = parseMailResponse('CATEGORY: recruiter\nSOURCE: none\nSUMMARY: Recruiter at Randstad reaching out about a Sr Front End role.');
+    expect(r.category).toBe('recruiter');
+    expect(r.apply_source).toBeNull();
+  });
+
   it('leaves apply_source null for SOURCE: none or when absent', () => {
     expect(parseMailResponse('CATEGORY: other\nSOURCE: none\nSUMMARY: newsletter').apply_source).toBeNull();
     expect(parseMailResponse('CATEGORY: rejection\nSUMMARY: no').apply_source).toBeNull();

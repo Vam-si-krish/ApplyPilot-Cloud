@@ -204,7 +204,8 @@ export interface ApiKeyMasked {
 }
 
 // ── Gmail inbox (ADR 0012) ───────────────────────────────────────────────────
-export type MailCategory = 'applied' | 'shortlisted' | 'action_needed' | 'assessment' | 'rejection' | 'other';
+// 'recruiter' (0025) = inbound recruiter outreach about a NEW role you didn't apply to.
+export type MailCategory = 'recruiter' | 'applied' | 'shortlisted' | 'action_needed' | 'assessment' | 'rejection' | 'other';
 
 /** How an application was submitted (ADR 0021): LinkedIn Easy Apply vs a company/ATS portal. */
 export type MailApplySource = 'easy_apply' | 'company_portal';

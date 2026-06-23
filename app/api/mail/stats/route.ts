@@ -13,7 +13,7 @@ import type { AppliedEvent } from '@/lib/trackerStats';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CATEGORIES: MailCategory[] = ['applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
+const CATEGORIES: MailCategory[] = ['recruiter', 'applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
 
 export async function GET() {
   try {

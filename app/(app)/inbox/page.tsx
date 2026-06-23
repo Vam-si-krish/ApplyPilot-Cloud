@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { Mail, RefreshCw, ExternalLink } from 'lucide-react';
 import type { MailCategory, MailMessage } from '@/lib/types';
 
-const ORDER: MailCategory[] = ['applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
+const ORDER: MailCategory[] = ['recruiter', 'applied', 'shortlisted', 'action_needed', 'assessment', 'rejection', 'other'];
 const META: Record<MailCategory, { label: string; cls: string }> = {
+  recruiter: { label: 'Recruiter', cls: 'bg-teal-500/10 border-teal-500/30 text-teal-300' },
   applied: { label: 'Applied', cls: 'bg-sky/10 border-sky/25 text-sky' },
   shortlisted: { label: 'Shortlisted', cls: 'bg-emerald/10 border-emerald/25 text-emerald' },
   action_needed: { label: 'Action needed', cls: 'bg-amber-500/10 border-amber-500/25 text-amber-400' },

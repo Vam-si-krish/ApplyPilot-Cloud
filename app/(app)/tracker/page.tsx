@@ -30,6 +30,7 @@ const GRAN: { id: Granularity; label: string; periods: number }[] = [
 
 // Funnel categories, in pipeline order, with their accent colors.
 const FUNNEL: { cat: MailCategory; label: string; dot: string; text: string }[] = [
+  { cat: 'recruiter', label: 'Recruiter outreach', dot: 'bg-teal-400', text: 'text-teal-300' },
   { cat: 'applied', label: 'Applied', dot: 'bg-sky', text: 'text-sky' },
   { cat: 'shortlisted', label: 'Shortlisted', dot: 'bg-emerald', text: 'text-emerald' },
   { cat: 'assessment', label: 'Assessments', dot: 'bg-violet-400', text: 'text-violet-300' },
