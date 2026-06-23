@@ -245,3 +245,17 @@ redeploy). Both worker + tunnel now run as launchd LaunchAgents (RunAtLoad+KeepA
 `install-service.sh` / `install-tunnel-service.sh`. Verified end-to-end: app→tunnel→worker `/health`
 200, `/tailor` 401. Restarting the worker under launchd also activated the uncommitted ADR 0031
 one-page changes + clickable-links template. Quick tunnels still need the Mac awake + logged in.
+
+---
+
+## 2026-06-23 — Fuller bullets + human voice (ADR 0033)
+The one-page résumé looked weak: bullets forced to one ~120-char line → half-empty page with
+thin points, plus AI tells (em-dashes, buzzwords). Since the one-page guarantee now lives in the
+renderer (ADR 0031), the prompt no longer needs to crush bullets. Tuned both synced copies
+(`lib/resumeTailor.ts` + `resume-worker/tailor.js`): (1) `LENGTH` now asks for SUBSTANTIAL ~2-line
+bullets (~180-210 chars: scope + action + tech + metric) that fill the page, same count; (2) added
+a "WRITE LIKE A HUMAN" section — varied action verbs, quantified, **no em-dashes**, banned-words
+list; (3) deterministic `cleanText` strips em-dashes (U+2014→comma) from every bullet + summary in
+`mergeTailored` (hyphens/en-dashes untouched); (4) softened the condense prompt to trim *just enough*
+instead of crushing to one line. typecheck ✅ · 100 tests ✅ (+1 em-dash regression) · build ✅ ·
+worker `node --check` ✅. **Live** — worker service kickstarted to load it.

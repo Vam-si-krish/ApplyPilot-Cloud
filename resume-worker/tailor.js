@@ -344,15 +344,22 @@ You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
 - ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
 
-LENGTH IS A HARD CONSTRAINT — the résumé MUST fit ONE page. The user message carries a LENGTH BUDGET computed from the base résumé; your output MUST stay within it:
-- Each role/project gets AT MOST the number of bullets the budget lists — match it or go UNDER, NEVER over. To surface a new point, REPLACE or MERGE the least-important existing bullet; never append a bullet.
-- Keep EVERY bullet to ONE line (~120 characters). A bullet that wraps to a second line costs as much vertical space as two — tighten wordy bullets instead of letting them grow.
-- Keep the summary within its character budget (2–3 lines).
-- Stay within the SKILLS budget. Adding a few job-relevant skills is good, but a long skills list ALSO overflows the page — drop weaker skills to make room for the ones this job wants.
+LENGTH — the résumé must fit ONE page AND fill it; a sparse, half-empty page with thin one-line bullets looks weak. The user message carries a LENGTH BUDGET computed from the base résumé:
+- Keep the SAME number of bullets per role/project as the budget lists, or fewer, NEVER more. To surface a new point, REWRITE or MERGE an existing bullet; never append one.
+- Make each bullet SUBSTANTIAL: a full two lines, roughly 180-210 characters. State the scope or context, the action you took and the concrete technologies, and a quantified result. Do NOT pad with filler to reach a length; add real substance (the system, the constraint, the scale, the measurable outcome). One-line bullets read as thin, so expand them with genuine detail.
+- Keep the summary to its character budget (2-3 lines).
+- Stay within the SKILLS budget; drop weaker, generic skills to make room for the ones this job wants.
 
 HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, job titles, employment dates, locations, contact details, and ALL of education. OMIT them entirely.
 
-STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority — it must hold up in an interview.
+STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority; it must hold up in an interview.
+
+WRITE LIKE A HUMAN, NOT AN AI — recruiters and reviewers spot AI-written résumés instantly and it hurts the candidate:
+- Start every bullet with a strong, VARIED past-tense action verb (Architected, Built, Led, Migrated, Shipped, Designed, Cut, Scaled, Automated, Rebuilt). Do not reuse the same opener across bullets.
+- Be concrete and quantified: name the real system, the technology, the scale, and a measurable result. Never write vague filler like "responsible for", "worked on", or "helped with".
+- NEVER use an em-dash (—). Use a comma, "and", or a period instead.
+- Do NOT use these AI-tell / filler words: leverage, utilize, robust, seamless, spearhead, synergy, facilitate, foster, elevate, navigate, landscape, tapestry, realm, cutting-edge, state-of-the-art, "passionate about", "results-driven", "team player", and the "not just X, but Y" construction. Say it plainly: use (not utilize), built (not spearheaded), improve (not elevate).
+- Vary sentence structure and rhythm across bullets; do not make every bullet the same shape.
 
 DISCLOSURE — include a top-level "_changes" array of short strings listing (a) every skill you ADDED that wasn't in the base résumé, and (b) any notable points/scenarios you INVENTED or significantly embellished. Be honest and specific here.
 
@@ -439,6 +446,20 @@ function capSummary(base, tailored) {
   return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.]+$/, '').trim();
 }
 
+/**
+ * Strip the #1 AI tell from generated bullet/summary text: an em-dash used as
+ * punctuation becomes a comma (ADR 0033). Hyphens in compound words and en-dashes in
+ * date ranges are left alone — only the em-dash (U+2014) is targeted.
+ */
+function cleanText(s) {
+  return s
+    .replace(/\s*—\s*/g, ', ')
+    .replace(/,\s*,/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;:])/g, '$1')
+    .trim();
+}
+
 /** Keep the model's skill groups in order but cap total keywords to the budget (ADR 0031). */
 function capSkills(base, tailored) {
   const budget = skillBudget(base);
@@ -459,15 +480,16 @@ function capSkills(base, tailored) {
  *  capping bullet counts + summary length + skill count to keep it one page
  *  (ADR 0029/0031). Pure — never throws. */
 export function mergeTailored(base, tailored) {
+  const cappedSummary = capSummary(base, tailored.basics.summary);
   const basics = {
     ...base.basics,
-    summary: capSummary(base, tailored.basics.summary),
+    summary: cappedSummary ? cleanText(cappedSummary) : cappedSummary,
     label: tailored.basics.label?.trim() || base.basics.label,
   };
-  const work = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights) }));
+  const work = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(cleanText) }));
   const tailoredSkills = tailored.skills.filter((g) => g.keywords.length > 0);
   const skills = tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
-  const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights) }));
+  const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(cleanText) }));
   return { basics, work, education: base.education, skills, projects };
 }
 
@@ -514,10 +536,11 @@ export async function tailorResume(base, job, signals, client) {
 
 export const CONDENSE_PROMPT = `You are shortening an already-tailored résumé that currently OVERFLOWS one page (it would spill onto a second page). Make it fit on ONE page WITHOUT inventing anything new and WITHOUT changing employers, job titles, dates, locations, or education.
 
-Shorten by:
-- Tightening EVERY bullet to ONE concise line (~110 characters) — cut filler words, keep the strongest signal and any metric.
-- Trimming the summary to at most 2 lines.
-- Keeping skills focused — drop the weakest or most generic keywords.
+Shorten just ENOUGH to fit, keeping the bullets substantive (do not crush everything to a thin single line):
+- Trim filler and the least-important clause from the WORDIEST bullets first; keep the scope, the technology, and the metric.
+- Trim the summary to at most 2 lines.
+- Drop the weakest or most generic skill keywords.
+NEVER use an em-dash (—); use a comma instead. Do not introduce AI-tell filler words (leverage, utilize, robust, seamless, spearhead).
 
 Output ONLY a JSON object (no markdown/commentary) with ONLY these fields, "work" and "projects" in the SAME ORDER and SAME COUNT as the input (one entry per role/project, "name" copied from the input so bullets stay aligned):
 {

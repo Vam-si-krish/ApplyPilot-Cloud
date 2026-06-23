@@ -125,6 +125,20 @@ describe('mergeTailored — deterministic one-page caps (ADR 0031)', () => {
     // base has 3 keywords → budget = max(3+6, ceil(3*1.4)=5) = 9
     expect(total).toBe(9);
   });
+
+  it('strips em-dashes from generated bullets (AI tell) but keeps hyphenated compounds (ADR 0033)', () => {
+    const tailored: ResumeDoc = {
+      ...base(),
+      work: [
+        { name: 'JPMorgan', highlights: ['Built cross-browser UIs — cutting latency 20% — across modules', 'Led migration'] },
+        { name: 'Yash', highlights: ['Maintained Angular app'] },
+      ],
+    };
+    const out = mergeTailored(base(), tailored);
+    expect(out.work[0].highlights[0]).toBe('Built cross-browser UIs, cutting latency 20%, across modules');
+    expect(out.work[0].highlights[0]).not.toContain('—'); // em-dash gone
+    expect(out.work[0].highlights[0]).toContain('cross-browser'); // hyphen preserved
+  });
 });
 
 describe('buildTailorMessages', () => {
