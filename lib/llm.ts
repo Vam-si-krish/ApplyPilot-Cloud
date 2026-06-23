@@ -13,9 +13,38 @@
  * LLM_PROVIDER pins one explicitly; LLM_MODEL overrides the model name.
  */
 
+/**
+ * A text segment within a message. `cache: true` marks an Anthropic prompt-cache
+ * breakpoint (ADR 0031) — everything up to and including that segment is cached and
+ * billed at ~0.1× on a hit. Other providers don't support it, so they just
+ * concatenate the segment text (see `flattenContent`).
+ */
+export interface ContentPart {
+  text: string;
+  cache?: boolean;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  /** Plain text, or an ordered list of segments (some cacheable). */
+  content: string | ContentPart[];
+}
+
+/** Collapse structured content to one string — used by providers without cache_control. */
+function flattenContent(content: string | ContentPart[]): string {
+  return typeof content === 'string' ? content : content.map((p) => p.text).join('\n\n');
+}
+
+type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
+
+/** Build Anthropic message content, attaching cache_control to cacheable segments. */
+function toAnthropicContent(content: string | ContentPart[]): string | AnthropicTextBlock[] {
+  if (typeof content === 'string') return content;
+  return content.map((p) => {
+    const block: AnthropicTextBlock = { type: 'text', text: p.text };
+    if (p.cache) block.cache_control = { type: 'ephemeral' };
+    return block;
+  });
 }
 
 interface ProviderConfig {
@@ -138,10 +167,10 @@ export class LLMClient {
   // -- Anthropic Messages API --------------------------------------------------
   private async chatAnthropic(messages: ChatMessage[], temperature: number, maxTokens: number): Promise<string> {
     const systemText: string[] = [];
-    const anthMessages: { role: 'user' | 'assistant'; content: string }[] = [];
+    const anthMessages: { role: 'user' | 'assistant'; content: string | AnthropicTextBlock[] }[] = [];
     for (const msg of messages) {
-      if (msg.role === 'system') systemText.push(msg.content);
-      else anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
+      if (msg.role === 'system') systemText.push(flattenContent(msg.content));
+      else anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: toAnthropicContent(msg.content) });
     }
 
     const payload: Record<string, unknown> = {
@@ -175,9 +204,10 @@ export class LLMClient {
     const systemParts: { text: string }[] = [];
 
     for (const msg of messages) {
-      if (msg.role === 'system') systemParts.push({ text: msg.content });
-      else if (msg.role === 'user') contents.push({ role: 'user', parts: [{ text: msg.content }] });
-      else if (msg.role === 'assistant') contents.push({ role: 'model', parts: [{ text: msg.content }] });
+      const text = flattenContent(msg.content);
+      if (msg.role === 'system') systemParts.push({ text });
+      else if (msg.role === 'user') contents.push({ role: 'user', parts: [{ text }] });
+      else if (msg.role === 'assistant') contents.push({ role: 'model', parts: [{ text }] });
     }
 
     const payload: Record<string, unknown> = {
@@ -202,10 +232,12 @@ export class LLMClient {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
 
+    // OpenAI-compat layer has no cache_control — send plain-string content.
+    const compatMessages = messages.map((m) => ({ role: m.role, content: flattenContent(m.content) }));
     const resp = await this.fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ model: this.model, messages, temperature, max_tokens: maxTokens }),
+      body: JSON.stringify({ model: this.model, messages: compatMessages, temperature, max_tokens: maxTokens }),
     });
 
     // 403/404 on Gemini compat = model not on the compat layer — switch to native.

@@ -45,41 +45,58 @@ export interface TailorResult {
 export const TAILOR_PROMPT = `You are an expert résumé writer helping the candidate LAND INTERVIEWS for a specific job, and optimizing the résumé to pass ATS keyword screening (aim for a strong keyword match with the posting).
 
 You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
-- Rewrite bullet points to foreground the job's requirements and keywords, adding plausible detail, metrics, and scenarios consistent with the candidate's real roles (e.g., if they touched WebSockets, describe real-time features in depth).
+- Rewrite bullet points to foreground the job's requirements and keywords, adding plausible detail and metrics consistent with the candidate's real roles.
 - ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
 
-LENGTH — keep it to ONE PAGE; the tailored résumé must be NET-NEUTRAL in length (same as the base or shorter):
-- Do NOT increase the number of bullet points (highlights) in ANY role or project. Each must have the SAME count as the base résumé, or fewer — NEVER more.
-- You cannot just append a new point. To surface a job-relevant point, REPLACE or MERGE the LEAST important existing bullet in that role, or modify an existing bullet to carry the new emphasis. Adding one means removing/condensing one.
-- Keep individual bullets to roughly one line; tighten wordy ones instead of growing the résumé.
-- Skills are compact — you MAY still add skills (they don't push it to a second page).
+LENGTH IS A HARD CONSTRAINT — the résumé MUST fit ONE page. The user message carries a LENGTH BUDGET computed from the base résumé; your output MUST stay within it:
+- Each role/project gets AT MOST the number of bullets the budget lists — match it or go UNDER, NEVER over. To surface a new point, REPLACE or MERGE the least-important existing bullet; never append a bullet.
+- Keep EVERY bullet to ONE line (~120 characters). A bullet that wraps to a second line costs as much vertical space as two — tighten wordy bullets instead of letting them grow.
+- Keep the summary within its character budget (2–3 lines).
+- Stay within the SKILLS budget. Adding a few job-relevant skills is good, but a long skills list ALSO overflows the page — drop weaker skills to make room for the ones this job wants.
 
-HARD LIMITS — never change these verifiable facts (a background check would catch them):
-- Employer / company names, job titles, and employment dates: keep EXACTLY as the base résumé.
-- Education: institutions, degrees, and dates: keep EXACTLY. Do not invent new jobs, employers, or degrees.
+HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, job titles, employment dates, locations, contact details, and ALL of education. OMIT them entirely.
 
 STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority — it must hold up in an interview.
 
-DISCLOSURE — also report what you changed: include a top-level "_changes" array of short strings listing (a) every skill you ADDED that wasn't in the base résumé, and (b) any notable points/scenarios you INVENTED or significantly embellished. Be honest and specific here.
+DISCLOSURE — include a top-level "_changes" array of short strings listing (a) every skill you ADDED that wasn't in the base résumé, and (b) any notable points/scenarios you INVENTED or significantly embellished. Be honest and specific here.
 
-Output ONLY a JSON object (no markdown/commentary), the SAME shape as the base résumé PLUS "_changes":
+Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work" and "projects" in the SAME ORDER and SAME COUNT as the base (one entry per role/project), with "name" copied from the base purely so the bullets stay aligned to the right role:
 {
-  "basics": { "name":"", "label":"", "email":"", "phone":"", "url":"", "location":"", "summary":"", "profiles":[{"network":"","url":""}] },
-  "work": [ { "name":"", "position":"", "location":"", "startDate":"", "endDate":"", "highlights":["",""] } ],
-  "education": [ { "institution":"", "area":"", "studyType":"", "startDate":"", "endDate":"", "score":"" } ],
-  "skills": [ { "name":"", "keywords":["",""] } ],
-  "projects": [ { "name":"", "description":"", "url":"", "highlights":[] } ],
-  "_changes": ["Added Kubernetes (adjacent to your Docker/CI experience)", "Replaced a generic bullet with a detailed WebSockets real-time-collaboration one"]
+  "basics": { "summary": "", "label": "" },
+  "work": [ { "name": "<company, copied from base>", "highlights": ["", ""] } ],
+  "skills": [ { "name": "", "keywords": ["", ""] } ],
+  "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
+  "_changes": ["Added Kubernetes (adjacent to your Docker/CI experience)", "Tightened a generic bullet into a detailed WebSockets real-time-collaboration one"]
 }
-Keep work entries in the same order and count, with the same companies, titles, and dates as the base résumé, and the SAME number of highlights per role/project as the base (or fewer) — never more.`;
+Do NOT output name, contact, profiles, job titles, dates, locations, or education — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
+
+/** Per-section length budget derived from the base résumé (which already fits one page).
+ *  Injected into the prompt so the model aims for the right size, and mirrored by the
+ *  deterministic caps in `mergeTailored` so the page can't overflow if it doesn't (ADR 0031). */
+function lengthBudget(base: ResumeDoc): string {
+  const summary = summaryBudget(base);
+  const work = base.work.map((w, i) => `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`).join('\n');
+  const projects = base.projects.map((p, i) => `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`).join('\n');
+  return (
+    `Summary: ≤ ${summary} characters.\n` +
+    `Work bullets per role (match or go under, NEVER over):\n${work || '  (none)'}\n` +
+    `Project bullets per project:\n${projects || '  (none)'}\n` +
+    `Total skill keywords across all groups: ≤ ${skillBudget(base)}.`
+  );
+}
 
 export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: TailorSignals): ChatMessage[] {
   const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
-  const user =
+  // STABLE prefix (system prompt + this block) — cached across every job the user
+  // tailors in a session. The budget is derived only from the base, so it's stable too.
+  const baseBlock =
     `BASE RÉSUMÉ (the candidate's real experience — anchor employers/titles/dates/education to this — JSON):\n${JSON.stringify(base)}\n\n` +
+    `LENGTH BUDGET (derived from the base — your output MUST stay within these so it fits one page):\n${lengthBudget(base)}`;
+  // VOLATILE tail — the per-job content, after the cache breakpoint.
+  const jobBlock =
     `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
     `JOB DESCRIPTION:\n${desc}\n\n` +
     `SIGNALS (from our scorer):\n` +
@@ -89,7 +106,7 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
     `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}`;
   return [
     { role: 'system', content: TAILOR_PROMPT },
-    { role: 'user', content: user },
+    { role: 'user', content: [{ text: baseBlock, cache: true }, { text: jobBlock }] },
   ];
 }
 
@@ -101,6 +118,44 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
 function capHighlights(baseHl: string[], tailoredHl?: string[]): string[] {
   if (!tailoredHl || tailoredHl.length === 0) return baseHl;
   return baseHl.length > 0 ? tailoredHl.slice(0, baseHl.length) : tailoredHl;
+}
+
+/** Character budget for the summary: base length + 15% slack, floor 320 (ADR 0031). */
+function summaryBudget(base: ResumeDoc): number {
+  return Math.max(Math.ceil((base.basics.summary || '').length * 1.15), 320);
+}
+
+/** Total-keyword budget across all skill groups: base count + slack (ADR 0031). */
+function skillBudget(base: ResumeDoc): number {
+  const baseCount = base.skills.reduce((n, g) => n + g.keywords.length, 0);
+  return Math.max(baseCount + 6, Math.ceil(baseCount * 1.4));
+}
+
+/** Take the model's summary but hard-cap it to the budget, trimmed at a word boundary. */
+function capSummary(base: ResumeDoc, tailored?: string): string | undefined {
+  const t = (tailored || '').trim();
+  if (!t) return base.basics.summary;
+  const budget = summaryBudget(base);
+  if (t.length <= budget) return t;
+  const cut = t.slice(0, budget);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.]+$/, '').trim();
+}
+
+/** Keep the model's skill groups in order but cap total keywords to the budget (ADR 0031). */
+function capSkills(base: ResumeDoc, tailored: ResumeDoc['skills']): ResumeDoc['skills'] {
+  const budget = skillBudget(base);
+  const out: ResumeDoc['skills'] = [];
+  let used = 0;
+  for (const g of tailored) {
+    if (used >= budget) break;
+    const keywords = g.keywords.slice(0, budget - used);
+    if (keywords.length) {
+      out.push({ name: g.name, keywords });
+      used += keywords.length;
+    }
+  }
+  return out;
 }
 
 /** Lowercased set of every skill keyword in a résumé. */
@@ -117,10 +172,12 @@ function skillSet(doc: ResumeDoc): Set<string> {
  * bullets, and the SKILL SET may be enhanced. Pure — never throws.
  */
 export function mergeTailored(base: ResumeDoc, tailored: ResumeDoc): ResumeDoc {
-  // basics: keep identity (name/email/phone/url/location/profiles); take reworded summary + label.
+  // basics: keep identity (name/email/phone/url/location/profiles); take the reworded
+  // summary + label, but hard-cap the summary length (ADR 0031) so a verbose summary
+  // can't push the résumé onto a second page.
   const basics = {
     ...base.basics,
-    summary: tailored.basics.summary?.trim() || base.basics.summary,
+    summary: capSummary(base, tailored.basics.summary),
     label: tailored.basics.label?.trim() || base.basics.label,
   };
 
@@ -130,9 +187,10 @@ export function mergeTailored(base: ResumeDoc, tailored: ResumeDoc): ResumeDoc {
   // ordered by importance, so trimming overflow only drops its least-important bullet.
   const work: ResumeWork[] = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights) }));
 
-  // skills: keep the model's groups AS-IS (additions allowed); fall back to base if empty.
-  let skills = tailored.skills.filter((g) => g.keywords.length > 0);
-  if (skills.length === 0) skills = base.skills;
+  // skills: keep the model's groups (additions allowed) but CAP the total keyword count
+  // (ADR 0031) — a long skills list also overflows the page; fall back to base if empty.
+  const tailoredSkills = tailored.skills.filter((g) => g.keywords.length > 0);
+  const skills = tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
 
   // projects: anchor name/url to base; take enhanced (count-capped) highlights.
   const projects: ResumeProject[] = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights) }));

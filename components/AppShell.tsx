@@ -10,7 +10,7 @@ import { LayoutDashboard, Briefcase, History, Bot, Mail, TrendingUp, User, Setti
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/jobs', label: 'Jobs', icon: Briefcase },
-  { to: '/applications', label: 'Applications', icon: FileText },
+  { to: '/applications', label: 'Tailor & Apply', icon: FileText },
   { to: '/past', label: 'Past Jobs', icon: History },
   { to: '/inbox', label: 'Inbox', icon: Mail },
   { to: '/tracker', label: 'Tracker', icon: TrendingUp },

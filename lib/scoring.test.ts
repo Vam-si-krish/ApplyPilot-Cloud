@@ -87,7 +87,7 @@ describe('buildScoreMessages', () => {
   it('embeds resume and job, truncating description to 15000 chars', () => {
     const longDesc = 'x'.repeat(16000);
     const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', location: 'NYC', full_description: longDesc });
-    const user = msgs[1].content;
+    const user = msgs[1].content as string; // scoring messages are always plain strings
     expect(user.startsWith('RESUME:\nRES\n\n---\n\nJOB POSTING:\n')).toBe(true);
     expect(user).toContain('TITLE: T');
     expect(user).toContain('COMPANY: C');

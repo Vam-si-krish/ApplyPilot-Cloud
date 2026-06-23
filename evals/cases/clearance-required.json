@@ -1,0 +1,12 @@
+{
+  "name": "clearance-required",
+  "description": "A strong skills match that is hard-blocked by a security-clearance + US-citizenship requirement — must score exactly 1, no matter how well the résumé fits (ADR 0030).",
+  "resume": "Alex Rivera — Senior Backend Engineer. 8 years building distributed systems in Go and Python, Kubernetes, AWS, gRPC, and high-throughput data pipelines. Led platform teams and on-call.",
+  "job": {
+    "title": "Senior Backend Engineer",
+    "company": "DefenseGrid Systems",
+    "location": "Reston, VA",
+    "full_description": "We are hiring a Senior Backend Engineer to build mission-critical services in Go and Python on Kubernetes/AWS. 7+ years required. U.S. Citizenship is required and you must hold an active TS/SCI security clearance — this is a non-negotiable government contract requirement. Strong distributed-systems and gRPC experience expected."
+  },
+  "expect": { "minScore": 1, "maxScore": 1 }
+}

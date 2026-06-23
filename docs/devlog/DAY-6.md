@@ -176,3 +176,47 @@ Five changes from user feedback:
    older rows get a one-click "Score résumé".
 - typecheck ✅ · 95 tests ✅ · build ✅ · worker `node --check` ✅. **Undeployed** — push to go live
   (migrations 0023+0024 already applied → safe).
+
+---
+
+## 2026-06-23 — Tailor & Apply UX + clearance gate (ADR 0030)
+1. **"Did you apply?" on the Applications tab** — same pendingApply ref + visibilitychange dialog as Jobs;
+   "Yes" marks the application applied (stamps applied_at).
+2. **Renamed "Applications" → "Tailor & Apply"** (nav + heading; route stays /applications). Per user.
+3. **Proper PDF filenames** — `/api/applications/[id]/pdf` now builds "<Name> - <Company> - Resume.pdf"
+   from the tailored résumé + job company and sets it via the signed-URL `download` option; client downloads
+   via an `<a download>` click (direct download, no blank preview tab).
+4. **Clearance/citizenship gate strengthened** — the scorer already scored 1 for clearance/US-citizen/Green-Card
+   (scoring.ts Phase 1); made it a prominent HARD BLOCK with synonyms (USC, TS/SCI, Public Trust, Q clearance,
+   ITAR US-Persons-only…). Score 1, skill fit irrelevant. New eval `clearance-required.json` locks it.
+- No migrations (code + prompt only). typecheck ✅ · 96 tests ✅ · build ✅. **Undeployed** — push to go live.
+- Note: the fit scorer scores the BASE résumé; it already suits the fetch→score→top100→assess→tailor funnel.
+  The only requested rubric change (clearance) was already present and is now hardened.
+
+---
+
+## 2026-06-23 — Strict one-page tailoring + token/cache cuts (ADR 0031)
+Root cause of the second-page spill: `capHighlights` capped bullet **count**, not **size**,
+and summary/skills were uncapped — while the prompt invited bullets to grow "in depth." The
+font auto-shrink bottomed out at the ~9pt floor and then spilled to page 2 (`tooLong`). Fix
+across both hand-synced copies (`lib/*` + `resume-worker/*`):
+1. **Deterministic caps in `mergeTailored`** (always): summary length `max(baseLen×1.15, 320)`
+   chars, total skill keywords `max(baseCount+6, ceil(baseCount×1.4))`, plus the existing
+   bullet-count cap.
+2. **AI-condense loop + hard backstop** on the worker (`renderResumeToOnePage`): render → if it
+   would overflow the readable floor, the model condenses (≤2 passes, it picks what to cut) →
+   re-render; then a deterministic backstop drops the least-important bullet until it fits —
+   **can never ship 2 pages**. A shortened résumé is persisted back to `tailored_resume` (PDF ↔
+   screen match) and its stale tailored fit score is cleared.
+3. **Patch-shaped output** — `TAILOR_PROMPT` now emits ONLY the fields the merge keeps
+   (summary/label, per-role/project highlights + a `name` alignment key, skills, `_changes`),
+   omitting identity/contact/titles/dates/locations/education (restored from base anyway).
+   Prompt-only change — `normalizeResume`/`mergeTailored` already ignore the omitted fields.
+   ~½ the output tokens, less drift.
+4. **Prompt caching** — `ChatMessage.content` may be `string | ContentPart[]`; Anthropic client
+   attaches `cache_control` to `cache:true` parts (other providers concatenate, unchanged).
+   `buildTailorMessages` caches the system prompt + base résumé + length budget; only the
+   per-job tail is uncached. Sonnet 4.6 caches a ≥2048-tok prefix; sparse résumés silently
+   skip caching (no error). Default 5-min TTL (no extended-TTL header dependency).
+- No migrations. typecheck ✅ · 99 tests ✅ (+3) · build ✅ · worker `node --check` ✅.
+  **Undeployed — worker redeploy required** (condense loop + renderResumeToOnePage live there).

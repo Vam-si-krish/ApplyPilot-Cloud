@@ -93,3 +93,65 @@ export async function renderResumePdf(resume, template = 'classic') {
     await page.close().catch(() => {});
   }
 }
+
+/**
+ * Deterministic backstop (ADR 0031): drop the single least-important bullet — the last
+ * highlight of whichever role/project currently has the most — returning a NEW résumé.
+ * Never empties an entry (only trims entries with >1 highlight). Returns null when
+ * there's nothing left to trim, so the caller's loop terminates.
+ */
+function dropLeastImportantHighlight(resume) {
+  const clone = JSON.parse(JSON.stringify(resume));
+  const pools = [...(clone.work || []), ...(clone.projects || [])];
+  let target = null;
+  for (const e of pools) {
+    const n = (e.highlights || []).length;
+    if (n > 1 && (!target || n > target.highlights.length)) target = e;
+  }
+  if (!target) return null;
+  target.highlights = target.highlights.slice(0, -1);
+  return clone;
+}
+
+/**
+ * Render to a guaranteed one-page PDF (ADR 0031). Render → if it would spill past the
+ * readable font floor, ask the model to CONDENSE (up to 2 passes, `condenseFn` decides
+ * what to cut) → re-render; then a deterministic backstop drops the least-important
+ * bullets until it fits. The returned `resume` is the (possibly shortened) version that
+ * the PDF actually reflects, so the caller can persist it to match what was rendered.
+ *
+ * @param {object} resume
+ * @param {string} template
+ * @param {null | ((resume: object, pass: number) => Promise<object>)} condenseFn
+ * @returns {Promise<{ pdf: Buffer, scale: number, pages: number, tooLong: boolean, resume: object, condensed: boolean, trimmed: boolean }>}
+ */
+export async function renderResumeToOnePage(resume, template = 'classic', condenseFn = null) {
+  let current = resume;
+  let r = await renderResumePdf(current, template);
+  let condensed = false;
+  let trimmed = false;
+
+  // 1) AI condense passes (preferred — the model chooses what to shorten/drop).
+  for (let pass = 0; condenseFn && r.tooLong && pass < 2; pass++) {
+    try {
+      const next = await condenseFn(current, pass);
+      if (!next) break;
+      current = next;
+      condensed = true;
+    } catch {
+      break; // LLM unavailable/failed — fall through to the deterministic backstop
+    }
+    r = await renderResumePdf(current, template);
+  }
+
+  // 2) Deterministic backstop — guarantees one page even if condensing is unavailable.
+  for (let guard = 0; r.tooLong && guard < 8; guard++) {
+    const next = dropLeastImportantHighlight(current);
+    if (!next) break; // nothing left to trim
+    current = next;
+    trimmed = true;
+    r = await renderResumePdf(current, template);
+  }
+
+  return { ...r, resume: current, condensed, trimmed };
+}

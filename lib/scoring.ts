@@ -19,7 +19,12 @@ export const SCORE_PROMPT = `You are a senior technical recruiter with 15+ years
 ### PHASE 1 — VALIDATION (do this first)
 Inspect the JOB POSTING text.
 - If it is NOT a real job description (legal/accessibility disclaimer, login wall, cookie notice, navigation/footer links, an empty or garbled blob), set SCORE to 0 and stop.
-- If the role explicitly REQUIRES US Citizenship, a Green Card, or an active Security Clearance, set SCORE to 1 and stop (the candidate cannot meet it).
+- HARD BLOCK — if the posting requires ANY of the following, set SCORE to 1 and STOP, regardless of how well the skills, seniority, or domain match (skill fit is irrelevant here — the candidate simply cannot be considered):
+  • US Citizenship — "US Citizen", "U.S. citizen", "USC", "must be a US citizen", "citizenship required".
+  • Lawful permanent residency / Green Card — "Green Card holder", "permanent resident required".
+  • An active or obtainable Security Clearance — "Secret", "Top Secret", "TS/SCI", "Public Trust", "Q clearance", "DoD/active clearance", "ability to obtain a clearance".
+  • Citizenship-restricted authorization — e.g. ITAR/EAR "US Persons only".
+  Set SCORE to 1, note the blocker, and stop. (Do NOT use 0 — that is reserved for invalid/non-job content.)
 - Otherwise continue to Phase 2.
 
 ### PHASE 2 — WEIGHTED ANALYSIS

@@ -18,8 +18,8 @@ import {
   updateApplication,
   uploadPdf,
 } from './supabase.js';
-import { renderResumePdf, getBrowser, closeBrowser } from './render.js';
-import { makeClient, tailorResume } from './tailor.js';
+import { renderResumeToOnePage, getBrowser, closeBrowser } from './render.js';
+import { makeClient, tailorResume, condenseResume } from './tailor.js';
 
 const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
 
@@ -62,13 +62,54 @@ app.post('/generate', async (req, res) => {
     await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
 
     const template = appRow.template || 'classic';
-    const { pdf, scale, pages, tooLong } = await renderResumePdf(appRow.tailored_resume, template);
+
+    // Build an AI-condense fn if a tailoring provider + active key is configured.
+    // If not, the renderer falls back to the deterministic backstop, which still
+    // guarantees one page (ADR 0031).
+    let condenseFn = null;
+    try {
+      const settings = await getSettings();
+      const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
+      const model = (settings.tailor_model || settings.llm_model || '').trim();
+      if (LLM_PROVIDERS.has(provider)) {
+        const key = await getActiveApiKey(provider);
+        if (key) {
+          const client = makeClient(provider, model, key);
+          condenseFn = (resume, pass) => condenseResume(resume, client, pass);
+        }
+      }
+    } catch {
+      /* settings/key unavailable → deterministic backstop only */
+    }
+
+    const { pdf, scale, pages, tooLong, resume, condensed, trimmed } = await renderResumeToOnePage(
+      appRow.tailored_resume,
+      template,
+      condenseFn,
+    );
 
     const path = `${id}.pdf`;
     await uploadPdf(path, pdf);
-    await updateApplication(id, { status: 'ready', pdf_path: path, error: tooLong ? 'Content is long — trimmed to fit one page; consider shortening.' : null });
 
-    res.json({ ok: true, pdf_path: path, pages, scale, tooLong, bytes: pdf.length });
+    const update = {
+      status: 'ready',
+      pdf_path: path,
+      error: tooLong
+        ? 'Content is very long — shrunk to one page; consider shortening.'
+        : trimmed
+          ? 'Content ran long — trimmed the least-important detail to fit one page.'
+          : null,
+    };
+    // If the résumé was shortened to fit, persist it so the on-screen copy matches the
+    // PDF, and clear the stale tailored fit score (content changed; the app re-scores).
+    if (condensed || trimmed) {
+      update.tailored_resume = resume;
+      update.tailored_fit_score = null;
+      update.tailored_score_note = null;
+    }
+    await updateApplication(id, update);
+
+    res.json({ ok: true, pdf_path: path, pages, scale, tooLong, condensed, trimmed, bytes: pdf.length });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
@@ -156,7 +197,8 @@ app.post('/render-inline', async (req, res) => {
   if (!resume || typeof resume !== 'object') return res.status(400).json({ error: 'resume required' });
 
   try {
-    const { pdf, pages, scale, tooLong } = await renderResumePdf(resume, template);
+    // No DB row / LLM client here, so the deterministic backstop guarantees one page.
+    const { pdf, pages, scale, tooLong } = await renderResumeToOnePage(resume, template, null);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('X-Resume-Pages', String(pages));
     res.setHeader('X-Resume-Scale', String(scale));

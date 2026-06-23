@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2 } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
@@ -33,6 +33,10 @@ export default function ApplicationsPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [rendering, setRendering] = useState<string | null>(null); // application currently rendering a PDF
   const [scoringTailored, setScoringTailored] = useState<string | null>(null); // application whose tailored résumé is being scored
+  // "Did you apply?" tracking — parity with the Jobs tab. The external apply link is a
+  // real <a target="_blank">; on return to the tab we ask whether they applied.
+  const pendingApply = useRef<ApplicationWithJob | null>(null);
+  const [applyDialog, setApplyDialog] = useState<ApplicationWithJob | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,6 +51,18 @@ export default function ApplicationsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Ask "did you apply?" when the user returns after opening the posting.
+  useEffect(() => {
+    function onVisible() {
+      if (!document.hidden && pendingApply.current) {
+        setApplyDialog(pendingApply.current);
+        pendingApply.current = null;
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   function toggleExpand(a: ApplicationWithJob) {
     if (expanded === a.id) {
@@ -189,23 +205,34 @@ export default function ApplicationsPage() {
     }
   }
 
-  // Open the generated PDF via a short-lived signed URL.
+  // Download the generated PDF with a proper filename (ADR 0030). The signed URL sets
+  // Content-Disposition: attachment; an <a download> click downloads it directly
+  // instead of opening a blank preview tab.
   async function downloadPdf(id: string) {
     try {
       const d = await fetch(`/api/applications/${id}/pdf`).then((r) => r.json());
-      if (d.url) window.open(d.url, '_blank', 'noopener');
-      else setMsg(d.error || 'No PDF available.');
+      if (!d.url) {
+        setMsg(d.error || 'No PDF available.');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = d.url;
+      if (d.filename) a.download = d.filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } catch {
-      setMsg('Could not open the PDF.');
+      setMsg('Could not download the PDF.');
     }
   }
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Applications</h1>
+        <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Tailor &amp; Apply</h1>
         <p className="text-slate-muted text-[13px] mt-0.5">
-          Shortlisted jobs you&apos;re preparing tailored résumés for. Add jobs from the{' '}
+          Tailor a résumé for each shortlisted job, generate the PDF, then apply. Add jobs from the{' '}
           <Link href="/jobs" className="text-sky hover:underline">Jobs</Link> tab.
         </p>
       </div>
@@ -307,7 +334,7 @@ export default function ApplicationsPage() {
                     </button>
                   )}
                   {job && (
-                    <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" title="Open posting" className="text-slate-muted hover:text-sky shrink-0">
+                    <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" onClick={() => { pendingApply.current = a; }} title="Open posting (will ask if you applied)" className="text-slate-muted hover:text-sky shrink-0">
                       <ExternalLink size={15} />
                     </a>
                   )}
@@ -402,6 +429,31 @@ export default function ApplicationsPage() {
           Generation reframes your real experience for each job (never fabricated). Keep your{' '}
           <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> current for the best results.
         </p>
+      )}
+
+      {/* "Did you apply?" — shown after returning from the external posting link (parity with Jobs). */}
+      {applyDialog && (
+        <div className="fixed bottom-5 right-5 z-50 bg-card border border-ink rounded-xl p-4 shadow-2xl w-80 animate-slide-up">
+          <p className="text-[13px] font-semibold text-slate-text mb-0.5">Did you apply?</p>
+          <p className="text-[12px] text-slate-muted mb-4 truncate">
+            {applyDialog.job?.title ?? 'This job'}
+            {applyDialog.job?.company ? ` · ${applyDialog.job.company}` : ''}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { patch(applyDialog.id, { status: 'applied' }); setApplyDialog(null); }}
+              className="flex-1 px-3 py-2 text-[12px] font-medium text-emerald bg-emerald/10 border border-emerald/30 rounded-lg hover:bg-emerald/20 transition-all"
+            >
+              Yes, I applied ✓
+            </button>
+            <button
+              onClick={() => setApplyDialog(null)}
+              className="px-4 py-2 text-[12px] text-slate-muted border border-ink rounded-lg hover:bg-raised transition-all"
+            >
+              No
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

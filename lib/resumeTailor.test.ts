@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mergeTailored, addedSkills, buildTailorMessages, TAILOR_PROMPT } from './resumeTailor';
+import { normalizeResume } from './resume';
+import type { ContentPart } from './llm';
 import type { ResumeDoc } from './types';
 
 function base(): ResumeDoc {
@@ -84,14 +86,59 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
     expect(out.work[0].highlights).toEqual(base().work[0].highlights); // empty → base
     expect(out.work[1].highlights).toEqual(base().work[1].highlights); // missing → base
   });
+
+  it('handles the patch-shaped model output — partial fields, omitted identity/education (ADR 0031)', () => {
+    // The model now emits only the fields we keep; everything else is restored from base.
+    const patch = {
+      basics: { summary: 'Tailored.', label: 'Senior FE' },
+      work: [
+        { name: 'JPMorgan', highlights: ['New bullet A'] },
+        { name: 'Yash', highlights: ['New bullet B'] },
+      ],
+      skills: [{ name: 'Frontend', keywords: ['React', 'Next.js'] }],
+      projects: [{ name: 'Proj', highlights: ['proj bullet'] }],
+      _changes: ['Added Next.js'],
+    };
+    const out = mergeTailored(base(), normalizeResume(patch));
+    expect(out.basics.name).toBe('Vamsi'); // restored from base (patch omits it)
+    expect(out.basics.email).toBe('v@x.com'); // restored
+    expect(out.basics.summary).toBe('Tailored.'); // taken from patch
+    expect(out.work[0].name).toBe('JPMorgan'); // anchored
+    expect(out.work[0].highlights).toEqual(['New bullet A']);
+    expect(out.education).toEqual(base().education); // restored (patch omits education entirely)
+    expect(out.skills[0].keywords).toContain('Next.js');
+  });
+});
+
+describe('mergeTailored — deterministic one-page caps (ADR 0031)', () => {
+  it('hard-caps an over-long summary to the budget', () => {
+    const longSummary = 'word '.repeat(200); // ~1000 chars
+    const out = mergeTailored(base(), { ...base(), basics: { ...base().basics, summary: longSummary } });
+    // base summary is short → budget floor is 320 chars
+    expect(out.basics.summary!.length).toBeLessThanOrEqual(320);
+  });
+
+  it('caps the total number of skill keywords (long list also overflows the page)', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `skill${i}`);
+    const out = mergeTailored(base(), { ...base(), skills: [{ name: 'All', keywords: many }] });
+    const total = out.skills.reduce((n, g) => n + g.keywords.length, 0);
+    // base has 3 keywords → budget = max(3+6, ceil(3*1.4)=5) = 9
+    expect(total).toBe(9);
+  });
 });
 
 describe('buildTailorMessages', () => {
-  it('uses the tailor prompt and includes the job + matched signals', () => {
+  it('puts the base résumé + budget in a cached prefix and the job in the volatile tail', () => {
     const msgs = buildTailorMessages(base(), { title: 'FE Eng', company: 'Acme', full_description: 'Need React.' }, { matched: ['React'], missing: 'Kubernetes' });
     expect(msgs[0]).toEqual({ role: 'system', content: TAILOR_PROMPT });
-    expect(msgs[1].content).toContain('Acme');
-    expect(msgs[1].content).toContain('React');
-    expect(msgs[1].content).toContain('Kubernetes');
+
+    const parts = msgs[1].content as ContentPart[];
+    expect(parts[0].cache).toBe(true); // base + length budget = the cached prefix
+    expect(parts[0].text).toContain('BASE RÉSUMÉ');
+    expect(parts[0].text).toContain('LENGTH BUDGET');
+    expect(parts[1].cache).toBeUndefined(); // per-job tail is not cached
+    expect(parts[1].text).toContain('Acme');
+    expect(parts[1].text).toContain('React');
+    expect(parts[1].text).toContain('Kubernetes');
   });
 });
