@@ -32,16 +32,37 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+/** Add a scheme to a bare URL/handle ("linkedin.com/in/x") so it's a valid clickable link. */
+function href(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  if (/^(https?:|mailto:|tel:)/i.test(s)) return s;
+  return `https://${s.replace(/^\/+/, '')}`;
+}
+
+/** Compact display text for a URL — drop the scheme and any trailing slash. */
+function urlText(raw) {
+  return String(raw ?? '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+}
+
+/** A real anchor (clickable in the PDF), styled to read as plain résumé text. */
+function link(url, text) {
+  return `<a href="${esc(href(url))}">${esc(text ?? urlText(url))}</a>`;
+}
+
 function contactLine(b) {
   // Location first, then phone, email, profiles (LinkedIn/GitHub), portfolio — pipe-separated.
+  // Everything but the location is a real clickable link (ADR 0032): phone → tel:,
+  // email → mailto:, profiles/website → https. Profiles show the network name when
+  // present (compact + recruiter-friendly) and link to the full URL.
   const parts = [];
   if (b.location) parts.push(esc(b.location));
-  if (b.phone) parts.push(esc(b.phone));
-  if (b.email) parts.push(esc(b.email));
+  if (b.phone) parts.push(`<a href="tel:${esc(b.phone.replace(/[^+\d]/g, ''))}">${esc(b.phone)}</a>`);
+  if (b.email) parts.push(`<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>`);
   for (const p of b.profiles || []) {
-    if (p.url) parts.push(esc(p.url));
+    if (p.url) parts.push(link(p.url, p.network || undefined));
   }
-  if (b.url) parts.push(esc(b.url));
+  if (b.url) parts.push(link(b.url));
   return parts.join('&nbsp;&nbsp;|&nbsp;&nbsp;');
 }
 
@@ -82,7 +103,7 @@ function projectEntry(p) {
     <div class="entry">
       <div class="entry-head">
         <span class="entry-title">${esc(p.name || '')}</span>
-        <span class="entry-meta">${esc(p.url || '')}</span>
+        <span class="entry-meta">${p.url ? link(p.url) : ''}</span>
       </div>
       ${p.description ? `<div class="entry-sub"><span class="entry-role">${esc(p.description)}</span></div>` : ''}
       ${bullets ? `<ul>${bullets}</ul>` : ''}
@@ -135,6 +156,8 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
   :root { --scale: ${scale}; --accent: ${theme.accent}; --rule: ${theme.rule}; --muted: ${theme.muted}; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { background: #fff; }
+  /* Links are clickable in the PDF but read as plain résumé text (no blue underline). */
+  a { color: inherit; text-decoration: none; }
   body {
     font-family: Arial, Helvetica, sans-serif;
     color: #1a1a1a;

@@ -220,3 +220,28 @@ across both hand-synced copies (`lib/*` + `resume-worker/*`):
    skip caching (no error). Default 5-min TTL (no extended-TTL header dependency).
 - No migrations. typecheck ✅ · 99 tests ✅ (+3) · build ✅ · worker `node --check` ✅.
   **Undeployed — worker redeploy required** (condense loop + renderResumeToOnePage live there).
+
+---
+
+## 2026-06-23 — Clickable résumé links + codebase review backlog
+1. **Clickable contact links in the PDF** — `resume-worker/templates.js` rendered LinkedIn/GitHub/
+   website/phone/email as plain text; now real `<a>` anchors (tel:/mailto:/https, bare handles get a
+   scheme), styled to read as plain text. Project URL linked too. Verified via `node render-sample.js`
+   (`/URI` annotations present, still one page). **Worker redeploy required.**
+2. **Full-codebase review → [docs/BACKLOG.md](../BACKLOG.md)** — a do-one-by-one checklist (security
+   password rotation, URL-dedup bug fix, scoring/assistant prompt-caching, `/api/jobs` over-fetch,
+   render the tailored label, nav/UX). **Next session: start from BACKLOG.md and work top-down.**
+
+---
+
+## 2026-06-23 — Generate 502 fixed permanently (ADR 0032)
+Root cause: the worker's Cloudflare **quick tunnel** mints a new random URL each restart, and the
+app's `settings.resume_worker_url` was hand-set → every tunnel restart broke Generate with a 502.
+(The named-tunnel `worker.vamsikrish.com` path is blocked — the domain's DNS is on Netlify/NS1, not
+Cloudflare, so the route's CNAME lands in an inactive CF zone with no edge TLS.)
+Fix: `resume-worker/tunnel.mjs` owns the quick tunnel and **auto-publishes its current URL into
+`settings.resume_worker_url`** (Supabase REST, worker `.env` creds; app prefers DB over env → no
+redeploy). Both worker + tunnel now run as launchd LaunchAgents (RunAtLoad+KeepAlive) via
+`install-service.sh` / `install-tunnel-service.sh`. Verified end-to-end: app→tunnel→worker `/health`
+200, `/tailor` 401. Restarting the worker under launchd also activated the uncommitted ADR 0031
+one-page changes + clickable-links template. Quick tunnels still need the Mac awake + logged in.
