@@ -205,7 +205,16 @@ export default function ApplicationsPage() {
         setDraft(row.tailored_resume ? structuredClone(row.tailored_resume) : null);
         // Score the new résumé so the row shows its fit vs the original (ADR 0029).
         await scoreTailored(a.id);
-        setMsg('Tailored résumé generated — review and edit below.');
+        // Auto-create the PDF so it's ready to download from the row — no second click.
+        setRendering(a.id);
+        setMsg('Tailored résumé ready — creating the PDF…');
+        const pdf = await doRender(a.id);
+        setRendering(null);
+        setMsg(
+          pdf.ok
+            ? 'Résumé and PDF ready — download from the row, or review and edit below.'
+            : `Résumé ready — PDF render failed: ${pdf.error}. Use “Create PDF” below to retry.`,
+        );
       } else if (row?.status === 'failed') {
         setMsg(`Generation failed: ${row.error || 'unknown error'}`);
       } else {
@@ -262,7 +271,7 @@ export default function ApplicationsPage() {
     let done = 0;
     let ok = 0;
     let failed = 0;
-    setBulkProgress({ label: 'Generating tailored résumés', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
+    setBulkProgress({ label: 'Generating résumés & PDFs', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
     try {
       for (const id of ids) {
         // Optimistic: show the row as generating immediately.
@@ -284,6 +293,10 @@ export default function ApplicationsPage() {
               ok++;
               // Score the new résumé against its job (parity with single generate, ADR 0029).
               await fetch(`/api/applications/${id}/score-tailored`, { method: 'POST' }).catch(() => {});
+              // Auto-create the PDF too, so every generated résumé is download-ready.
+              setRendering(id);
+              await doRender(id).catch(() => {});
+              setRendering(null);
             } else {
               failed++;
             }
@@ -292,7 +305,7 @@ export default function ApplicationsPage() {
           failed++;
         }
         done++;
-        setBulkProgress({ label: 'Generating tailored résumés', done, total: ids.length, phase: 'running', tone: 'violet' });
+        setBulkProgress({ label: 'Generating résumés & PDFs', done, total: ids.length, phase: 'running', tone: 'violet' });
         load(true); // results light up live as each one lands
       }
       setBulkProgress({
@@ -306,6 +319,7 @@ export default function ApplicationsPage() {
       load(true);
     } finally {
       setBulkBusy(false);
+      setRendering(null);
     }
   }
 
@@ -348,28 +362,37 @@ export default function ApplicationsPage() {
     });
   }
 
-  // Ask the résumé worker to render the tailored résumé to a one-page PDF.
+  // Core PDF render — proxies to the résumé worker. No UI side effects, so it can be
+  // reused both by the manual button and the auto-render-after-generate flow.
+  async function doRender(id: string): Promise<{ ok: boolean; tooLong?: boolean; error?: string }> {
+    try {
+      const r = await fetch(`/api/applications/${id}/render`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: d.error || 'unknown error' };
+      return { ok: true, tooLong: !!d.tooLong };
+    } catch {
+      return { ok: false, error: 'could not reach the résumé worker' };
+    }
+  }
+
+  // Manual "Create / Re-render PDF" button — keeps the truthfulness confirm gate so the
+  // user reviews any AI additions before deliberately (re)producing the PDF.
   async function renderPdf(a: ApplicationWithJob) {
     if (rendering) return;
-    // Make the user confirm anything the AI added/embellished before producing the PDF.
     if (!confirmTailorChanges(a.tailor_changes)) return;
     setRendering(a.id);
     setMsg('Rendering PDF…');
-    try {
-      const r = await fetch(`/api/applications/${a.id}/render`, { method: 'POST' });
-      const d = await r.json();
-      if (!r.ok) {
-        setMsg(`PDF render failed: ${d.error || 'unknown error'}`);
-      } else {
-        setMsg(d.tooLong ? 'PDF ready — content was long, trimmed to one page (consider shortening).' : `PDF ready (1 page).`);
-      }
-      load(true);
-    } catch {
-      setMsg('PDF render failed.');
-    } finally {
-      setRendering(null);
-      setTimeout(() => setMsg(null), 7000);
-    }
+    const res = await doRender(a.id);
+    setMsg(
+      res.ok
+        ? res.tooLong
+          ? 'PDF ready — content was long, trimmed to one page (consider shortening).'
+          : 'PDF ready (1 page).'
+        : `PDF render failed: ${res.error}`,
+    );
+    load(true);
+    setRendering(null);
+    setTimeout(() => setMsg(null), 7000);
   }
 
   // Download the generated PDF with a proper filename (ADR 0030). The signed URL sets
@@ -659,6 +682,21 @@ export default function ApplicationsPage() {
                   >
                     <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate' : 'Generate'}
                   </button>
+                  {/* PDF — created automatically after generation; download straight from the
+                      row so there's no need to expand and scroll. Shows a spinner while rendering. */}
+                  {rendering === a.id ? (
+                    <span className="flex items-center gap-1 text-[11px] text-violet-300 shrink-0" title="Creating PDF…">
+                      <Loader2 size={12} className="animate-spin" /> <span className="hidden sm:inline">PDF…</span>
+                    </span>
+                  ) : a.pdf_path ? (
+                    <button
+                      onClick={() => downloadPdf(a.id)}
+                      title="Download the tailored résumé PDF"
+                      className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium text-emerald bg-emerald/10 border border-emerald/30 hover:bg-emerald/20 rounded-md transition-all shrink-0"
+                    >
+                      <Download size={13} /> <span className="hidden sm:inline">PDF</span>
+                    </button>
+                  ) : null}
                   <span className="hidden md:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
                     <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
                   </span>

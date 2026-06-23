@@ -71,6 +71,7 @@ export default function JobsPage() {
   // Defaults to the "recommended" view (ADR 0010): strong jobs (6+) at solid
   // companies (good/medium). Change the filters to widen.
   const [minScore, setMinScore] = useState('6');
+  const [maxScore, setMaxScore] = useState(''); // upper fit-score bound — lets you isolate low-fit jobs
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
   const [companyTier, setCompanyTier] = useState('good,medium');
@@ -142,10 +143,23 @@ export default function JobsPage() {
   // would silently empty the list on those tabs — skip them there.
   const scoreless = status === 'unscored' || status === 'filtered';
 
+  // Fit-score range setters that keep the range valid. Picking a max below the current
+  // min (e.g. the default ≥6) clears the min — that's exactly the "show me the low-fit
+  // jobs to delete" path — and vice-versa.
+  function changeMinScore(v: string) {
+    setMinScore(v);
+    if (v && maxScore && Number(v) > Number(maxScore)) setMaxScore('');
+  }
+  function changeMaxScore(v: string) {
+    setMaxScore(v);
+    if (v && minScore && Number(minScore) > Number(v)) setMinScore('');
+  }
+
   const buildParams = useCallback(() => {
     const p = new URLSearchParams();
     if (search) p.set('search', search);
     if (minScore && !scoreless) p.set('minScore', minScore);
+    if (maxScore && !scoreless) p.set('maxScore', maxScore);
     if (minSkill === '0') p.set('maxSkill', '0'); // "No skill match" = matched none of my skills
     else if (minSkill) p.set('minSkill', minSkill);
     if (status === 'applied') p.set('applied', 'true');
@@ -161,7 +175,7 @@ export default function JobsPage() {
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     return p;
-  }, [search, minScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
+  }, [search, minScore, maxScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,12 +195,12 @@ export default function JobsPage() {
   // Drop the selection whenever the filter set changes (the ids on screen change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, status, minScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
+  }, [search, status, minScore, maxScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
 
   // Reset pagination when filters change.
   useEffect(() => {
     setLimit(300);
-  }, [search, status, minScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
+  }, [search, status, minScore, maxScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
 
   // Close the runs dropdown on any click outside it (or Escape).
   useEffect(() => {
@@ -237,6 +251,7 @@ export default function JobsPage() {
     setSearch('');
     setStatus('all');
     setMinScore('6');
+    setMaxScore('');
     setMinSkill('');
     setEmploymentType('');
     setCompanyTier('good,medium');
@@ -635,17 +650,34 @@ export default function JobsPage() {
             <option value="external">External</option>
           </select>
 
-          <select
-            value={minScore}
-            onChange={(e) => setMinScore(e.target.value)}
-            title="Filter by fit score"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
-          >
-            <option value="">Any score</option>
-            <option value="8">Score ≥ 8</option>
-            <option value="6">Score ≥ 6</option>
-            <option value="4">Score ≥ 4</option>
-          </select>
+          {/* Fit-score RANGE — set a min and/or max so you can isolate any band (e.g. ≤ 5
+              to find low-fit jobs to delete, or 7–7 for exactly 7), not just "≥ N". */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-card border border-ink rounded-md" title="Filter by fit-score range">
+            <span className="text-[12px] text-slate-muted">Fit</span>
+            <select
+              value={minScore}
+              onChange={(e) => changeMinScore(e.target.value)}
+              title="Minimum fit score"
+              className="bg-transparent text-[12px] text-slate-text outline-none cursor-pointer"
+            >
+              <option value="">min</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <option key={n} value={n}>≥ {n}</option>
+              ))}
+            </select>
+            <span className="text-[12px] text-slate-muted">–</span>
+            <select
+              value={maxScore}
+              onChange={(e) => changeMaxScore(e.target.value)}
+              title="Maximum fit score"
+              className="bg-transparent text-[12px] text-slate-text outline-none cursor-pointer"
+            >
+              <option value="">max</option>
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                <option key={n} value={n}>≤ {n}</option>
+              ))}
+            </select>
+          </div>
 
           <select
             value={minSkill}
@@ -655,6 +687,7 @@ export default function JobsPage() {
               // "No skill match" is for finding junk to delete — relax score/company so they all show.
               if (v === '0') {
                 setMinScore('');
+                setMaxScore('');
                 setCompanyTier('');
               }
             }}
@@ -739,6 +772,7 @@ export default function JobsPage() {
           if (search) chips.push({ key: 'q', label: `“${search}”`, clear: () => setSearch('') });
           if (status !== 'all') chips.push({ key: 'st', label: `Status: ${status}`, clear: () => setStatus('all') });
           if (minScore && !scoreless) chips.push({ key: 'sc', label: `Fit ≥ ${minScore}`, clear: () => setMinScore('') });
+          if (maxScore && !scoreless) chips.push({ key: 'scx', label: `Fit ≤ ${maxScore}`, clear: () => setMaxScore('') });
           if (minSkill)
             chips.push({
               key: 'sk',
