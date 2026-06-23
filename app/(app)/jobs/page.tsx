@@ -9,7 +9,7 @@ import CompanyTierBadge from '@/components/CompanyTierBadge';
 import SkillMatchBadge from '@/components/SkillMatchBadge';
 import JobsLegend from '@/components/JobsLegend';
 import ScoringPanel from '@/components/ScoringPanel';
-import ProgressToast, { type ProgressTone } from '@/components/ProgressToast';
+import { useProgress } from '@/components/ProgressContext';
 import type { Job } from '@/lib/types';
 
 const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
@@ -96,8 +96,9 @@ export default function JobsPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
   // Prominent, always-visible progress for the selection-based AI jobs (scoring /
-  // company assessment) — a fixed toast, not the tiny inline "5/25" text.
-  const [bulkProgress, setBulkProgress] = useState<{ label: string; done: number; total: number; phase: 'running' | 'done'; tone: ProgressTone } | null>(null);
+  // company assessment) — lives in a shared provider so the toast stays pinned and
+  // live even when you switch tabs mid-run (the work keeps running regardless).
+  const { setProgress: setBulkProgress, running: bulkRunning } = useProgress();
   const [fetching, setFetching] = useState(false); // empty-state "Run a fetch" trigger
 
   // Apply tracking: when user clicks an external link we wait for them to return.
@@ -317,7 +318,7 @@ export default function JobsPage() {
   // AI-score exactly the picked jobs (chunked to stay under the serverless timeout).
   async function scoreSelected() {
     const ids = selectedVisibleIds();
-    if (ids.length === 0 || bulkBusy) return;
+    if (ids.length === 0 || bulkBusy || bulkRunning) return;
     setBulkBusy(true);
     let scored = 0;
     let filtered = 0;
@@ -345,7 +346,6 @@ export default function JobsPage() {
       setBulkProgress({ label: 'Scoring failed', done, total: ids.length, phase: 'done', tone: 'sky' });
     } finally {
       setBulkBusy(false);
-      setTimeout(() => setBulkProgress(null), 5000);
     }
   }
 
@@ -408,7 +408,7 @@ export default function JobsPage() {
   // Re-runs even on already-assessed jobs (overwrites the tier) — this IS the reassess path.
   async function assessSelected() {
     const ids = selectedVisibleIds();
-    if (ids.length === 0 || bulkBusy) return;
+    if (ids.length === 0 || bulkBusy || bulkRunning) return;
     // One LLM call per job — guard against an accidental huge re-run.
     if (ids.length > 20 && !confirm(`Assess / re-assess ${ids.length} companies? This runs one AI call per job and re-rates any that were already assessed.`)) return;
     setBulkBusy(true);
@@ -435,7 +435,6 @@ export default function JobsPage() {
       setBulkProgress({ label: 'Company assessment failed', done, total: ids.length, phase: 'done', tone: 'violet' });
     } finally {
       setBulkBusy(false);
-      setTimeout(() => setBulkProgress(null), 5000);
     }
   }
 
@@ -511,8 +510,8 @@ export default function JobsPage() {
       {/* Live progress of the *automatic* scorer (daily run / webhook loop), if active. */}
       <ScoringPanel onActivity={() => { load(); refreshStats(); }} />
 
-      {/* Always-visible progress for the user's selection-based scoring / assessment. */}
-      {bulkProgress && <ProgressToast {...bulkProgress} />}
+      {/* The selection-based scoring / assessment progress toast is rendered globally by
+          ProgressProvider so it stays pinned across tab switches. */}
 
       {/* Run selector */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -800,7 +799,7 @@ export default function JobsPage() {
             <>
               <button
                 onClick={scoreSelected}
-                disabled={bulkBusy}
+                disabled={bulkBusy || bulkRunning}
                 title="AI-score just the selected jobs (skips the auto pre-filter)"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
               >
@@ -808,7 +807,7 @@ export default function JobsPage() {
               </button>
               <button
                 onClick={assessSelected}
-                disabled={bulkBusy}
+                disabled={bulkBusy || bulkRunning}
                 title="AI-assess the selected companies — re-runs even on jobs already rated, so use this to re-assess too"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
               >

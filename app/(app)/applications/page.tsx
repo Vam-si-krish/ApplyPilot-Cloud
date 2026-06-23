@@ -8,7 +8,7 @@ import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
-import ProgressToast, { type ProgressTone } from '@/components/ProgressToast';
+import { useProgress } from '@/components/ProgressContext';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 
 type View = 'list' | 'base' | 'manual';
@@ -47,11 +47,12 @@ export default function ApplicationsPage() {
   const pendingApply = useRef<ApplicationWithJob | null>(null);
   const [applyDialog, setApplyDialog] = useState<ApplicationWithJob | null>(null);
 
-  // Bulk generate — select multiple applications and tailor résumés for all at once,
-  // with a single shared progress bar (ProgressToast, same UX as the Jobs bulk actions).
+  // Bulk generate — select multiple applications and tailor résumés for all at once.
+  // The progress toast lives in the shared provider so it stays pinned across tab
+  // switches while the (still-running) generation loop works in the background.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState<{ label: string; done: number; total: number; phase: 'running' | 'done'; tone: ProgressTone } | null>(null);
+  const { setProgress: setBulkProgress, running: bulkRunning } = useProgress();
 
   // "Add custom job" — manually enter a job (e.g. from an email) to tailor a résumé to it.
   const [showCustom, setShowCustom] = useState(false);
@@ -253,7 +254,7 @@ export default function ApplicationsPage() {
   // is single-flight), driving one shared progress bar. Mirrors the single-generate
   // flow per app: hand off → poll the row until ready/failed → score the new résumé.
   async function generateSelected() {
-    if (bulkBusy || genId) return;
+    if (bulkBusy || bulkRunning || genId) return;
     const ids = [...selected].filter((id) => apps.find((a) => a.id === id)?.job);
     if (ids.length === 0) return;
     setBulkBusy(true);
@@ -305,7 +306,6 @@ export default function ApplicationsPage() {
       load(true);
     } finally {
       setBulkBusy(false);
-      setTimeout(() => setBulkProgress(null), 6000);
     }
   }
 
@@ -593,7 +593,7 @@ export default function ApplicationsPage() {
           )}
           <button
             onClick={generateSelected}
-            disabled={bulkBusy || !!genId || selectedGeneratable === 0}
+            disabled={bulkBusy || bulkRunning || !!genId || selectedGeneratable === 0}
             title="Generate a tailored résumé for every selected application"
             className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
           >
@@ -772,8 +772,8 @@ export default function ApplicationsPage() {
         </p>
       )}
 
-      {/* Shared progress bar for bulk generate (same toast as the Jobs bulk actions). */}
-      {bulkProgress && <ProgressToast {...bulkProgress} />}
+      {/* The bulk-generate progress toast is rendered globally by ProgressProvider so it
+          stays pinned across tab switches while generation runs. */}
 
       {/* "Did you apply?" — shown after returning from the external posting link (parity with Jobs). */}
       {applyDialog && (
