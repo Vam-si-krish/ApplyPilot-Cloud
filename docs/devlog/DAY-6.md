@@ -259,3 +259,15 @@ list; (3) deterministic `cleanText` strips em-dashes (U+2014→comma) from every
 `mergeTailored` (hyphens/en-dashes untouched); (4) softened the condense prompt to trim *just enough*
 instead of crushing to one line. typecheck ✅ · 100 tests ✅ (+1 em-dash regression) · build ✅ ·
 worker `node --check` ✅. **Live** — worker service kickstarted to load it.
+
+---
+
+## 2026-06-23 — Add custom (manual) jobs (ADR 0034)
+The user often hears about roles by email; added a way to enter a job by hand and tailor a résumé
+to it, through the normal Tailor & Apply flow. `createCustomApplication` (lib/db.ts) inserts a
+`jobs` row (synthetic `manual:<uuid>` url, user's link → `application_url`, `source='manual'`,
+`status='scored'` so the scorer skips it) + an `applications` row; title + description required,
+company + link optional. New `POST /api/applications/custom`. `/api/jobs` now excludes
+`source='manual'` so manual jobs stay out of the scraped Jobs list. UI: "Add custom job" button +
+inline form on the Tailor & Apply tab. No migration (reuses existing columns). typecheck ✅ · build ✅
+(route `/api/applications/custom` in manifest). **App-side → needs a Netlify deploy to go live.**

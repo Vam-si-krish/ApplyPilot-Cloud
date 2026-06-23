@@ -34,6 +34,10 @@ export async function GET(req: Request) {
   if (status === 'all') q = q.neq('status', 'archived').neq('status', 'filtered');
   else q = q.eq('status', status);
 
+  // Manually-added jobs live only under Tailor & Apply (ADR 0034) — keep them out of the
+  // scraped Jobs list. (source IS NULL covers normal scraped rows.)
+  q = q.or('source.is.null,source.neq.manual');
+
   if (search) q = q.or(`title.ilike.%${search}%,company.ilike.%${search}%,location.ilike.%${search}%`);
   if (minScore !== null && minScore !== '') q = q.gte('fit_score', Number(minScore));
   if (maxScore !== null && maxScore !== '') q = q.lte('fit_score', Number(maxScore));

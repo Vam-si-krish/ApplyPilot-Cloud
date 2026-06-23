@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2 } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
@@ -37,6 +37,38 @@ export default function ApplicationsPage() {
   // real <a target="_blank">; on return to the tab we ask whether they applied.
   const pendingApply = useRef<ApplicationWithJob | null>(null);
   const [applyDialog, setApplyDialog] = useState<ApplicationWithJob | null>(null);
+
+  // "Add custom job" — manually enter a job (e.g. from an email) to tailor a résumé to it.
+  const [showCustom, setShowCustom] = useState(false);
+  const [customForm, setCustomForm] = useState({ title: '', company: '', url: '', description: '' });
+  const [savingCustom, setSavingCustom] = useState(false);
+  const resetCustom = () => setCustomForm({ title: '', company: '', url: '', description: '' });
+
+  async function addCustomJob() {
+    if (!customForm.title.trim() || !customForm.description.trim() || savingCustom) return;
+    setSavingCustom(true);
+    setMsg(null);
+    try {
+      const r = await fetch('/api/applications/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(customForm),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setMsg(d.error || 'Could not add the job.');
+        return;
+      }
+      resetCustom();
+      setShowCustom(false);
+      await load();
+      setMsg('Custom job added — open it below and Generate a tailored résumé.');
+    } catch {
+      setMsg('Could not add the job.');
+    } finally {
+      setSavingCustom(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -257,6 +289,68 @@ export default function ApplicationsPage() {
 
       {msg && <div className="mb-3 text-[12px] text-slate-muted animate-fade-in">{msg}</div>}
 
+      {view === 'list' && (
+        <div className="mb-4">
+          <button
+            onClick={() => setShowCustom((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text border border-ink rounded-lg hover:bg-raised transition-all"
+          >
+            <Plus size={14} /> Add custom job
+          </button>
+
+          {showCustom && (
+            <div className="mt-3 bg-card border border-ink rounded-xl p-4 animate-fade-in">
+              <p className="text-[12px] text-slate-muted mb-3">
+                Add a job you found yourself (e.g. from an email). <span className="text-slate-text">Company</span> and{' '}
+                <span className="text-slate-text">link</span> are optional; the description is what the résumé is tailored to.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                <input
+                  value={customForm.title}
+                  onChange={(e) => setCustomForm({ ...customForm, title: e.target.value })}
+                  placeholder="Job title *"
+                  className="px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none"
+                />
+                <input
+                  value={customForm.company}
+                  onChange={(e) => setCustomForm({ ...customForm, company: e.target.value })}
+                  placeholder="Company (optional)"
+                  className="px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none"
+                />
+              </div>
+              <input
+                value={customForm.url}
+                onChange={(e) => setCustomForm({ ...customForm, url: e.target.value })}
+                placeholder="Job / apply link (optional)"
+                className="w-full px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none mb-3"
+              />
+              <textarea
+                value={customForm.description}
+                onChange={(e) => setCustomForm({ ...customForm, description: e.target.value })}
+                placeholder="Paste the full job description *"
+                rows={6}
+                className="w-full px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none mb-3 resize-y"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={addCustomJob}
+                  disabled={!customForm.title.trim() || !customForm.description.trim() || savingCustom}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingCustom ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Add job
+                </button>
+                <button
+                  onClick={() => { setShowCustom(false); resetCustom(); }}
+                  className="px-4 py-2 text-[13px] text-slate-muted border border-ink rounded-lg hover:bg-raised transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {view === 'manual' ? (
         <ManualGenerate />
       ) : view === 'base' ? (
@@ -268,7 +362,8 @@ export default function ApplicationsPage() {
           <FileText size={22} className="mx-auto text-slate-muted mb-3" />
           <h3 className="text-[14px] font-medium text-slate-text mb-1">No applications yet</h3>
           <p className="text-[13px] text-slate-muted max-w-md mx-auto mb-5">
-            On the Jobs tab, select the roles you want to apply to and use <span className="text-sky">Add to Applications</span>.
+            On the Jobs tab, select the roles you want to apply to and use <span className="text-sky">Add to Applications</span>
+            {' '}— or use <span className="text-sky">Add custom job</span> above to enter one yourself (e.g. from an email).
             They&apos;ll appear here, ready for a tailored résumé.
           </p>
           <Link

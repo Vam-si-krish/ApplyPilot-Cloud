@@ -1,4 +1,5 @@
 /** Server-side data access helpers over the service-role Supabase client. */
+import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
 
@@ -167,6 +168,50 @@ export async function addApplications(jobIds: string[]): Promise<number> {
     .select('id');
   if (error) throw new Error(`Failed to add applications: ${error.message}`);
   return data?.length ?? 0;
+}
+
+/**
+ * Create a manually-entered job + its application in one step (ADR 0034). For a job the
+ * user adds by hand (e.g. from a recruiter email) so they can tailor a résumé to it.
+ * Company and link are OPTIONAL; only the title + description are required (the
+ * description is what tailoring reads). The job is flagged `source='manual'` (hidden from
+ * the scraped Jobs list) and `status='scored'` with no fit_score so the scoring loop
+ * skips it. `jobs.url` is unique + not-null, so a synthetic internal url is always used
+ * and the user's link (if any) is stored in `application_url` — no collision with scraped rows.
+ */
+export async function createCustomApplication(input: {
+  title: string;
+  company?: string | null;
+  url?: string | null;
+  description: string;
+}): Promise<ApplicationWithJob> {
+  const title = input.title.trim();
+  const description = input.description.trim();
+  if (!title) throw new Error('A job title is required.');
+  if (!description) throw new Error('A job description is required — it is what the résumé is tailored to.');
+
+  const { data: job, error: jobErr } = await supabaseAdmin()
+    .from('jobs')
+    .insert({
+      url: `manual:${randomUUID()}`,
+      application_url: (input.url || '').trim() || null,
+      title,
+      company: (input.company || '').trim() || null,
+      full_description: description,
+      status: 'scored', // not 'unscored' → the scoring loop ignores it
+      source: 'manual', // hidden from the scraped Jobs list
+    })
+    .select('*')
+    .single();
+  if (jobErr) throw new Error(`Failed to create custom job: ${jobErr.message}`);
+
+  const { data: appRow, error: appErr } = await supabaseAdmin()
+    .from('applications')
+    .insert({ job_id: (job as Job).id, status: 'queued' })
+    .select('*, job:jobs(*)')
+    .single();
+  if (appErr) throw new Error(`Failed to create application: ${appErr.message}`);
+  return appRow as ApplicationWithJob;
 }
 
 /** One application joined with its job (used by the generate route). */
