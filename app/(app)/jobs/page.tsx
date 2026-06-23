@@ -9,6 +9,7 @@ import CompanyTierBadge from '@/components/CompanyTierBadge';
 import SkillMatchBadge from '@/components/SkillMatchBadge';
 import JobsLegend from '@/components/JobsLegend';
 import ScoringPanel from '@/components/ScoringPanel';
+import ProgressToast, { type ProgressTone } from '@/components/ProgressToast';
 import type { Job } from '@/lib/types';
 
 const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
@@ -94,6 +95,9 @@ export default function JobsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  // Prominent, always-visible progress for the selection-based AI jobs (scoring /
+  // company assessment) — a fixed toast, not the tiny inline "5/25" text.
+  const [bulkProgress, setBulkProgress] = useState<{ label: string; done: number; total: number; phase: 'running' | 'done'; tone: ProgressTone } | null>(null);
   const [fetching, setFetching] = useState(false); // empty-state "Run a fetch" trigger
 
   // Apply tracking: when user clicks an external link we wait for them to return.
@@ -304,10 +308,10 @@ export default function JobsPage() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy) return;
     setBulkBusy(true);
-    setBulkMsg('Scoring…');
     let scored = 0;
     let filtered = 0;
     let done = 0;
+    setBulkProgress({ label: 'AI-scoring selected jobs', done: 0, total: ids.length, phase: 'running', tone: 'sky' });
     try {
       for (let i = 0; i < ids.length; i += 5) {
         const chunk = ids.slice(i, i + 5);
@@ -319,17 +323,18 @@ export default function JobsPage() {
         scored += d.scored ?? 0;
         filtered += d.filtered ?? 0;
         done += chunk.length;
-        setBulkMsg(`Scored ${done}/${ids.length}…`);
+        setBulkProgress({ label: 'AI-scoring selected jobs', done, total: ids.length, phase: 'running', tone: 'sky' });
+        load(); // scores light up live as each chunk lands
       }
-      setBulkMsg(`Done — ${scored} scored${filtered ? `, ${filtered} filtered` : ''}.`);
+      setBulkProgress({ label: `Done — ${scored} scored${filtered ? `, ${filtered} filtered` : ''}`, done: ids.length, total: ids.length, phase: 'done', tone: 'sky' });
       setSelected(new Set());
       load();
       refreshStats();
     } catch {
-      setBulkMsg('Scoring failed.');
+      setBulkProgress({ label: 'Scoring failed', done, total: ids.length, phase: 'done', tone: 'sky' });
     } finally {
       setBulkBusy(false);
-      setTimeout(() => setBulkMsg(null), 6000);
+      setTimeout(() => setBulkProgress(null), 5000);
     }
   }
 
@@ -396,9 +401,9 @@ export default function JobsPage() {
     // One LLM call per job — guard against an accidental huge re-run.
     if (ids.length > 20 && !confirm(`Assess / re-assess ${ids.length} companies? This runs one AI call per job and re-rates any that were already assessed.`)) return;
     setBulkBusy(true);
-    setBulkMsg('Assessing companies…');
     let assessed = 0;
     let done = 0;
+    setBulkProgress({ label: 'AI-assessing companies', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
     try {
       for (let i = 0; i < ids.length; i += 5) {
         const chunk = ids.slice(i, i + 5);
@@ -409,16 +414,17 @@ export default function JobsPage() {
         }).then((r) => r.json());
         assessed += d.assessed ?? 0;
         done += chunk.length;
-        setBulkMsg(`Assessed ${done}/${ids.length}…`);
+        setBulkProgress({ label: 'AI-assessing companies', done, total: ids.length, phase: 'running', tone: 'violet' });
+        load(); // tiers light up live as each chunk lands
       }
-      setBulkMsg(`Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}.`);
+      setBulkProgress({ label: `Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}`, done: ids.length, total: ids.length, phase: 'done', tone: 'violet' });
       setSelected(new Set());
       load();
     } catch {
-      setBulkMsg('Company assessment failed.');
+      setBulkProgress({ label: 'Company assessment failed', done, total: ids.length, phase: 'done', tone: 'violet' });
     } finally {
       setBulkBusy(false);
-      setTimeout(() => setBulkMsg(null), 6000);
+      setTimeout(() => setBulkProgress(null), 5000);
     }
   }
 
@@ -491,9 +497,11 @@ export default function JobsPage() {
         </div>
       </div>
 
-      {/* Live AI fit-scoring progress + Start/Stop (ADR 0028). Replaces the old
-          "Score unscored" button: single-flight, shows progress, stoppable. */}
+      {/* Live progress of the *automatic* scorer (daily run / webhook loop), if active. */}
       <ScoringPanel onActivity={() => { load(); refreshStats(); }} />
+
+      {/* Always-visible progress for the user's selection-based scoring / assessment. */}
+      {bulkProgress && <ProgressToast {...bulkProgress} />}
 
       {/* Run selector */}
       <div className="flex flex-wrap items-center gap-3 mb-4">

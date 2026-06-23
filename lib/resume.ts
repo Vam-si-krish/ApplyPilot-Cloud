@@ -150,6 +150,55 @@ export function normalizeResume(input: unknown): ResumeDoc {
 }
 
 /**
+ * Flatten a structured résumé into plain text for the fit scorer (ADR 0029). The
+ * scorer reads a résumé string + job; this renders the tailored ResumeDoc the same
+ * way a recruiter would read it (summary, roles + bullets, education, skills,
+ * projects) so the tailored résumé can be scored against the job.
+ */
+export function resumeToText(doc: ResumeDoc): string {
+  const out: string[] = [];
+  const b = doc.basics;
+  if (b.name) out.push(b.name);
+  if (b.label) out.push(b.label);
+  if (b.summary) out.push(`\n${b.summary}`);
+
+  if (doc.work.length) {
+    out.push('\nEXPERIENCE');
+    for (const w of doc.work) {
+      const head = [w.position, w.name].filter(Boolean).join(' — ');
+      const dates = [w.startDate, w.endDate].filter(Boolean).join(' to ');
+      out.push([head, dates].filter(Boolean).join('  '));
+      for (const h of w.highlights) out.push(`- ${h}`);
+    }
+  }
+
+  if (doc.education.length) {
+    out.push('\nEDUCATION');
+    for (const e of doc.education) {
+      out.push([e.studyType, e.area, e.institution].filter(Boolean).join(', '));
+    }
+  }
+
+  if (doc.skills.length) {
+    out.push('\nSKILLS');
+    for (const s of doc.skills) {
+      const kws = s.keywords.join(', ');
+      out.push([s.name, kws].filter(Boolean).join(': '));
+    }
+  }
+
+  if (doc.projects.length) {
+    out.push('\nPROJECTS');
+    for (const p of doc.projects) {
+      out.push([p.name, p.description].filter(Boolean).join(' — '));
+      for (const h of p.highlights) out.push(`- ${h}`);
+    }
+  }
+
+  return out.join('\n').trim();
+}
+
+/**
  * Pull the first JSON object out of an LLM response — tolerates ```json fences and
  * surrounding prose by scanning for balanced braces. Returns null if none parses.
  */

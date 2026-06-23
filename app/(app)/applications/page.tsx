@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2 } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
+import CompanyTierBadge from '@/components/CompanyTierBadge';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 
 type View = 'list' | 'base' | 'manual';
@@ -31,6 +32,7 @@ export default function ApplicationsPage() {
   const [draft, setDraft] = useState<ResumeDoc | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [rendering, setRendering] = useState<string | null>(null); // application currently rendering a PDF
+  const [scoringTailored, setScoringTailored] = useState<string | null>(null); // application whose tailored résumé is being scored
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,9 +106,12 @@ export default function ApplicationsPage() {
       }
 
       if (row?.status === 'ready') {
-        setMsg('Tailored résumé generated — review and edit below.');
+        setMsg('Tailored résumé generated — scoring it against the job…');
         setExpanded(a.id);
         setDraft(row.tailored_resume ? structuredClone(row.tailored_resume) : null);
+        // Score the new résumé so the row shows its fit vs the original (ADR 0029).
+        await scoreTailored(a.id);
+        setMsg('Tailored résumé generated — review and edit below.');
       } else if (row?.status === 'failed') {
         setMsg(`Generation failed: ${row.error || 'unknown error'}`);
       } else {
@@ -118,6 +123,19 @@ export default function ApplicationsPage() {
     } finally {
       setGenId(null);
       setTimeout(() => setMsg(null), 6000);
+    }
+  }
+
+  // Fit-score the application's tailored résumé against its job (ADR 0029).
+  async function scoreTailored(id: string) {
+    setScoringTailored(id);
+    try {
+      await fetch(`/api/applications/${id}/score-tailored`, { method: 'POST' });
+      await load();
+    } catch {
+      /* non-fatal — the row just won't show a tailored score */
+    } finally {
+      setScoringTailored(null);
     }
   }
 
@@ -253,8 +271,20 @@ export default function ApplicationsPage() {
                     <p className="text-slate-muted text-[11px] truncate">
                       {job?.company ?? '—'}
                       {job?.location ? ` · ${job.location}` : ''}
-                      {typeof job?.fit_score === 'number' ? ` · fit ${job.fit_score}/10` : ''}
                     </p>
+                    {/* All three signals: original job fit · AI company tier · tailored-résumé fit (ADR 0029). */}
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {typeof job?.fit_score === 'number' && (
+                        <ScoreChip label="Job fit" value={job.fit_score} title="Original fit of your base résumé to this job" />
+                      )}
+                      {job?.company_tier && <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} />}
+                      <TailoredScoreChip
+                        app={a}
+                        original={job?.fit_score ?? null}
+                        busy={scoringTailored === a.id}
+                        onScore={() => scoreTailored(a.id)}
+                      />
+                    </div>
                   </div>
                   <button
                     onClick={() => generate(a)}
@@ -375,4 +405,72 @@ export default function ApplicationsPage() {
       )}
     </div>
   );
+}
+
+/** Color a 0–10 score: ≥7 strong (green), 5–6 moderate (amber), else weak (red). */
+function scoreColor(v: number): string {
+  return v >= 7
+    ? 'bg-emerald/10 border-emerald/25 text-emerald'
+    : v >= 5
+      ? 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+      : 'bg-rose/10 border-rose/30 text-rose';
+}
+
+/** Small labelled score chip (e.g. the original job fit). */
+function ScoreChip({ label, value, title }: { label: string; value: number; title?: string }) {
+  return (
+    <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${scoreColor(value)}`}>
+      {label} {value}/10
+    </span>
+  );
+}
+
+/**
+ * The tailored-résumé fit chip (ADR 0029): shows the new score (with the delta vs the
+ * original job fit) once computed; a spinner while scoring; or a one-click "Score
+ * résumé" when a résumé exists but hasn't been scored (e.g. older applications).
+ */
+function TailoredScoreChip({
+  app,
+  original,
+  busy,
+  onScore,
+}: {
+  app: ApplicationWithJob;
+  original: number | null;
+  busy: boolean;
+  onScore: () => void;
+}) {
+  if (busy) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border border-violet-500/25 bg-violet-500/10 text-violet-300">
+        <Loader2 size={10} className="animate-spin" /> Scoring résumé…
+      </span>
+    );
+  }
+  if (typeof app.tailored_fit_score === 'number') {
+    const v = app.tailored_fit_score;
+    const delta = original != null ? v - original : null;
+    return (
+      <span
+        title={app.tailored_score_note || 'Fit of your tailored résumé to this job'}
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${scoreColor(v)}`}
+      >
+        <Sparkles size={10} /> Résumé {v}/10
+        {delta != null && delta !== 0 ? <span className="opacity-70">({delta > 0 ? '+' : ''}{delta})</span> : null}
+      </span>
+    );
+  }
+  if (app.tailored_resume) {
+    return (
+      <button
+        onClick={onScore}
+        title="Score your tailored résumé against this job"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border border-ink text-slate-muted hover:text-violet-300 hover:border-violet-500/30 transition-all"
+      >
+        <Sparkles size={10} /> Score résumé
+      </button>
+    );
+  }
+  return null;
 }

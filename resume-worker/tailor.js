@@ -322,9 +322,15 @@ export function extractJsonObject(text) {
 export const TAILOR_PROMPT = `You are an expert résumé writer helping the candidate LAND INTERVIEWS for a specific job, and optimizing the résumé to pass ATS keyword screening (aim for a strong keyword match with the posting).
 
 You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
-- Rewrite and EXPAND bullet points to foreground the job's requirements and keywords, adding plausible detail, metrics, and scenarios consistent with the candidate's real roles (e.g., if they touched WebSockets, describe real-time features in depth).
+- Rewrite bullet points to foreground the job's requirements and keywords, adding plausible detail, metrics, and scenarios consistent with the candidate's real roles (e.g., if they touched WebSockets, describe real-time features in depth).
 - ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
+
+LENGTH — keep it to ONE PAGE; the tailored résumé must be NET-NEUTRAL in length (same as the base or shorter):
+- Do NOT increase the number of bullet points (highlights) in ANY role or project. Each must have the SAME count as the base résumé, or fewer — NEVER more.
+- You cannot just append a new point. To surface a job-relevant point, REPLACE or MERGE the LEAST important existing bullet in that role, or modify an existing bullet to carry the new emphasis. Adding one means removing/condensing one.
+- Keep individual bullets to roughly one line; tighten wordy ones instead of growing the résumé.
+- Skills are compact — you MAY still add skills (they don't push it to a second page).
 
 HARD LIMITS — never change these verifiable facts (a background check would catch them):
 - Employer / company names, job titles, and employment dates: keep EXACTLY as the base résumé.
@@ -341,9 +347,9 @@ Output ONLY a JSON object (no markdown/commentary), the SAME shape as the base r
   "education": [ { "institution":"", "area":"", "studyType":"", "startDate":"", "endDate":"", "score":"" } ],
   "skills": [ { "name":"", "keywords":["",""] } ],
   "projects": [ { "name":"", "description":"", "url":"", "highlights":[] } ],
-  "_changes": ["Added Kubernetes (adjacent to your Docker/CI experience)", "Expanded WebSockets into a detailed real-time-collaboration bullet"]
+  "_changes": ["Added Kubernetes (adjacent to your Docker/CI experience)", "Replaced a generic bullet with a detailed WebSockets real-time-collaboration one"]
 }
-Keep work entries in the same order and count, with the same companies, titles, and dates as the base résumé.`;
+Keep work entries in the same order and count, with the same companies, titles, and dates as the base résumé, and the SAME number of highlights per role/project as the base (or fewer) — never more.`;
 
 export function buildTailorMessages(base, job, signals) {
   const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
@@ -370,23 +376,27 @@ function skillSet(doc) {
   return set;
 }
 
-/** Merge the model's draft onto the base, anchoring verifiable facts (ADR 0026). Pure — never throws. */
+/**
+ * Length-neutral highlight merge (ADR 0029): take the model's bullets but never MORE
+ * than the base had, so the résumé can't overflow one page. Empty/omitted → keep base.
+ */
+function capHighlights(baseHl, tailoredHl) {
+  if (!tailoredHl || tailoredHl.length === 0) return baseHl;
+  return baseHl.length > 0 ? tailoredHl.slice(0, baseHl.length) : tailoredHl;
+}
+
+/** Merge the model's draft onto the base, anchoring verifiable facts (ADR 0026) and
+ *  capping bullet counts to keep it one page (ADR 0029). Pure — never throws. */
 export function mergeTailored(base, tailored) {
   const basics = {
     ...base.basics,
     summary: tailored.basics.summary?.trim() || base.basics.summary,
     label: tailored.basics.label?.trim() || base.basics.label,
   };
-  const work = base.work.map((b, i) => {
-    const t = tailored.work[i];
-    return { ...b, highlights: t && t.highlights.length ? t.highlights : b.highlights };
-  });
+  const work = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights) }));
   let skills = tailored.skills.filter((g) => g.keywords.length > 0);
   if (skills.length === 0) skills = base.skills;
-  const projects = base.projects.map((b, i) => {
-    const t = tailored.projects[i];
-    return { ...b, highlights: t && t.highlights.length ? t.highlights : b.highlights };
-  });
+  const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights) }));
   return { basics, work, education: base.education, skills, projects };
 }
 

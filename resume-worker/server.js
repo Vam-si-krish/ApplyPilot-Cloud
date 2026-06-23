@@ -126,7 +126,15 @@ app.post('/tailor', async (req, res) => {
     const client = makeClient(provider, model, key);
     tailorResume(base, job, signals, client)
       .then(({ resume, changes }) =>
-        updateApplication(id, { tailored_resume: resume, tailor_changes: changes, status: 'ready', error: null }),
+        // Clear any stale tailored score — the app re-scores the new résumé (ADR 0029).
+        updateApplication(id, {
+          tailored_resume: resume,
+          tailor_changes: changes,
+          status: 'ready',
+          error: null,
+          tailored_fit_score: null,
+          tailored_score_note: null,
+        }),
       )
       .catch((e) => {
         const msg = e instanceof Error ? e.message : String(e);

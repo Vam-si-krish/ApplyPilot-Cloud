@@ -1,15 +1,17 @@
 'use client';
 
 /**
- * Live scoring progress + Stop control (ADR 0028). Mirrors the Gmail SyncProgressPanel:
- * polls /api/score-status, shows a progress bar (done of total) while the single-flight
- * scorer runs, a Stop button that halts after the current batch (scored work is kept),
- * and a Start button when jobs are waiting. Polls fast (2.5s) while active, slow (12s)
- * while idle, so it isn't a constant fast network call. Calls `onActivity` so the host
- * page refreshes its job list as scores land.
+ * Live progress + Stop for the *automatic* fit-scorer (the daily run / webhook loop,
+ * ADR 0028). Polls /api/score-status and shows a progress bar (done of total) while
+ * the single-flight scorer runs, plus a Stop button that halts after the current
+ * batch (scored work is kept). There is intentionally NO start button — scoring is
+ * user-driven from the Jobs page by selecting jobs (the user wants control over WHICH
+ * jobs are scored); this panel only surfaces an already-running pass. Polls fast
+ * (2.5s) while active, slow (12s) while idle. Calls `onActivity` so the host page
+ * refreshes its list as scores land.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Sparkles, Square, CheckCircle2, Loader2 } from 'lucide-react';
+import { Square, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface ScoreStatus {
   active: boolean;
@@ -58,17 +60,6 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
     return () => clearInterval(t);
   }, [poll, st?.active]);
 
-  async function start() {
-    setBusy(true);
-    setFlashDone(false);
-    try {
-      await fetch('/api/score-start', { method: 'POST' });
-    } finally {
-      setBusy(false);
-    }
-    setTimeout(poll, 800);
-  }
-
   async function stop() {
     setBusy(true);
     setSt((s) => (s ? { ...s, stop_requested: true } : s)); // optimistic
@@ -83,18 +74,15 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
   if (!st) return null;
   const running = st.active;
   const stopping = st.active && st.stop_requested;
-  const pending = !st.active && st.remaining > 0;
-  if (!running && !pending && !flashDone) return null; // nothing to show
+  if (!running && !flashDone) return null; // only surfaces an active/just-finished auto pass
 
   const pct = st.total > 0 ? Math.min(100, Math.round((st.done / st.total) * 100)) : null;
 
   const line = stopping
     ? `Stopping after this batch — ${st.done} of ${st.total} scored`
     : running
-      ? `Scoring jobs — ${st.done} of ${st.total}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`
-      : flashDone
-        ? `Done — scored ${st.done} job${st.done === 1 ? '' : 's'}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`
-        : `${st.remaining} job${st.remaining === 1 ? '' : 's'} waiting to score${st.stale ? ' · previous run stalled' : ''}`;
+      ? `Auto-scoring jobs — ${st.done} of ${st.total}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`
+      : `Done — scored ${st.done} job${st.done === 1 ? '' : 's'}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`;
 
   return (
     <div className="bg-card border border-ink rounded-xl px-5 py-4 mb-5 animate-fade-in">
@@ -102,14 +90,12 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
         <div className="flex items-center gap-2 min-w-0">
           {running ? (
             <Loader2 size={14} className={`${stopping ? 'text-amber' : 'text-sky'} animate-spin shrink-0`} />
-          ) : flashDone ? (
-            <CheckCircle2 size={14} className="text-emerald shrink-0" />
           ) : (
-            <Sparkles size={14} className="text-sky shrink-0" />
+            <CheckCircle2 size={14} className="text-emerald shrink-0" />
           )}
           <span className="text-[13px] text-slate-text font-medium truncate">{line}</span>
         </div>
-        {running ? (
+        {running && (
           <button
             onClick={stop}
             disabled={busy || stopping}
@@ -117,15 +103,7 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
           >
             <Square size={12} /> {stopping ? 'Stopping…' : 'Stop'}
           </button>
-        ) : pending ? (
-          <button
-            onClick={start}
-            disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all shrink-0"
-          >
-            <Sparkles size={12} /> {busy ? 'Starting…' : 'Score now'}
-          </button>
-        ) : null}
+        )}
       </div>
       {(running || flashDone) && (
         <div className="h-1.5 w-full bg-raised rounded-full overflow-hidden">

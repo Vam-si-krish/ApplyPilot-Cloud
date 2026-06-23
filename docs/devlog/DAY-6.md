@@ -156,3 +156,23 @@ Two findings + fixes:
   `done/total` bar, Stop (halts after current batch, scored work kept), Start when jobs wait, "Done" flash.
   Polls 2.5s active / 12s idle. Replaced the old "Score unscored" button on Jobs.
 - typecheck ✅ · 95 tests ✅ · build ✅. **Undeployed** — goes live on push (migration already applied → safe).
+
+---
+
+## 2026-06-23 — UX pass: user-driven scoring, visible progress, 1-page tailoring, 3 scores (ADR 0029)
+Five changes from user feedback:
+1. **Removed the auto "Score now" button** (Dashboard + Jobs). `ScoringPanel` now only *surfaces* an
+   already-running automatic pass (daily run/webhook) + Stop. Scoring is user-driven via job selection.
+2. **Prominent progress for selection scoring** — new `components/ProgressToast.tsx` (fixed bottom-right,
+   done/total bar) replaces the tiny inline "5/25" text; list refreshes live per chunk.
+3. **Same for company assessment** (Assess/re-assess) — same toast (violet tone).
+4. **Length-neutral tailoring** — `TAILOR_PROMPT` (lib + worker) now forbids increasing bullet count
+   ("add one, remove one"; skills still allowed); `mergeTailored` caps each role/project's highlights to
+   the base count (`capHighlights`). Stops 1-page résumés spilling to page 2.
+5. **3 scores in Applications** — migration **0024 (APPLIED to live DB & verified)**:
+   `applications.tailored_fit_score` + `tailored_score_note`. New `POST /api/applications/[id]/score-tailored`
+   (one scorer call over `resumeToText(tailored)`), auto-run after generation; row shows Job fit + company
+   tier + Résumé X/10 (with delta). Regenerate clears the stale score (worker writes null) → re-scores;
+   older rows get a one-click "Score résumé".
+- typecheck ✅ · 95 tests ✅ · build ✅ · worker `node --check` ✅. **Undeployed** — push to go live
+  (migrations 0023+0024 already applied → safe).
