@@ -8,6 +8,7 @@ import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
+import ProgressToast, { type ProgressTone } from '@/components/ProgressToast';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 
 type View = 'list' | 'base' | 'manual';
@@ -38,6 +39,12 @@ export default function ApplicationsPage() {
   const pendingApply = useRef<ApplicationWithJob | null>(null);
   const [applyDialog, setApplyDialog] = useState<ApplicationWithJob | null>(null);
 
+  // Bulk generate — select multiple applications and tailor résumés for all at once,
+  // with a single shared progress bar (ProgressToast, same UX as the Jobs bulk actions).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ label: string; done: number; total: number; phase: 'running' | 'done'; tone: ProgressTone } | null>(null);
+
   // "Add custom job" — manually enter a job (e.g. from an email) to tailor a résumé to it.
   const [showCustom, setShowCustom] = useState(false);
   const [customForm, setCustomForm] = useState({ title: '', company: '', url: '', description: '' });
@@ -61,7 +68,7 @@ export default function ApplicationsPage() {
       }
       resetCustom();
       setShowCustom(false);
-      await load();
+      await load(true);
       setMsg('Custom job added — open it below and Generate a tailored résumé.');
     } catch {
       setMsg('Could not add the job.');
@@ -70,13 +77,16 @@ export default function ApplicationsPage() {
     }
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent` re-fetches the list in place without flipping the full-page "Loading…"
+  // state — this is what kills the post-generate / post-PDF flicker (the list and the
+  // open editor stay mounted; only changed rows re-render).
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const d = await fetch('/api/applications').then((r) => r.json());
       setApps(d.applications ?? []);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -112,14 +122,15 @@ export default function ApplicationsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    load();
+    load(true);
   }
 
   async function remove(id: string) {
     if (!confirm('Remove this application?')) return;
     await fetch(`/api/applications/${id}`, { method: 'DELETE' });
     if (expanded === id) setExpanded(null);
-    load();
+    setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    load(true);
   }
 
   // Fetch a single application's current row from the list endpoint (used to poll
@@ -130,7 +141,7 @@ export default function ApplicationsPage() {
   }
 
   async function generate(a: ApplicationWithJob) {
-    if (genId) return;
+    if (genId || bulkBusy) return;
     setGenId(a.id);
     setMsg('Generating tailored résumé… this can take up to a minute.');
     try {
@@ -140,7 +151,7 @@ export default function ApplicationsPage() {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
         setMsg(`Generation failed: ${d.error || 'unknown error'}`);
-        load();
+        load(true);
         return;
       }
 
@@ -165,7 +176,7 @@ export default function ApplicationsPage() {
       } else {
         setMsg('Still generating — refresh in a moment to see the result.');
       }
-      load();
+      load(true);
     } catch {
       setMsg('Generation failed.');
     } finally {
@@ -174,12 +185,87 @@ export default function ApplicationsPage() {
     }
   }
 
+  // ── Bulk generate ──────────────────────────────────────────────────────────
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  const selectableIds = apps.filter((a) => a.job).map((a) => a.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+
+  // Generate tailored résumés for every selected application, sequentially (the worker
+  // is single-flight), driving one shared progress bar. Mirrors the single-generate
+  // flow per app: hand off → poll the row until ready/failed → score the new résumé.
+  async function generateSelected() {
+    if (bulkBusy || genId) return;
+    const ids = [...selected].filter((id) => apps.find((a) => a.id === id)?.job);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    setMsg(null);
+    let done = 0;
+    let ok = 0;
+    let failed = 0;
+    setBulkProgress({ label: 'Generating tailored résumés', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
+    try {
+      for (const id of ids) {
+        // Optimistic: show the row as generating immediately.
+        setApps((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'generating' } : x)));
+        try {
+          const r = await fetch(`/api/applications/${id}/generate`, { method: 'POST' });
+          if (!r.ok) {
+            failed++;
+          } else {
+            // Poll the row until the worker marks it ready/failed (cap ~3 min each).
+            const deadline = Date.now() + 180_000;
+            let row: ApplicationWithJob | null = null;
+            while (Date.now() < deadline) {
+              await new Promise((res) => setTimeout(res, 2500));
+              row = await fetchApp(id).catch(() => null);
+              if (row && (row.status === 'ready' || row.status === 'failed')) break;
+            }
+            if (row?.status === 'ready') {
+              ok++;
+              // Score the new résumé against its job (parity with single generate, ADR 0029).
+              await fetch(`/api/applications/${id}/score-tailored`, { method: 'POST' }).catch(() => {});
+            } else {
+              failed++;
+            }
+          }
+        } catch {
+          failed++;
+        }
+        done++;
+        setBulkProgress({ label: 'Generating tailored résumés', done, total: ids.length, phase: 'running', tone: 'violet' });
+        load(true); // results light up live as each one lands
+      }
+      setBulkProgress({
+        label: `Done — ${ok} generated${failed ? `, ${failed} failed` : ''}`,
+        done: ids.length,
+        total: ids.length,
+        phase: 'done',
+        tone: 'violet',
+      });
+      setSelected(new Set());
+      load(true);
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkProgress(null), 6000);
+    }
+  }
+
   // Fit-score the application's tailored résumé against its job (ADR 0029).
   async function scoreTailored(id: string) {
     setScoringTailored(id);
     try {
       await fetch(`/api/applications/${id}/score-tailored`, { method: 'POST' });
-      await load();
+      await load(true);
     } catch {
       /* non-fatal — the row just won't show a tailored score */
     } finally {
@@ -197,7 +283,7 @@ export default function ApplicationsPage() {
         body: JSON.stringify({ tailored_resume: draft }),
       });
       setMsg('Saved.');
-      load();
+      load(true);
     } finally {
       setSavingDraft(false);
       setTimeout(() => setMsg(null), 3000);
@@ -228,7 +314,7 @@ export default function ApplicationsPage() {
       } else {
         setMsg(d.tooLong ? 'PDF ready — content was long, trimmed to one page (consider shortening).' : `PDF ready (1 page).`);
       }
-      load();
+      load(true);
     } catch {
       setMsg('PDF render failed.');
     } finally {
@@ -374,6 +460,38 @@ export default function ApplicationsPage() {
           </Link>
         </div>
       ) : (
+        <>
+        {/* Bulk-select toolbar — pick applications and generate all their résumés at once. */}
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <label className="flex items-center gap-2 text-[12px] text-slate-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              disabled={bulkBusy}
+              className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+            />
+            {selected.size > 0 ? `${selected.size} selected` : `Select all (${selectableIds.length})`}
+          </label>
+          {selected.size > 0 && (
+            <button
+              onClick={() => setSelected(new Set())}
+              disabled={bulkBusy}
+              className="text-[12px] text-slate-muted hover:text-slate-text underline disabled:opacity-40"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={generateSelected}
+            disabled={bulkBusy || !!genId || selected.size === 0}
+            title="Generate a tailored résumé for every selected application"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+          >
+            {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+            {bulkBusy ? 'Generating…' : `Generate selected${selected.size > 0 ? ` (${selected.size})` : ''}`}
+          </button>
+        </div>
         <div className="bg-card border border-ink rounded-xl overflow-hidden divide-y divide-ink-subtle">
           {apps.map((a) => {
             const job = a.job;
@@ -382,6 +500,14 @@ export default function ApplicationsPage() {
             return (
               <div key={a.id}>
                 <div className="flex items-center gap-3 px-5 py-3 hover:bg-raised transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(a.id)}
+                    onChange={() => toggleOne(a.id)}
+                    disabled={!a.job || bulkBusy}
+                    title={a.job ? 'Select for bulk generate' : 'Job removed — cannot generate'}
+                    className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 disabled:opacity-30"
+                  />
                   <button onClick={() => toggleExpand(a)} className="text-slate-muted hover:text-sky shrink-0">
                     {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                   </button>
@@ -410,7 +536,7 @@ export default function ApplicationsPage() {
                   </div>
                   <button
                     onClick={() => generate(a)}
-                    disabled={!!genId || !job}
+                    disabled={!!genId || bulkBusy || !job}
                     title="Generate a job-tailored résumé from your base résumé (truthful reframing)"
                     className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all shrink-0"
                   >
@@ -448,7 +574,7 @@ export default function ApplicationsPage() {
                     {/* Mobile generate button (the row one is hidden on small screens) */}
                     <button
                       onClick={() => generate(a)}
-                      disabled={!!genId || !job}
+                      disabled={!!genId || bulkBusy || !job}
                       className="sm:hidden mb-3 flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
                     >
                       <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate résumé' : 'Generate résumé'}
@@ -517,6 +643,7 @@ export default function ApplicationsPage() {
             );
           })}
         </div>
+        </>
       )}
 
       {view === 'list' && apps.length > 0 && (
@@ -525,6 +652,9 @@ export default function ApplicationsPage() {
           <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> current for the best results.
         </p>
       )}
+
+      {/* Shared progress bar for bulk generate (same toast as the Jobs bulk actions). */}
+      {bulkProgress && <ProgressToast {...bulkProgress} />}
 
       {/* "Did you apply?" — shown after returning from the external posting link (parity with Jobs). */}
       {applyDialog && (
