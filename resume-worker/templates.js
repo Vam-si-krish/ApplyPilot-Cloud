@@ -50,6 +50,18 @@ function link(url, text) {
   return `<a href="${esc(href(url))}">${esc(text ?? urlText(url))}</a>`;
 }
 
+/**
+ * True only when the value can become a real link: it has a scheme, or it looks
+ * like a domain (contains a dot, e.g. linkedin.com/in/you). Guards against an
+ * incomplete value like a bare "portfolio" rendering as a broken https://portfolio.
+ */
+function linkable(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return false;
+  if (/^(https?:|mailto:|tel:)/i.test(s)) return true;
+  return /\.[a-z]{2,}/i.test(s);
+}
+
 function contactLine(b) {
   // Location first, then phone, email, profiles (LinkedIn/GitHub), portfolio — pipe-separated.
   // Everything but the location is a real clickable link (ADR 0032): phone → tel:,
@@ -60,9 +72,9 @@ function contactLine(b) {
   if (b.phone) parts.push(`<a href="tel:${esc(b.phone.replace(/[^+\d]/g, ''))}">${esc(b.phone)}</a>`);
   if (b.email) parts.push(`<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>`);
   for (const p of b.profiles || []) {
-    if (p.url) parts.push(link(p.url, p.network || undefined));
+    if (linkable(p.url)) parts.push(link(p.url, p.network || undefined));
   }
-  if (b.url) parts.push(link(b.url));
+  if (linkable(b.url)) parts.push(link(b.url));
   return parts.join('&nbsp;&nbsp;|&nbsp;&nbsp;');
 }
 

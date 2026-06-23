@@ -17,6 +17,15 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
     update({ basics: { ...d.basics, [key]: v } });
   }
 
+  // Profiles (LinkedIn, GitHub, …) live in basics.profiles — give them full edit control.
+  const profiles = d.basics.profiles ?? [];
+  function setProfiles(next: { network?: string; url?: string }[]) {
+    update({ basics: { ...d.basics, profiles: next } });
+  }
+  function setProfile(i: number, p: Partial<{ network?: string; url?: string }>) {
+    setProfiles(profiles.map((item, j) => (j === i ? { ...item, ...p } : item)));
+  }
+
   return (
     <div className="space-y-5">
       {/* Basics */}
@@ -27,9 +36,28 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
           <Input label="Email" value={d.basics.email} onChange={(v) => setBasics('email', v)} />
           <Input label="Phone" value={d.basics.phone} onChange={(v) => setBasics('phone', v)} />
           <Input label="Location" value={d.basics.location} onChange={(v) => setBasics('location', v)} placeholder="Boston, MA" />
-          <Input label="Website / portfolio" value={d.basics.url} onChange={(v) => setBasics('url', v)} />
+          <Input label="Portfolio / website" value={d.basics.url} onChange={(v) => setBasics('url', v)} placeholder="yoursite.com" />
         </div>
         <TextArea label="Summary" value={d.basics.summary} onChange={(v) => setBasics('summary', v)} rows={3} />
+      </Section>
+
+      {/* Links & profiles — LinkedIn, GitHub, etc. (each renders as a clickable link in the PDF) */}
+      <Section title="Links & profiles" onAdd={() => setProfiles([...profiles, { network: '', url: '' }])} addLabel="Add link">
+        {profiles.length === 0 && <Empty>No links yet — add LinkedIn, GitHub, or any profile URL.</Empty>}
+        {profiles.map((p, i) => (
+          <Row key={i} onRemove={() => setProfiles(profiles.filter((_, j) => j !== i))}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input label="Label" value={p.network} onChange={(v) => setProfile(i, { network: v })} placeholder="LinkedIn" />
+              <Input label="URL" value={p.url} onChange={(v) => setProfile(i, { url: v })} placeholder="linkedin.com/in/you" />
+            </div>
+          </Row>
+        ))}
+        {profiles.length === 0 && (
+          <div className="flex flex-wrap gap-2">
+            <QuickAdd label="+ LinkedIn" onClick={() => setProfiles([...profiles, { network: 'LinkedIn', url: '' }])} />
+            <QuickAdd label="+ GitHub" onClick={() => setProfiles([...profiles, { network: 'GitHub', url: '' }])} />
+          </div>
+        )}
       </Section>
 
       {/* Skills */}
@@ -156,6 +184,17 @@ function Row({ children, onRemove }: { children: React.ReactNode; onRemove: () =
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-[12px] text-slate-muted italic">{children}</p>;
+}
+
+function QuickAdd({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-2.5 py-1 text-[12px] text-sky bg-sky/10 border border-sky/25 hover:bg-sky/20 rounded-md transition-colors"
+    >
+      {label}
+    </button>
+  );
 }
 
 function Input({ label, value, onChange, placeholder }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string }) {
