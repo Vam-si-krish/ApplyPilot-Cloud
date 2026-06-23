@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
@@ -21,6 +21,9 @@ const STATUS_STYLE: Record<ApplicationStatus, string> = {
   failed: 'bg-rose/10 border-rose/30 text-rose',
 };
 
+// Status tabs for the Tailor & Apply list (parity with the Jobs tab's status filter).
+const STATUS_FILTERS: Array<'all' | ApplicationStatus> = ['all', 'queued', 'generating', 'ready', 'applied', 'failed'];
+
 export default function ApplicationsPage() {
   const [view, setView] = useState<View>('list');
   const [apps, setApps] = useState<ApplicationWithJob[]>([]);
@@ -28,6 +31,11 @@ export default function ApplicationsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [genId, setGenId] = useState<string | null>(null); // application currently generating
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Filters (parity with the Jobs tab — the subset that maps to applications).
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ApplicationStatus>('all');
+  const [hideApplied, setHideApplied] = useState(true);
 
   // Local editable draft of the expanded application's tailored résumé.
   const [draft, setDraft] = useState<ResumeDoc | null>(null);
@@ -106,6 +114,11 @@ export default function ApplicationsPage() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
+  // Clear the selection whenever the filters change (the visible rows change).
+  useEffect(() => {
+    setSelected(new Set());
+  }, [search, statusFilter, hideApplied]);
+
   function toggleExpand(a: ApplicationWithJob) {
     if (expanded === a.id) {
       setExpanded(null);
@@ -131,6 +144,27 @@ export default function ApplicationsPage() {
     if (expanded === id) setExpanded(null);
     setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
     load(true);
+  }
+
+  // Bulk-delete every selected application — any row, including ones whose job was
+  // removed (those are exactly the clutter worth clearing). Mirrors the Jobs tab.
+  async function deleteSelected() {
+    const ids = [...selected];
+    if (ids.length === 0 || bulkBusy) return;
+    if (!confirm(`Remove the ${ids.length} selected application${ids.length === 1 ? '' : 's'}? This can't be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(ids.map((id) => fetch(`/api/applications/${id}`, { method: 'DELETE' })));
+      if (expanded && ids.includes(expanded)) setExpanded(null);
+      setSelected(new Set());
+      setMsg(`Removed ${ids.length} application${ids.length === 1 ? '' : 's'}.`);
+      load(true);
+    } catch {
+      setMsg('Could not remove the selected applications.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setMsg(null), 4000);
+    }
   }
 
   // Fetch a single application's current row from the list endpoint (used to poll
@@ -194,8 +228,23 @@ export default function ApplicationsPage() {
       return next;
     });
   }
-  const selectableIds = apps.filter((a) => a.job).map((a) => a.id);
+  // Visible (filtered) applications — the list, select-all, and bulk actions all
+  // operate on this set, not the full one. Mirrors the Jobs tab's filtering.
+  const q = search.trim().toLowerCase();
+  const filtered = apps.filter((a) => {
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    if (hideApplied && statusFilter !== 'applied' && a.status === 'applied') return false;
+    if (q) {
+      const hay = `${a.job?.title ?? ''} ${a.job?.company ?? ''} ${a.job?.location ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  // Any visible row can be selected (so job-removed clutter is bulk-deletable);
+  // Generate only acts on the ones that still have a job.
+  const selectableIds = filtered.map((a) => a.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const selectedGeneratable = [...selected].filter((id) => apps.find((a) => a.id === id)?.job).length;
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(selectableIds));
   }
@@ -461,7 +510,67 @@ export default function ApplicationsPage() {
         </div>
       ) : (
         <>
-        {/* Bulk-select toolbar — pick applications and generate all their résumés at once. */}
+        {/* Filters — search, status, hide applied (the Jobs-tab subset that maps here) */}
+        <div className="space-y-3 mb-4">
+          <div className="relative max-w-md">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search title, company, location…"
+              className="pl-8 pr-3 py-1.5 w-full bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 flex-wrap">
+              {STATUS_FILTERS.map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
+                    statusFilter === st
+                      ? st === 'applied'
+                        ? 'bg-emerald/10 text-emerald border-emerald/30'
+                        : 'bg-sky-glow text-sky border-sky/30'
+                      : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+            <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
+            <label
+              title="Hide applications you've already applied to"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+                hideApplied && statusFilter !== 'applied' ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+              } ${statusFilter === 'applied' ? 'opacity-40 pointer-events-none' : ''}`}
+            >
+              <input
+                type="checkbox"
+                checked={hideApplied && statusFilter !== 'applied'}
+                onChange={(e) => setHideApplied(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+              />
+              Hide applied
+            </label>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="bg-card border border-ink rounded-xl px-6 py-12 text-center">
+            <FileText size={20} className="mx-auto text-slate-muted mb-2" />
+            <p className="text-[13px] text-slate-text mb-1">No applications match these filters.</p>
+            <button
+              onClick={() => { setSearch(''); setStatusFilter('all'); setHideApplied(false); }}
+              className="text-[12px] text-sky hover:underline"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+        <>
+        {/* Bulk-select toolbar — pick applications and act on just those. */}
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           <label className="flex items-center gap-2 text-[12px] text-slate-muted cursor-pointer select-none">
             <input
@@ -484,16 +593,24 @@ export default function ApplicationsPage() {
           )}
           <button
             onClick={generateSelected}
-            disabled={bulkBusy || !!genId || selected.size === 0}
+            disabled={bulkBusy || !!genId || selectedGeneratable === 0}
             title="Generate a tailored résumé for every selected application"
             className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
           >
             {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {bulkBusy ? 'Generating…' : `Generate selected${selected.size > 0 ? ` (${selected.size})` : ''}`}
+            {bulkBusy ? 'Generating…' : `Generate selected${selectedGeneratable > 0 ? ` (${selectedGeneratable})` : ''}`}
+          </button>
+          <button
+            onClick={deleteSelected}
+            disabled={bulkBusy || selected.size === 0}
+            title="Remove the selected applications permanently"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+          >
+            <Trash2 size={13} /> Delete selected{selected.size > 0 ? ` (${selected.size})` : ''}
           </button>
         </div>
         <div className="bg-card border border-ink rounded-xl overflow-hidden divide-y divide-ink-subtle">
-          {apps.map((a) => {
+          {filtered.map((a) => {
             const job = a.job;
             const open = expanded === a.id;
             const generating = genId === a.id || a.status === 'generating';
@@ -504,8 +621,8 @@ export default function ApplicationsPage() {
                     type="checkbox"
                     checked={selected.has(a.id)}
                     onChange={() => toggleOne(a.id)}
-                    disabled={!a.job || bulkBusy}
-                    title={a.job ? 'Select for bulk generate' : 'Job removed — cannot generate'}
+                    disabled={bulkBusy}
+                    title={a.job ? 'Select' : 'Select (job removed — can still delete)'}
                     className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 disabled:opacity-30"
                   />
                   <button onClick={() => toggleExpand(a)} className="text-slate-muted hover:text-sky shrink-0">
@@ -643,6 +760,8 @@ export default function ApplicationsPage() {
             );
           })}
         </div>
+        </>
+        )}
         </>
       )}
 

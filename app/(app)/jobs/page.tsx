@@ -104,11 +104,22 @@ export default function JobsPage() {
   const pendingApplyJob = useRef<Job | null>(null);
   const [applyDialog, setApplyDialog] = useState<Job | null>(null);
 
-  // Fetch the runs list once on mount.
+  // Fetch the runs list once on mount, and default the selector to the most recent
+  // run *if* it happened within the last 24h — so the page opens on the latest fetch
+  // instead of "All runs". An older latest run leaves it on "All runs". (The dropdown
+  // itself is unchanged; this only sets the initial selection.)
   useEffect(() => {
     fetch('/api/runs')
       .then((r) => (r.ok ? r.json() : { runs: [] }))
-      .then((d) => setRuns(d.runs ?? []))
+      .then((d) => {
+        const list: RunSummary[] = d.runs ?? [];
+        setRuns(list);
+        if (list.length > 0) {
+          const latest = list.reduce((a, b) => (new Date(a.started_at) >= new Date(b.started_at) ? a : b));
+          const ageMs = Date.now() - new Date(latest.started_at).getTime();
+          if (ageMs <= 24 * 60 * 60 * 1000) setSelectedRunIds([latest.id]);
+        }
+      })
       .catch(() => {});
   }, []);
 
