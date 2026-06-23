@@ -11,13 +11,22 @@ const PROVIDERS = [
   { id: 'anthropic', label: 'Anthropic Claude', model: 'claude-sonnet-4-6' },
 ];
 
-// Known models per provider (datalist suggestions; the field stays editable).
+// Known models per provider — shown as dropdown options. A "Custom…" option keeps the
+// field open-ended so any other model id still works.
 const MODELS: Record<string, string[]> = {
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'],
   anthropic: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8'],
   gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
 };
+// Friendly labels for the dropdown (falls back to the raw id for anything unlisted).
+const MODEL_LABELS: Record<string, string> = {
+  'gpt-4o-mini': 'GPT-4o mini', 'gpt-4o': 'GPT-4o', 'gpt-4.1-mini': 'GPT-4.1 mini', 'gpt-4.1': 'GPT-4.1',
+  'claude-haiku-4-5-20251001': 'Claude Haiku 4.5', 'claude-sonnet-4-6': 'Claude Sonnet 4.6', 'claude-opus-4-8': 'Claude Opus 4.8',
+  'gemini-2.0-flash': 'Gemini 2.0 Flash', 'gemini-2.5-flash': 'Gemini 2.5 Flash', 'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'deepseek-chat': 'DeepSeek Chat', 'deepseek-reasoner': 'DeepSeek Reasoner',
+};
+const CUSTOM_MODEL = '__custom__';
 const defaultModel = (provider: string) => MODELS[provider]?.[0] ?? '';
 
 const ACTORS = [
@@ -964,8 +973,9 @@ function SkillsEditor({ skills, onChange }: { skills: string[]; onChange: (v: st
   );
 }
 
-/** One task's provider + model (ADR 0025). Model is a free text field with
- *  per-provider suggestions via a datalist, so any model name still works. */
+/** One task's provider + model (ADR 0025). Model is a dropdown of the provider's known
+ *  models (so you select instead of typing), plus a "Custom…" option that reveals a text
+ *  field — so any other model id still works. */
 function TaskModel({
   title,
   hint,
@@ -981,7 +991,10 @@ function TaskModel({
   onProvider: (v: string) => void;
   onModel: (v: string) => void;
 }) {
-  const listId = `models-${title.toLowerCase()}`;
+  const known = MODELS[provider] ?? [];
+  // A model that isn't one of the provider's known ids is a custom one — show the text
+  // field and keep the dropdown on "Custom…".
+  const isCustom = !known.includes(model);
   return (
     <div className="bg-raised border border-ink rounded-lg p-3.5">
       <p className="text-[13px] font-medium text-slate-text">{title}</p>
@@ -999,17 +1012,31 @@ function TaskModel({
         ))}
       </select>
       <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Model</p>
-      <input
-        list={listId}
-        value={model}
-        onChange={(e) => onModel(e.target.value)}
-        className="w-full bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono placeholder:text-slate-muted"
-      />
-      <datalist id={listId}>
-        {(MODELS[provider] ?? []).map((m) => (
-          <option key={m} value={m} />
+      <select
+        value={isCustom ? CUSTOM_MODEL : model}
+        onChange={(e) => {
+          const v = e.target.value;
+          // Picking "Custom…" clears the field so the text input opens ready to type.
+          onModel(v === CUSTOM_MODEL ? '' : v);
+        }}
+        className="w-full bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono"
+      >
+        {known.map((m) => (
+          <option key={m} value={m}>
+            {MODEL_LABELS[m] ?? m}
+          </option>
         ))}
-      </datalist>
+        <option value={CUSTOM_MODEL}>Custom…</option>
+      </select>
+      {isCustom && (
+        <input
+          value={model}
+          onChange={(e) => onModel(e.target.value)}
+          placeholder="Enter a model id (e.g. gpt-4.1-nano)"
+          autoFocus
+          className="w-full mt-2 bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono placeholder:text-slate-muted"
+        />
+      )}
     </div>
   );
 }
