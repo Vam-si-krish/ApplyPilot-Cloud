@@ -30,6 +30,7 @@ export default function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [genId, setGenId] = useState<string | null>(null); // application currently generating
+  const [genCoverId, setGenCoverId] = useState<string | null>(null); // application whose cover letter is generating
   const [msg, setMsg] = useState<string | null>(null);
 
   // Filters (parity with the Jobs tab — the subset that maps to applications).
@@ -417,6 +418,64 @@ export default function ApplicationsPage() {
     }
   }
 
+  // Download the cover-letter PDF via a signed URL with a proper filename (ADR 0035).
+  async function downloadCoverPdf(id: string) {
+    try {
+      const d = await fetch(`/api/applications/${id}/cover-letter/pdf`).then((r) => r.json());
+      if (!d.url) {
+        setMsg(d.error || 'No cover letter available.');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = d.url;
+      if (d.filename) a.download = d.filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      setMsg('Could not download the cover letter.');
+    }
+  }
+
+  // Generate a cover letter for one application: hand off to the worker (async), poll
+  // the row until the PDF lands (or it errors), then auto-download it (one-click flow).
+  async function generateCoverLetter(a: ApplicationWithJob) {
+    if (genCoverId || !a.job) return;
+    setGenCoverId(a.id);
+    setMsg('Writing your cover letter… this can take up to a minute.');
+    try {
+      const r = await fetch(`/api/applications/${a.id}/cover-letter`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMsg(`Cover letter failed: ${d.error || 'unknown error'}`);
+        return;
+      }
+      // Poll until the worker writes the PDF path or an error (cap ~3 min).
+      const deadline = Date.now() + 180_000;
+      let row: ApplicationWithJob | null = null;
+      while (Date.now() < deadline) {
+        await new Promise((res) => setTimeout(res, 2500));
+        row = await fetchApp(a.id).catch(() => null);
+        if (row && (row.cover_letter_pdf_path || row.cover_letter_error)) break;
+      }
+      if (row?.cover_letter_pdf_path) {
+        setMsg('Cover letter ready — downloading…');
+        await downloadCoverPdf(a.id);
+      } else if (row?.cover_letter_error) {
+        setMsg(`Cover letter failed: ${row.cover_letter_error}`);
+      } else {
+        setMsg('Still writing — try the Cover letter button again in a moment.');
+      }
+      load(true);
+    } catch {
+      setMsg('Cover letter failed.');
+    } finally {
+      setGenCoverId(null);
+      setTimeout(() => setMsg(null), 6000);
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
       <div className="mb-6">
@@ -697,6 +756,29 @@ export default function ApplicationsPage() {
                       <Download size={13} /> <span className="hidden sm:inline">PDF</span>
                     </button>
                   ) : null}
+                  {/* Cover letter — generate on demand, then download straight from the row (ADR 0035). */}
+                  {genCoverId === a.id ? (
+                    <span className="flex items-center gap-1 text-[11px] text-sky shrink-0" title="Writing cover letter…">
+                      <Loader2 size={12} className="animate-spin" /> <span className="hidden sm:inline">Cover…</span>
+                    </span>
+                  ) : a.cover_letter_pdf_path ? (
+                    <button
+                      onClick={() => downloadCoverPdf(a.id)}
+                      title="Download the cover letter PDF"
+                      className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-md transition-all shrink-0"
+                    >
+                      <FileText size={13} /> <span className="hidden sm:inline">Cover</span>
+                    </button>
+                  ) : a.job ? (
+                    <button
+                      onClick={() => generateCoverLetter(a)}
+                      disabled={!!genCoverId}
+                      title="Generate a cover letter for this job"
+                      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-slate-muted border border-ink hover:text-sky hover:border-sky/30 disabled:opacity-40 rounded-md transition-all shrink-0"
+                    >
+                      <FileText size={12} /> Cover letter
+                    </button>
+                  ) : null}
                   <span className="hidden md:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
                     <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
                   </span>
@@ -791,6 +873,35 @@ export default function ApplicationsPage() {
                         résumé for <span className="text-slate-text">{job?.title ?? 'this job'}</span>.{' '}
                         {' '}Make sure your <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> is set first.
                       </p>
+                    )}
+
+                    {/* Cover letter — independent of the tailored résumé; written from the
+                        base résumé + this job, then downloaded as a PDF (ADR 0035). */}
+                    {job && (
+                      <div className="mt-5 pt-4 border-t border-ink-subtle flex flex-wrap items-center gap-3">
+                        <span className="text-[12px] text-slate-muted">Cover letter:</span>
+                        <button
+                          onClick={() => generateCoverLetter(a)}
+                          disabled={genCoverId === a.id}
+                          title="Write a cover letter for this job from your base résumé, then download the PDF"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+                        >
+                          {genCoverId === a.id ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                          {genCoverId === a.id ? 'Writing…' : a.cover_letter_pdf_path ? 'Regenerate' : 'Generate cover letter'}
+                        </button>
+                        {a.cover_letter_pdf_path && (
+                          <button
+                            onClick={() => downloadCoverPdf(a.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-md transition-all"
+                          >
+                            <Download size={13} /> Download cover letter
+                          </button>
+                        )}
+                        {a.cover_letter_error && !a.cover_letter_pdf_path && (
+                          <span className="text-[11px] text-rose">{a.cover_letter_error}</span>
+                        )}
+                        <span className="text-[11px] text-slate-muted">One click writes the letter and downloads the PDF.</span>
+                      </div>
                     )}
                   </div>
                 )}

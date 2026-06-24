@@ -10,7 +10,7 @@
  */
 import puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
-import { renderHtml } from './templates.js';
+import { renderHtml, renderCoverLetterHtml } from './templates.js';
 
 // Scale bounds. base font = 10.5pt * scale, so floor 0.86 ≈ 9.0pt (readable floor).
 // Ceiling is 1.0 so the exact spec font sizes are used whenever the content fits a
@@ -35,6 +35,29 @@ export async function closeBrowser() {
   if (_browser) {
     await _browser.close().catch(() => {});
     _browser = null;
+  }
+}
+
+/**
+ * Render a cover letter (ADR 0035). A letter is naturally about a page, so there's no
+ * fit-to-one-page search — just print the HTML with comfortable 1in letter margins.
+ * @returns {Promise<Buffer>} PDF bytes.
+ */
+export async function renderCoverLetterPdf(text, basics = {}, job = {}, template = 'classic') {
+  const html = renderCoverLetterHtml(text, basics, job, template);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({
+      format: 'Letter',
+      printBackground: true,
+      preferCSSPageSize: false,
+      margin: { top: '1in', bottom: '1in', left: '1in', right: '1in' },
+    });
+    return Buffer.from(pdf);
+  } finally {
+    await page.close().catch(() => {});
   }
 }
 

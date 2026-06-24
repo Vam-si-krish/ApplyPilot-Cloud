@@ -249,3 +249,55 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
 }
 
 export const TEMPLATES = Object.keys(THEMES);
+
+/**
+ * Cover letter → a clean, ATS-readable one-page business letter (ADR 0035). Reuses the
+ * candidate's contact header (name + contact line), adds today's date and the company,
+ * then renders the LLM-written body (blank-line-separated paragraphs; single newlines
+ * become line breaks so "Sincerely," sits above the name). No auto-fit — a cover letter
+ * is naturally about a page; render.js prints it with letter margins.
+ */
+export function renderCoverLetterHtml(text, basics = {}, job = {}, template = 'classic') {
+  const theme = THEMES[template] || THEMES.classic;
+  const b = basics || {};
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const company = job && job.company ? esc(job.company) : '';
+  const paras = String(text || '')
+    .split(/\n\s*\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${esc(p).replace(/\n/g, '<br/>')}</p>`)
+    .join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root { --accent: ${theme.accent}; --rule: ${theme.rule}; --muted: ${theme.muted}; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+  a { color: inherit; text-decoration: none; }
+  body { font-family: ${theme.bodyFont}; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+  header { text-align: center; margin-bottom: 14pt; }
+  .name { font-family: ${theme.headFont}; font-size: 17pt; line-height: 20pt; font-weight: bold; color: var(--accent); }
+  .contact { font-size: 9.5pt; line-height: 13pt; color: #444; margin-top: 3pt; }
+  .rule { border-bottom: 0.8pt solid var(--rule); margin-bottom: 14pt; }
+  .meta { font-size: 10.5pt; line-height: 15pt; color: #1a1a1a; margin-bottom: 14pt; }
+  .meta .company { font-weight: bold; }
+  .body p { font-size: 10.8pt; line-height: 15.5pt; margin-bottom: 11pt; text-align: left; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="name">${esc(b.name || '')}</div>
+    <div class="contact">${contactLine(b)}</div>
+  </header>
+  <div class="rule"></div>
+  <div class="meta">
+    ${esc(date)}${company ? `<br/><span class="company">${company}</span>` : ''}
+  </div>
+  <div class="body">${paras}</div>
+</body>
+</html>`;
+}

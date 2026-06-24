@@ -18,8 +18,9 @@ import {
   updateApplication,
   uploadPdf,
 } from './supabase.js';
-import { renderResumeToOnePage, getBrowser, closeBrowser } from './render.js';
+import { renderResumeToOnePage, renderCoverLetterPdf, getBrowser, closeBrowser } from './render.js';
 import { makeClient, tailorResume, condenseResume } from './tailor.js';
+import { generateCoverLetter } from './coverLetter.js';
 
 const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
 
@@ -181,6 +182,63 @@ app.post('/tailor', async (req, res) => {
         const msg = e instanceof Error ? e.message : String(e);
         return updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
       });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!res.headersSent) res.status(500).json({ error: msg });
+  }
+});
+
+/**
+ * POST /cover-letter {id} → write a cover letter for an application: one LLM call on
+ * the TAILORING model to draft it from the base résumé + job, render it to a one-page
+ * PDF, upload it, and store cover_letter + cover_letter_pdf_path (ADR 0035). Same
+ * async-ack shape as /tailor (the LLM call exceeds Netlify's function ceiling): cheap
+ * preconditions are checked synchronously; then it responds 202 and finishes in the
+ * background while the UI polls the row for cover_letter_pdf_path / cover_letter_error.
+ */
+app.post('/cover-letter', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  const id = req.body && req.body.id;
+  if (!id || typeof id !== 'string') return res.status(400).json({ error: 'id required' });
+
+  try {
+    const appRow = await getApplicationWithJob(id);
+    if (!appRow) return res.status(404).json({ error: 'application not found' });
+    if (!appRow.job) return res.status(409).json({ error: 'the job for this application was removed' });
+
+    const base = await getBaseResume();
+    if (!base || !Array.isArray(base.work) || base.work.length === 0) {
+      return res.status(409).json({ error: 'No base résumé yet — build it under Applications → Base résumé first.' });
+    }
+
+    const settings = await getSettings();
+    const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
+    const model = (settings.tailor_model || settings.llm_model || '').trim();
+    if (!LLM_PROVIDERS.has(provider)) {
+      return res.status(409).json({ error: `Tailoring provider "${provider || '(unset)'}" is not a supported LLM provider.` });
+    }
+    const key = await getActiveApiKey(provider);
+    if (!key) {
+      return res.status(409).json({ error: `No active ${provider} API key — add one under Settings → AI tokens.` });
+    }
+
+    const job = appRow.job;
+    // All preconditions met — clear any prior error, ack, then do the slow work async.
+    await updateApplication(id, { cover_letter_error: null }).catch(() => {});
+    res.status(202).json({ ok: true });
+
+    const client = makeClient(provider, model, key);
+    (async () => {
+      const text = await generateCoverLetter(base, job, client);
+      const pdf = await renderCoverLetterPdf(text, base.basics || {}, job, appRow.template || 'classic');
+      const path = `${id}-cover.pdf`;
+      await uploadPdf(path, pdf);
+      await updateApplication(id, { cover_letter: text, cover_letter_pdf_path: path, cover_letter_error: null });
+    })().catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      return updateApplication(id, { cover_letter_error: msg }).catch(() => {});
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!res.headersSent) res.status(500).json({ error: msg });

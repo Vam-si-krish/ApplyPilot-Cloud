@@ -336,6 +336,10 @@ export interface Application {
   tailored_fit_score: number | null;
   tailored_score_note: string | null;
   pdf_path: string | null;
+  /** Cover letter (ADR 0035): generated text, its rendered PDF path, last error. */
+  cover_letter: string | null;
+  cover_letter_pdf_path: string | null;
+  cover_letter_error: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;
