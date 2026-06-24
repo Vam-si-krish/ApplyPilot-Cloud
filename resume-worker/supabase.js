@@ -2,12 +2,6 @@
 import { createClient } from '@supabase/supabase-js';
 import ws from 'ws';
 
-// Supabase's realtime client builds a WebSocket at construction even though the worker
-// never subscribes; on Node < 22 there's no native WebSocket and it throws
-// ("Node.js 20 detected without native WebSocket support"). Provide `ws` as the global
-// WebSocket on older Node — a no-op on Node 22+, where the native one already exists.
-if (!globalThis.WebSocket) globalThis.WebSocket = ws;
-
 const BUCKET = process.env.RESUMES_BUCKET || 'resumes';
 
 let _client = null;
@@ -16,7 +10,10 @@ function client() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-  _client = createClient(url, key, { auth: { persistSession: false } });
+  // Pass ws explicitly as the realtime transport — @supabase/realtime-js v2.108+ throws
+  // "Node.js 20 detected without native WebSocket support" on Node < 22 if no transport
+  // is provided (it no longer accepts a globalThis polyfill as a fallback).
+  _client = createClient(url, key, { auth: { persistSession: false }, realtime: { transport: ws } });
   return _client;
 }
 
