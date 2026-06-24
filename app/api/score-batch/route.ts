@@ -18,7 +18,7 @@ import { checkCronAuth } from '@/lib/auth';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import {
   getSettings,
-  getResumeText,
+  getScoringResumeText,
   getUnscoredBatch,
   countUnscored,
   getLatestRunningRun,
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, done: true });
   }
 
-  const resume = await getResumeText();
+  const resume = await getScoringResumeText();
   const client = await buildScoringClient(settings);
 
   const { scored, filtered, errors } = await scoreJobRows(batch, {

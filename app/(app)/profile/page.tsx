@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Save, CheckCircle } from 'lucide-react';
 import type { Profile } from '@/lib/types';
 
-type Tab = 'personal' | 'work' | 'skills' | 'resume';
+type Tab = 'personal' | 'work' | 'skills';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Form = any;
@@ -68,7 +68,6 @@ export default function ProfilePage() {
     { id: 'personal', label: 'Personal' },
     { id: 'work', label: 'Work Auth' },
     { id: 'skills', label: 'Skills' },
-    { id: 'resume', label: 'Resume' },
   ];
 
   return (
@@ -76,7 +75,10 @@ export default function ProfilePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Profile</h1>
-          <p className="text-slate-muted text-[13px] mt-0.5">Your application data — the resume text drives scoring</p>
+          <p className="text-slate-muted text-[13px] mt-0.5">
+            Extra application data for the Assistant. Your résumé lives in{' '}
+            <a href="/applications" className="text-sky hover:underline">Tailor &amp; Apply → Base résumé</a> and drives scoring, tailoring, and cover letters.
+          </p>
         </div>
         {saved && (
           <div className="flex items-center gap-1.5 text-[13px] text-emerald animate-fade-in">
@@ -155,21 +157,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {tab === 'resume' && (
-          <div className="space-y-4">
-            <div className="bg-card border border-ink rounded-xl p-5">
-              <p className="text-[12px] font-semibold text-slate-muted uppercase tracking-wider font-display mb-1">Resume Text</p>
-              <p className="text-slate-muted text-[12px] mb-3">Used by the AI scorer to rate each job. Paste your full resume as plain text.</p>
-              <textarea
-                value={form.resume_text ?? ''}
-                onChange={(e) => set('resume_text', e.target.value)}
-                rows={22}
-                className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-4 py-3 rounded-lg text-[12px] font-mono text-slate-text resize-y"
-              />
-            </div>
-            <SaveBtn onClick={save} loading={saving} />
-          </div>
-        )}
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ const ALLOWED = [
   'compensation',
   'work_authorization',
   'skills_boundary',
-  'resume_text',
+  // 'resume_text' retired (ADR 0036) — the structured base résumé is the single source.
   'resume_pdf_path',
 ] as const;
 

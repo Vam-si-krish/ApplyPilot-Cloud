@@ -1,6 +1,7 @@
 /** Server-side data access helpers over the service-role Supabase client. */
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
+import { resumeToText } from './resume';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
 
 // ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
@@ -125,6 +126,23 @@ export async function getResumeText(): Promise<string> {
   const { data, error } = await supabaseAdmin().from('profile').select('resume_text').eq('id', 1).single();
   if (error) throw new Error(`Failed to load resume: ${error.message}`);
   return (data?.resume_text as string) || '';
+}
+
+/**
+ * The résumé text used for SCORING (ADR 0036). The structured base résumé is the single
+ * source of truth: it's serialized to recruiter-readable text. Falls back to the legacy
+ * `resume_text` only when no base résumé exists yet (safety during transition).
+ */
+export async function getScoringResumeText(): Promise<string> {
+  const { data, error } = await supabaseAdmin()
+    .from('profile')
+    .select('base_resume, resume_text')
+    .eq('id', 1)
+    .single();
+  if (error) throw new Error(`Failed to load resume: ${error.message}`);
+  const base = (data?.base_resume as ResumeDoc | null) ?? null;
+  const text = base ? resumeToText(base).trim() : '';
+  return text || ((data?.resume_text as string) || '');
 }
 
 // ── Base résumé + Applications (ADR 0024) ────────────────────────────────────

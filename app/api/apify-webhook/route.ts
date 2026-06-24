@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
-import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getResumeText } from '@/lib/db';
+import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getScoringResumeText } from '@/lib/db';
 import { prefilterScores } from '@/lib/prefilter';
 import { triggerScoreBatch } from '@/lib/pipeline';
 
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     // Cheap, local résumé↔job match score (ADR 0008), computed once over this
     // batch. Stored on every row (even when the filter is off) for transparency;
     // /api/score-batch uses it to gate the LLM. Keyed by url since rows are new.
-    const resume = await getResumeText().catch(() => '');
+    const resume = await getScoringResumeText().catch(() => '');
     const scores = prefilterScores(
       resume,
       mapped.map((r) => ({ id: r.url, text: `${r.title ?? ''}\n${r.full_description ?? ''}` })),

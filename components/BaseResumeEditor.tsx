@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, Sparkles, AlertCircle } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle } from 'lucide-react';
 import ResumeFields from '@/components/ResumeFields';
 import type { ResumeDoc } from '@/lib/types';
 
 /**
- * Editable base résumé (ADR 0024). The source of truth that per-job tailoring
- * reframes. "Rebuild from résumé text" runs the one-time LLM parse of
- * profile.resume_text; the structured form (ResumeFields) is then hand-editable.
+ * Editable base résumé (ADR 0024) — the single source of truth (ADR 0036). This one
+ * structured résumé drives scoring, per-job tailoring, and cover letters; it's edited
+ * here and nowhere else.
  */
 
 function emptyDoc(): ResumeDoc {
@@ -20,7 +20,6 @@ export default function BaseResumeEditor() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,24 +31,6 @@ export default function BaseResumeEditor() {
   }, []);
 
   const d = doc ?? emptyDoc();
-
-  async function rebuild() {
-    if (doc && !confirm('Rebuild the base résumé from your résumé text? This replaces the structured résumé below (your résumé text under Profile is unchanged).')) return;
-    setParsing(true);
-    setError(null);
-    try {
-      const r = await fetch('/api/base-resume/parse', { method: 'POST' });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Parse failed');
-      setDoc(data.base_resume);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not parse the résumé.');
-    } finally {
-      setParsing(false);
-    }
-  }
 
   async function save() {
     setSaving(true);
@@ -80,21 +61,12 @@ export default function BaseResumeEditor() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[13px] text-slate-text font-medium">Base résumé</p>
-          <p className="text-slate-muted text-[12px]">
-            The structured source of truth tailoring reframes per job — never fabricated, always your real experience.
-          </p>
-        </div>
-        <button
-          onClick={rebuild}
-          disabled={parsing}
-          title="Use AI to parse your Profile → Résumé text into these fields (one-time structuring, verbatim)"
-          className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all"
-        >
-          <Sparkles size={14} /> {parsing ? 'Parsing…' : doc ? 'Rebuild from résumé text' : 'Build from résumé text'}
-        </button>
+      <div>
+        <p className="text-[13px] text-slate-text font-medium">Base résumé</p>
+        <p className="text-slate-muted text-[12px]">
+          Your one résumé — it drives scoring, per-job tailoring, and cover letters. Never fabricated, always your real
+          experience. Edit it here; this is the only place it lives.
+        </p>
       </div>
 
       {error && (
@@ -107,8 +79,8 @@ export default function BaseResumeEditor() {
         <div className="bg-card border border-ink rounded-xl px-6 py-10 text-center">
           <p className="text-[13px] text-slate-text mb-1">No base résumé yet</p>
           <p className="text-[12px] text-slate-muted max-w-md mx-auto">
-            Click <span className="text-violet-300">Build from résumé text</span> to structure your Profile résumé into editable
-            fields, or start filling them in below.
+            Fill in your details below and <span className="text-sky">Save</span> — this becomes the résumé used everywhere
+            (scoring, tailoring, cover letters).
           </p>
         </div>
       )}

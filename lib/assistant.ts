@@ -10,6 +10,7 @@
  * scoring — the frozen SCORE_PROMPT is untouched (CLAUDE.md invariant).
  */
 import type { ChatMessage } from './llm';
+import { resumeToText } from './resume';
 import type { Profile } from './types';
 
 export const ASSISTANT_SYSTEM_PROMPT = `You are **ApplyBuddy**, a job-application assistant for ONE specific applicant — the user you are chatting with. You help them fill out job applications and reply to recruiters by writing the exact text they should paste or send, AS the applicant, in the first person. You never say you are an AI and you never explain your reasoning inside the answer.
@@ -83,7 +84,11 @@ export function buildAssistantSystem(profile: Profile): ChatMessage {
   if (hasContent(profile.compensation)) facts.compensation = profile.compensation;
   if (hasContent(profile.work_authorization)) facts.work_authorization = profile.work_authorization;
   if (hasContent(profile.skills_boundary)) facts.skills_boundary = profile.skills_boundary;
-  if (profile.resume_text) facts.resume_text = profile.resume_text;
+  // Résumé comes from the single source of truth — the structured base résumé (ADR 0036),
+  // serialized to text. Fall back to the legacy resume_text only if no base résumé exists.
+  const resumeText = profile.base_resume ? resumeToText(profile.base_resume).trim() : '';
+  if (resumeText) facts.resume = resumeText;
+  else if (profile.resume_text) facts.resume_text = profile.resume_text;
 
   const content = ASSISTANT_SYSTEM_PROMPT.replace('{{PROFILE_JSON}}', () => JSON.stringify(facts, null, 2));
   return { role: 'system', content };

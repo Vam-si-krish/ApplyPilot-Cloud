@@ -11,7 +11,7 @@
  * keep chunks bounded (a hard cap guards against a single oversized request).
  */
 import { NextResponse } from 'next/server';
-import { getJobsByIds, getResumeText, getSettings } from '@/lib/db';
+import { getJobsByIds, getScoringResumeText, getSettings } from '@/lib/db';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 
 export const runtime = 'nodejs';
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, scored: 0, filtered: 0, skipped });
   }
 
-  const resume = await getResumeText();
+  const resume = await getScoringResumeText();
   const settings = await getSettings();
   const client = await buildScoringClient(settings);
 
