@@ -1,5 +1,12 @@
 /** Supabase access for the worker (service role — server-only). */
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
+
+// Supabase's realtime client builds a WebSocket at construction even though the worker
+// never subscribes; on Node < 22 there's no native WebSocket and it throws
+// ("Node.js 20 detected without native WebSocket support"). Provide `ws` as the global
+// WebSocket on older Node — a no-op on Node 22+, where the native one already exists.
+if (!globalThis.WebSocket) globalThis.WebSocket = ws;
 
 const BUCKET = process.env.RESUMES_BUCKET || 'resumes';
 
