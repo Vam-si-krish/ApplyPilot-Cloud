@@ -386,7 +386,7 @@ function lengthBudget(base) {
   );
 }
 
-export function buildTailorMessages(base, job, signals) {
+export function buildTailorMessages(base, job, signals, instructions = '') {
   const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
@@ -403,9 +403,15 @@ export function buildTailorMessages(base, job, signals) {
     `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(', ') : 'N/A'}\n` +
     `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(', ') : 'N/A'}\n` +
     `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}`;
+  // Optional user/recruiter instructions — high priority for EMPHASIS, ORDERING, and which
+  // experience to foreground, but still bound by every rule above (never fabricate to satisfy them).
+  const instr = String(instructions || '').trim();
+  const instrBlock = instr
+    ? `\n\nUSER INSTRUCTIONS (HIGH PRIORITY — the candidate's explicit asks, often relayed from the recruiter). Follow these for emphasis, ordering, and which skills/projects/experience to foreground and how to frame the summary. They do NOT relax the rules above: stay truthful and plausible, keep the length budget, and never invent employers, titles, dates, or education:\n${instr.slice(0, 2000)}`
+    : '';
   return [
     { role: 'system', content: TAILOR_PROMPT },
-    { role: 'user', content: [{ text: baseBlock, cache: true }, { text: jobBlock }] },
+    { role: 'user', content: [{ text: baseBlock, cache: true }, { text: jobBlock + instrBlock }] },
   ];
 }
 
@@ -522,11 +528,11 @@ function extractChangeNotes(json) {
  * résumé plus `changes` (added skills + the model's invented-point notes).
  * Throws on empty base / unparseable reply.
  */
-export async function tailorResume(base, job, signals, client) {
+export async function tailorResume(base, job, signals, client, instructions = '') {
   if (!base || base.work.length === 0) {
     throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
   }
-  const response = await client.chat(buildTailorMessages(base, job, signals), { maxTokens: 4000, temperature: 0.35 });
+  const response = await client.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 4000, temperature: 0.35 });
   const json = extractJsonObject(response);
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);

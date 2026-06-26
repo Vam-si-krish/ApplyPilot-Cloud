@@ -332,6 +332,8 @@ export interface Application {
   tailored_resume: ResumeDoc | null;
   /** What the AI added/embellished vs the base résumé (ADR 0026); null = none/old. */
   tailor_changes: TailorChanges | null;
+  /** Custom tailoring guidance for the AI (ADR 0037), e.g. a recruiter's ask. Null = none. */
+  tailor_instructions: string | null;
   /** Fit (0–10) of the TAILORED résumé to this job (ADR 0029); null = not scored yet. */
   tailored_fit_score: number | null;
   tailored_score_note: string | null;

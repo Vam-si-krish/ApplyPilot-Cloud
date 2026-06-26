@@ -166,7 +166,7 @@ app.post('/tailor', async (req, res) => {
     res.status(202).json({ ok: true, status: 'generating' });
 
     const client = makeClient(provider, model, key);
-    tailorResume(base, job, signals, client)
+    tailorResume(base, job, signals, client, appRow.tailor_instructions || '')
       .then(({ resume, changes }) =>
         // Clear any stale tailored score — the app re-scores the new résumé (ADR 0029).
         updateApplication(id, {

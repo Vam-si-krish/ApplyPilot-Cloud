@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 const STATUSES: ApplicationStatus[] = ['queued', 'generating', 'ready', 'applied', 'failed'];
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  let body: { status?: unknown; applied_at?: unknown; tailored_resume?: unknown; template?: unknown };
+  let body: { status?: unknown; applied_at?: unknown; tailored_resume?: unknown; template?: unknown; tailor_instructions?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -29,6 +29,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     patch.applied_at = body.applied_at === null ? null : typeof body.applied_at === 'string' ? body.applied_at : null;
   }
   if (typeof body.template === 'string') patch.template = body.template;
+  if ('tailor_instructions' in body) {
+    patch.tailor_instructions =
+      typeof body.tailor_instructions === 'string' ? body.tailor_instructions.slice(0, 2000) : null;
+  }
   if ('tailored_resume' in body) {
     patch.tailored_resume = body.tailored_resume == null ? null : normalizeResume(body.tailored_resume);
   }

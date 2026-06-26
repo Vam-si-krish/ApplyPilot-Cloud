@@ -40,6 +40,9 @@ export default function ApplicationsPage() {
 
   // Local editable draft of the expanded application's tailored résumé.
   const [draft, setDraft] = useState<ResumeDoc | null>(null);
+  // Custom tailoring instructions for the expanded app (ADR 0037) — extra guidance the
+  // AI applies on top of the job description (e.g. a recruiter's ask). Seeded on expand.
+  const [instructions, setInstructions] = useState('');
   const [savingDraft, setSavingDraft] = useState(false);
   const [rendering, setRendering] = useState<string | null>(null); // application currently rendering a PDF
   const [scoringTailored, setScoringTailored] = useState<string | null>(null); // application whose tailored résumé is being scored
@@ -125,9 +128,11 @@ export default function ApplicationsPage() {
     if (expanded === a.id) {
       setExpanded(null);
       setDraft(null);
+      setInstructions('');
     } else {
       setExpanded(a.id);
       setDraft(a.tailored_resume ? structuredClone(a.tailored_resume) : null);
+      setInstructions(a.tailor_instructions ?? '');
     }
   }
 
@@ -181,6 +186,15 @@ export default function ApplicationsPage() {
     setGenId(a.id);
     setMsg('Generating tailored résumé… this can take up to a minute.');
     try {
+      // If this app is open, persist the latest custom instructions first so the worker
+      // (which reads them from the row) tailors with them. No-op when unchanged/empty.
+      if (expanded === a.id) {
+        await fetch(`/api/applications/${a.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tailor_instructions: instructions }),
+        }).catch(() => {});
+      }
       // The generate route hands off to the worker and returns 202 immediately;
       // the worker writes the result to the row, so we poll the row for status.
       const r = await fetch(`/api/applications/${a.id}/generate`, { method: 'POST' });
@@ -808,14 +822,34 @@ export default function ApplicationsPage() {
                         <AlertCircle size={14} className="mt-0.5 shrink-0" /> {a.error}
                       </div>
                     )}
-                    {/* Mobile generate button (the row one is hidden on small screens) */}
-                    <button
-                      onClick={() => generate(a)}
-                      disabled={!!genId || bulkBusy || !job}
-                      className="sm:hidden mb-3 flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
-                    >
-                      <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate résumé' : 'Generate résumé'}
-                    </button>
+                    {/* Custom instructions — extra guidance for the AI on top of the job
+                        description (e.g. a recruiter's ask). Persisted on the row; applied on
+                        the next Generate. This is also the generate control on small screens. */}
+                    <div className="mb-4">
+                      <label className="block text-[12px] font-medium text-slate-text mb-1.5">
+                        Custom instructions for the AI <span className="text-slate-muted font-normal">— optional</span>
+                      </label>
+                      <textarea
+                        value={instructions}
+                        onChange={(e) => setInstructions(e.target.value)}
+                        placeholder="e.g. Emphasize my Angular experience over React. Lead with the payments platform. Foreground Docker and CI/CD."
+                        rows={3}
+                        className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[12px] text-slate-text resize-y placeholder:text-slate-muted/60"
+                      />
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <button
+                          onClick={() => generate(a)}
+                          disabled={!!genId || bulkBusy || !job}
+                          title="Generate the tailored résumé using the job description plus your instructions above"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+                        >
+                          <Sparkles size={13} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate with instructions' : 'Generate with instructions'}
+                        </button>
+                        <span className="text-[11px] text-slate-muted">
+                          The AI already has the job description — these notes tell it what to emphasize. It stays truthful (no fabrication).
+                        </span>
+                      </div>
+                    </div>
 
                     {draft ? (
                       <>
