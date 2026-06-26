@@ -50,6 +50,15 @@ export async function GET(req: Request) {
   if (applied === 'true') q = q.not('applied_at', 'is', null);
   // Keep jobs you've already applied to out of the working list (they live under the Applied tab).
   if (url.searchParams.get('excludeApplied') === 'true') q = q.is('applied_at', null);
+  // Keep jobs already queued for tailoring out of the working list — once you "Add to
+  // Applications" they live under Tailor & Apply, so they shouldn't linger here too.
+  // Anti-join: pull the job_ids that already have an application row and exclude them.
+  if (url.searchParams.get('excludeInApplications') === 'true') {
+    const { data: appRows, error: appErr } = await supabaseAdmin().from('applications').select('job_id');
+    if (appErr) return NextResponse.json({ error: appErr.message }, { status: 500 });
+    const inApp = (appRows ?? []).map((r) => (r as { job_id: string | null }).job_id).filter((x): x is string => !!x);
+    if (inApp.length > 0) q = q.not('id', 'in', `(${inApp.join(',')})`);
+  }
   // Optionally hide jobs you opened but didn't apply to (clicked_at set, not yet applied).
   if (url.searchParams.get('excludeOpened') === 'true') q = q.or('clicked_at.is.null,applied_at.not.is.null');
   // 'opened' = link clicked but not yet marked applied (where the user left off).

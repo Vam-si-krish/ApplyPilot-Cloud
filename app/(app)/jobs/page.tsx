@@ -80,6 +80,7 @@ export default function JobsPage() {
   const [limit, setLimit] = useState(300); // page size; "Load more" raises it
   const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
+  const [hideInApplications, setHideInApplications] = useState(true); // jobs already queued for tailoring live under Tailor & Apply
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -172,10 +173,11 @@ export default function JobsPage() {
     if (employmentType) p.set('employmentType', employmentType);
     if (hideApplied && status !== 'applied') p.set('excludeApplied', 'true');
     if (hideOpened && status !== 'opened') p.set('excludeOpened', 'true');
+    if (hideInApplications) p.set('excludeInApplications', 'true');
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     return p;
-  }, [search, minScore, maxScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, selectedRunIds]);
+  }, [search, minScore, maxScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -258,6 +260,7 @@ export default function JobsPage() {
     setEasyApply(null);
     setHideApplied(true);
     setHideOpened(false);
+    setHideInApplications(true);
     setSelectedRunIds([]);
   }
 
@@ -469,6 +472,8 @@ export default function JobsPage() {
       const dupes = ids.length - added;
       setBulkMsg(`Added ${added} to Applications${dupes > 0 ? ` (${dupes} already there)` : ''}.`);
       setSelected(new Set());
+      // They now live under Tailor & Apply — drop them out of this list (when hidden).
+      if (hideInApplications) load();
     } catch {
       setBulkMsg('Could not add to Applications.');
     } finally {
@@ -761,6 +766,21 @@ export default function JobsPage() {
             Hide opened
           </label>
 
+          <label
+            title="Hide jobs you've already added to Applications (they live under Tailor & Apply)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+              hideInApplications ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={hideInApplications}
+              onChange={(e) => setHideInApplications(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+            />
+            Hide in Applications
+          </label>
+
           <button onClick={resetFilters} className="ml-1 text-[12px] text-slate-muted hover:text-sky underline">
             Reset
           </button>
@@ -784,6 +804,7 @@ export default function JobsPage() {
           if (easyApply !== null) chips.push({ key: 'ea', label: easyApply ? 'Easy Apply' : 'External', clear: () => setEasyApply(null) });
           if (hideApplied && status !== 'applied') chips.push({ key: 'ha', label: 'Hiding applied', clear: () => setHideApplied(false) });
           if (hideOpened && status !== 'opened') chips.push({ key: 'ho', label: 'Hiding opened', clear: () => setHideOpened(false) });
+          if (hideInApplications) chips.push({ key: 'hia', label: 'Hiding in Applications', clear: () => setHideInApplications(false) });
           if (selectedRunIds.length) chips.push({ key: 'ru', label: `${selectedRunIds.length} run${selectedRunIds.length > 1 ? 's' : ''}`, clear: () => setSelectedRunIds([]) });
           if (chips.length === 0) return null;
           return (
