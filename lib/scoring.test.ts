@@ -23,7 +23,7 @@ describe('parseScoreResponse', () => {
         'SCORE: 7',
         'EMPLOYMENT: contract',
         'SENIORITY: strong_fit',
-        'BREAKDOWN: skills=32 experience=20 domain=15 bonus=7 logistics=4',
+        'BREAKDOWN: skills=50 domain=20 experience=12',
         'KEYWORDS: React, Node',
         'MISSING: Kubernetes, GraphQL',
         'NOTE: Solid.',
@@ -32,14 +32,14 @@ describe('parseScoreResponse', () => {
     );
     expect(r.employment_type).toBe('contract');
     expect(r.seniority).toBe('strong_fit');
-    expect(r.breakdown).toEqual({ skills: 32, experience: 20, domain: 15, bonus: 7, logistics: 4 });
+    expect(r.breakdown).toEqual({ skills: 50, domain: 20, experience: 12 });
     expect(r.missing).toBe('Kubernetes, GraphQL');
   });
 
   it('treats MISSING: none as no gaps and clamps over-range sub-scores', () => {
-    const r = parseScoreResponse('SCORE: 9\nBREAKDOWN: skills=99 experience=0 domain=0 bonus=0 logistics=0\nMISSING: none');
+    const r = parseScoreResponse('SCORE: 9\nBREAKDOWN: skills=99 domain=0 experience=0\nMISSING: none');
     expect(r.missing).toBe('');
-    expect(r.breakdown?.skills).toBe(40); // clamped to the dimension max
+    expect(r.breakdown?.skills).toBe(60); // clamped to the dimension max (0–60)
   });
 
   it('leaves v2 fields null on an old-style response', () => {

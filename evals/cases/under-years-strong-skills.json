@@ -1,0 +1,12 @@
+{
+  "name": "under-years-strong-skills",
+  "description": "Strong matching stack but a couple of years under the posting's stated years (6 yrs evidenced vs '8+ years'). A years shortfall alone must NOT trigger the must-have cap (≤4) — the candidate has the core skills and would plausibly be shortlisted (ADR 0038). The scorer must also not fabricate that the candidate has 8+ years.",
+  "resume": "Marcus Lee — Senior Frontend Engineer. 6 years building production React + TypeScript single-page apps. Owned a customer-facing dashboard end to end, led a Context API + Redux state overhaul, set up Jest/React Testing Library coverage, and shipped responsive, accessible UI with Tailwind. Comfortable with Next.js and CI/CD.",
+  "job": {
+    "title": "Senior React UI/UX Developer",
+    "company": "Sunrise Apps",
+    "location": "Remote (US)",
+    "full_description": "Seeking a Senior React UI/UX Developer with 8+ years of frontend development experience. Advanced React.js (Hooks, Context API, Redux), strong TypeScript, HTML5/CSS3, responsive design, Tailwind, and automated testing required. You'll build scalable, high-performance web apps and translate designs into great UX. Nice to have: Next.js, accessibility (WCAG), Agile."
+  },
+  "expect": { "minScore": 5, "maxScore": 9 }
+}

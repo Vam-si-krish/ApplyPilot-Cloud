@@ -65,13 +65,18 @@ export interface ScorableJob {
 /** Role employment type, detected by the scorer (ADR 0022). */
 export type EmploymentType = 'full_time' | 'contract' | 'internship' | 'unknown';
 
-/** Per-dimension sub-scores from the weighted rubric (ADR 0022). */
+/**
+ * Per-dimension sub-scores from the weighted rubric. Three dimensions as of ADR 0038:
+ * skills (0–60), role/domain relevance (0–25), experience & seniority (0–15).
+ * `bonus`/`logistics` are LEGACY fields — present only on jobs scored under the old
+ * five-dimension rubric (ADR 0022); render-only, never produced by the current scorer.
+ */
 export interface ScoreBreakdown {
-  skills: number; // 0–40
-  experience: number; // 0–25
-  domain: number; // 0–20
-  bonus: number; // 0–10
-  logistics: number; // 0–5
+  skills: number; // 0–60
+  domain: number; // 0–25 (role relevance)
+  experience: number; // 0–15
+  bonus?: number; // legacy (ADR 0022): 0–10
+  logistics?: number; // legacy (ADR 0022): 0–5
 }
 
 /** What's persisted in jobs.score_breakdown — the sub-scores plus missing must-haves + seniority. */
@@ -153,6 +158,10 @@ export interface Settings {
   auto_assess_enabled: boolean;
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */
   auto_assess_min_score: number;
+  /** Safety gate (ADR 0039): when true, the manual "Score selected" action RE-scores
+   *  already-scored jobs (overwrites). Default false → it only scores unscored ones, so a
+   *  stray click can't re-score. Flip on, re-score, flip off. */
+  allow_rescore: boolean;
   resume_worker_url: string | null;
   /** Shared Bearer secret for the worker (ADR 0027). Server-only; the settings GET
    *  masks it. Falls back to the RESUME_WORKER_SECRET env var when unset. */

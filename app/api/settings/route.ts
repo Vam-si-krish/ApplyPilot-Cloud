@@ -87,6 +87,7 @@ export async function PUT(req: Request) {
   if (Number.isFinite(Number(body.auto_assess_min_score))) {
     patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));
   }
+  if (typeof body.allow_rescore === 'boolean') patch.allow_rescore = body.allow_rescore;
   if (typeof body.resume_worker_url === 'string') {
     patch.resume_worker_url = body.resume_worker_url.trim();
   }

@@ -34,6 +34,7 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     fetch_mode: 'url',
     auto_assess_enabled: true,
     auto_assess_min_score: 6,
+    allow_rescore: false,
     updated_at: '2026-06-18T00:00:00Z',
     ...over,
   };

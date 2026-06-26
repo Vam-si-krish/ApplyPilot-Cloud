@@ -4,8 +4,10 @@
  * Session-gated (not in middleware's PUBLIC/SELF_AUTH paths). The explicit
  * selection IS the user's filter, so the pre-filter gate is bypassed here — a
  * chosen job is scored directly even if its match % is below the auto threshold.
- * Only jobs not yet AI-scored ('unscored' or previously 'filtered') are scored;
- * already-'scored'/'archived' ones are reported as skipped.
+ * By default only jobs not yet AI-scored ('unscored' or previously 'filtered') are
+ * scored; already-'scored'/'archived' ones are reported as skipped. The `allow_rescore`
+ * setting (ADR 0039) unlocks RE-scoring already-scored jobs — a deliberate, gated path
+ * so a stray click can't overwrite scores or burn LLM calls.
  *
  * The caller sends ids in small chunks; this scores all given ids in one pass, so
  * keep chunks bounded (a hard cap guards against a single oversized request).
@@ -33,8 +35,13 @@ export async function POST(req: Request) {
   }
 
   const rows = await getJobsByIds(ids);
-  // Score only jobs not already AI-scored; a chosen 'filtered' job is re-evaluated.
-  const toScore = rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+  const settings = await getSettings();
+  // Re-scoring already-scored jobs is gated behind a Settings toggle (ADR 0039) so a stray
+  // click can't overwrite scores or burn LLM calls. OFF (default): score only jobs with no
+  // AI score yet (a chosen 'filtered' job is re-evaluated). ON: re-score every picked job.
+  const toScore = settings.allow_rescore
+    ? rows
+    : rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
   const skipped = rows.length - toScore.length;
 
   if (toScore.length === 0) {
@@ -42,7 +49,6 @@ export async function POST(req: Request) {
   }
 
   const resume = await getScoringResumeText();
-  const settings = await getSettings();
   const client = await buildScoringClient(settings);
 
   // prefilterThreshold: null → bypass the gate; the manual selection overrides it.

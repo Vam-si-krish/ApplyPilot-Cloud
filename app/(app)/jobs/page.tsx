@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
@@ -82,6 +82,7 @@ export default function JobsPage() {
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
   const [hideInApplications, setHideInApplications] = useState(true); // jobs already queued for tailoring live under Tailor & Apply
   const [showMoreFilters, setShowMoreFilters] = useState(false); // collapsible secondary refinements (declutters the bar)
+  const [allowRescore, setAllowRescore] = useState(false); // Settings gate (ADR 0039): when on, "Score selected" re-scores already-scored jobs
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -158,6 +159,16 @@ export default function JobsPage() {
     (hideApplied && status !== 'applied' ? 1 : 0) +
     (hideOpened && status !== 'opened' ? 1 : 0) +
     (hideInApplications ? 1 : 0);
+
+  // Reflect the re-scoring safety gate (ADR 0039): when it's on, "Score selected"
+  // overwrites existing scores — surface that so it's deliberate, and so the user
+  // remembers to switch it back off. Re-read on mount (Settings → Jobs remounts this).
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setAllowRescore(!!d.allow_rescore))
+      .catch(() => {});
+  }, []);
 
   // Shared filter params (everything except pagination), reused by the list load
   // and by "select all matching" (idsOnly).
@@ -551,6 +562,17 @@ export default function JobsPage() {
       {/* Live progress of the *automatic* scorer (daily run / webhook loop), if active. */}
       <ScoringPanel onActivity={() => { load(); refreshStats(); }} />
 
+      {/* Re-scoring safety gate is ON (ADR 0039) — make it visible so it's deliberate. */}
+      {allowRescore && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-[12px] text-amber-400">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>
+            Re-scoring is <strong>ON</strong> — “Score selected” will overwrite existing scores. Turn it off in{' '}
+            <Link href="/settings" className="underline hover:text-amber-300">Settings</Link> when you&apos;re done.
+          </span>
+        </div>
+      )}
+
       {/* The selection-based scoring / assessment progress toast is rendered globally by
           ProgressProvider so it stays pinned across tab switches. */}
 
@@ -899,10 +921,18 @@ export default function JobsPage() {
               <button
                 onClick={scoreSelected}
                 disabled={bulkBusy || bulkRunning}
-                title="AI-score just the selected jobs (skips the auto pre-filter)"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+                title={
+                  allowRescore
+                    ? 'Re-score the selected jobs — overwrites existing scores (re-scoring is ON in Settings)'
+                    : 'AI-score just the selected jobs (already-scored ones are skipped; skips the auto pre-filter)'
+                }
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border disabled:opacity-40 rounded-md transition-all ${
+                  allowRescore
+                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20'
+                    : 'text-sky bg-sky/10 border-sky/30 hover:bg-sky/20'
+                }`}
               >
-                <Sparkles size={13} /> Score selected ({selected.size})
+                <Sparkles size={13} /> {allowRescore ? 'Re-score' : 'Score'} selected ({selected.size})
               </button>
               <button
                 onClick={assessSelected}

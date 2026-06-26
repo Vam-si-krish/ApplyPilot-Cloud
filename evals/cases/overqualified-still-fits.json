@@ -1,0 +1,12 @@
+{
+  "name": "overqualified-still-fits",
+  "description": "A Staff/Principal engineer (12 yrs) vs a mid-level React role whose stack they clearly cover. Overqualification must NOT tank the score — the candidate can do the job and would plausibly be shortlisted (ADR 0038).",
+  "resume": "Priya Nair — Staff Frontend Engineer. 12 years building and leading large React + TypeScript web platforms. Architected a design system used by 60+ engineers, drove Next.js migrations, owned performance and accessibility, mentored senior engineers, set frontend technical direction across teams. Deep with Redux, React Query, Jest/Playwright, Webpack/Vite, CI/CD.",
+  "job": {
+    "title": "Frontend Engineer (Mid-level)",
+    "company": "BrightLabs",
+    "location": "Remote (US)",
+    "full_description": "We're hiring a Frontend Engineer to build features in our React/TypeScript web app. Requirements: 3+ years of React, solid JavaScript/TypeScript, comfortable with REST APIs and component-based UI, and writing tests. Nice to have: Next.js, design systems, performance work. You'll collaborate with product and design to ship user-facing features."
+  },
+  "expect": { "minScore": 6, "maxScore": 10 }
+}

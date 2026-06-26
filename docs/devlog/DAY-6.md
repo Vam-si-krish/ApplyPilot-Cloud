@@ -271,3 +271,50 @@ company + link optional. New `POST /api/applications/custom`. `/api/jobs` now ex
 `source='manual'` so manual jobs stay out of the scraped Jobs list. UI: "Add custom job" button +
 inline form on the Tailor & Apply tab. No migration (reuses existing columns). typecheck ✅ · build ✅
 (route `/api/applications/custom` in manifest). **App-side → needs a Netlify deploy to go live.**
+
+---
+
+## 2026-06-26 — UI consistency pass + Jobs/Dashboard rework
+Holistic review of everything shown to the user. (1) **Naming**: the user clicked "Add to
+Applications" on Jobs but landed in a section named "Tailor & Apply" (an inner tab was *also*
+"Applications"). Per the user's call, kept the section name **Tailor & Apply** and reworded the rest:
+Jobs button → **"Send to Tailor & Apply"**, toasts/tooltip/hide-filter follow, inner tab
+"Applications" → **"Queue"**, empty state → "Nothing queued yet". (2) **Past Jobs** day groups are now
+**collapsible** (most-recent day open, rest collapsed; expand/collapse-all; open state survives row
+patches). (3) **Jobs filter bar** decluttered: Search + Fit + Company stay up front, the rest fold into
+a remembered **"More filters"** disclosure with an active-count badge; chips still summarise everything.
+(4) Aligned the sidebar/dashboard stat label ("To score") and made Dashboard **Top Jobs** rows clickable
+(+ "View all →"). typecheck ✅ · build ✅ (all routes).
+
+---
+
+## 2026-06-26 — Scoring calibration: shortlisting lens (ADR 0038)
+Two live misjudgements on GPT-4o-mini: the scorer **fabricated** "8+ years of experience" (echoing the
+posting's required-years back as a candidate fact) and sometimes scored an **overqualified** candidate a
+**1**. The score is 100% prompt-driven (no code touches `seniority`/score), so recalibrated `SCORE_PROMPT`
+only: reframed the objective to *predict shortlisting / worth-applying*; hardened anti-fabrication (a
+posting requirement is NOT evidence about the candidate; Phase 2 establishes **evidenced years from the
+résumé only**; REASONING must state that figure and never claim an unshown bar); **overqualification is
+never a penalty**; **years are soft** (a ~2–3yr shortfall is a small deduction, never the `≤4` must-have
+cap); the cap is reserved for missing CORE skills / mandatory cert / Phase-1 blockers. Then, since the user
+**tailors every job they apply to**, collapsed the rubric **5 dimensions → 3** (Skills 60 / Role relevance 25 /
+Experience 15; dropped bonus + logistics) and made **skills tailoring-aware** (credit real-but-buried skills,
+never skills the candidate lacks; role relevance is the irrelevance guard). Touch points beyond the prompt:
+`BREAKDOWN` line, `parseBreakdown`, `ScoreBreakdown` type (bonus/logistics now optional legacy), `JobDetails`
+(3 rows new / 5 rows legacy back-compat for pre-0038 jobs), 2 parser tests. Same scorer powers the
+tailored-fit chip (ADR 0029), so it benefits too. one-call/error→0 + eval bands unchanged; added eval cases
+`overqualified-still-fits` (≥6) and `under-years-strong-skills` (≥5). Recommend bumping the **Scoring** model
+in Settings (GPT-4.1-mini / 4o / Gemini 2.5 Flash / Claude) — 4o-mini is the most anchor-prone tier.
+typecheck ✅ · tests ✅ (parser + eval structure). **App-side → needs a deploy to go live.**
+
+---
+
+## 2026-06-26 — Re-scoring safety gate (ADR 0039)
+The Jobs-tab "Score selected" used to silently **skip** already-scored jobs, so re-assessing a score was
+impossible — but also accident-proof. User wanted to be able to re-score *deliberately* without firing it by
+mistake. Added a `settings.allow_rescore` boolean (migration 0028, default false, applied to live DB). OFF
+(default) = unchanged (score only unscored/filtered). ON = `/api/score-selected` re-scores every picked job,
+overwriting. Settings → **Re-scoring** amber toggle (persists on Save). Jobs tab shows it's armed: amber
+banner + the bulk button flips **Score selected → Re-score selected** (amber); the page re-reads the flag on
+mount. Flow: enable + Save → Jobs → Re-score → turn back off. Daily auto-scorer untouched. typecheck ✅ ·
+build ✅. **App-side → needs a deploy to go live (DB migration already applied).**
