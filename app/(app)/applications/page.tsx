@@ -520,7 +520,7 @@ export default function ApplicationsPage() {
 
       <div className="flex gap-1 mb-5 border-b border-ink">
         {([
-          { id: 'list' as View, label: 'Applications' },
+          { id: 'list' as View, label: 'Queue' },
           { id: 'manual' as View, label: 'Quick Generate' },
           { id: 'base' as View, label: 'Base résumé' },
         ]).map((t) => (
@@ -609,9 +609,9 @@ export default function ApplicationsPage() {
       ) : apps.length === 0 ? (
         <div className="bg-card border border-ink rounded-xl px-6 py-14 text-center">
           <FileText size={22} className="mx-auto text-slate-muted mb-3" />
-          <h3 className="text-[14px] font-medium text-slate-text mb-1">No applications yet</h3>
+          <h3 className="text-[14px] font-medium text-slate-text mb-1">Nothing queued yet</h3>
           <p className="text-[13px] text-slate-muted max-w-md mx-auto mb-5">
-            On the Jobs tab, select the roles you want to apply to and use <span className="text-sky">Add to Applications</span>
+            On the Jobs tab, select the roles you want to apply to and use <span className="text-sky">Send to Tailor &amp; Apply</span>
             {' '}— or use <span className="text-sky">Add custom job</span> above to enter one yourself (e.g. from an email).
             They&apos;ll appear here, ready for a tailored résumé.
           </p>

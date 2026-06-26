@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
@@ -81,6 +81,7 @@ export default function JobsPage() {
   const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
   const [hideInApplications, setHideInApplications] = useState(true); // jobs already queued for tailoring live under Tailor & Apply
+  const [showMoreFilters, setShowMoreFilters] = useState(false); // collapsible secondary refinements (declutters the bar)
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -137,6 +138,26 @@ export default function JobsPage() {
   useEffect(() => {
     refreshStats();
   }, [refreshStats]);
+
+  // Remember whether the secondary "More filters" panel is expanded (default collapsed).
+  useEffect(() => {
+    setShowMoreFilters(localStorage.getItem('jobsMoreFilters') === '1');
+  }, []);
+  function toggleMoreFilters() {
+    setShowMoreFilters((v) => {
+      localStorage.setItem('jobsMoreFilters', v ? '0' : '1');
+      return !v;
+    });
+  }
+  // How many of the *secondary* refinements are currently constraining the list — shown
+  // as a badge on the toggle so a collapsed panel never hides an active filter silently.
+  const moreFilterCount =
+    (easyApply !== null ? 1 : 0) +
+    (minSkill ? 1 : 0) +
+    (employmentType ? 1 : 0) +
+    (hideApplied && status !== 'applied' ? 1 : 0) +
+    (hideOpened && status !== 'opened' ? 1 : 0) +
+    (hideInApplications ? 1 : 0);
 
   // Shared filter params (everything except pagination), reused by the list load
   // and by "select all matching" (idsOnly).
@@ -456,12 +477,12 @@ export default function JobsPage() {
     }
   }
 
-  // Queue the selected jobs into the Applications section (idempotent server-side).
+  // Queue the selected jobs into the Tailor & Apply section (idempotent server-side).
   async function addToApplications() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy) return;
     setBulkBusy(true);
-    setBulkMsg('Adding to Applications…');
+    setBulkMsg('Sending to Tailor & Apply…');
     try {
       const d = await fetch('/api/applications', {
         method: 'POST',
@@ -470,12 +491,12 @@ export default function JobsPage() {
       }).then((r) => r.json());
       const added = d.added ?? 0;
       const dupes = ids.length - added;
-      setBulkMsg(`Added ${added} to Applications${dupes > 0 ? ` (${dupes} already there)` : ''}.`);
+      setBulkMsg(`Sent ${added} to Tailor & Apply${dupes > 0 ? ` (${dupes} already there)` : ''}.`);
       setSelected(new Set());
       // They now live under Tailor & Apply — drop them out of this list (when hidden).
       if (hideInApplications) load();
     } catch {
-      setBulkMsg('Could not add to Applications.');
+      setBulkMsg('Could not send to Tailor & Apply.');
     } finally {
       setBulkBusy(false);
       setTimeout(() => setBulkMsg(null), 6000);
@@ -612,48 +633,20 @@ export default function JobsPage() {
         )}
       </div>
 
-      {/* Filters — search, then the primary status tabs, then grouped refinements */}
+      {/* Filters — search + Fit + Company stay up front; everything else folds into
+          "More filters" so the bar isn't a wall of dropdowns. Active refinements still
+          surface as chips below and as a count on the toggle. */}
       <div className="space-y-3 mb-5">
-        <div className="relative max-w-md">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search title, company, location…"
-            className="pl-8 pr-3 py-1.5 w-full bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
-          />
-        </div>
-
-        <div className="flex gap-1 flex-wrap">
-          {STATUSES.map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatus(st)}
-              title={STATUS_HELP[st]}
-              className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
-                status === st
-                  ? st === 'applied'
-                    ? 'bg-emerald/10 text-emerald border-emerald/30'
-                    : 'bg-sky-glow text-sky border-sky/30'
-                  : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
-        </div>
-
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={easyApply === null ? '' : easyApply ? 'easy' : 'external'}
-            onChange={(e) => setEasyApply(e.target.value === '' ? null : e.target.value === 'easy')}
-            title="Filter by how you apply"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
-          >
-            <option value="">Any apply type</option>
-            <option value="easy">Easy Apply</option>
-            <option value="external">External</option>
-          </select>
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search title, company, location…"
+              className="pl-8 pr-3 py-1.5 w-full bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
+            />
+          </div>
 
           {/* Fit-score RANGE — set a min and/or max so you can isolate any band (e.g. ≤ 5
               to find low-fit jobs to delete, or 7–7 for exactly 7), not just "≥ N". */}
@@ -685,6 +678,75 @@ export default function JobsPage() {
           </div>
 
           <select
+            value={companyTier}
+            onChange={(e) => setCompanyTier(e.target.value)}
+            title="Filter by AI company assessment"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="good,medium">Company: Good or Medium</option>
+            <option value="">Any company</option>
+            <option value="good">Company: Good</option>
+            <option value="medium">Company: Medium</option>
+            <option value="low">Company: Low</option>
+            <option value="unknown">Company: Unknown</option>
+            <option value="none">Company: Not assessed</option>
+          </select>
+
+          {/* Fold the secondary refinements away by default — a badge keeps any active
+              ones from hiding silently. */}
+          <button
+            type="button"
+            onClick={toggleMoreFilters}
+            title="Apply type, skill match, role type, and hide rules"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border transition-all ${
+              showMoreFilters || moreFilterCount > 0 ? 'bg-sky/10 border-sky/30 text-sky' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+            }`}
+          >
+            <SlidersHorizontal size={13} /> More filters
+            {moreFilterCount > 0 && (
+              <span className="px-1.5 py-px text-[10px] font-mono rounded bg-sky/20 text-sky">{moreFilterCount}</span>
+            )}
+            <ChevronDown size={13} className={`transition-transform ${showMoreFilters ? 'rotate-180' : ''}`} />
+          </button>
+
+          <button onClick={resetFilters} className="ml-auto text-[12px] text-slate-muted hover:text-sky underline">
+            Reset
+          </button>
+        </div>
+
+        <div className="flex gap-1 flex-wrap">
+          {STATUSES.map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatus(st)}
+              title={STATUS_HELP[st]}
+              className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
+                status === st
+                  ? st === 'applied'
+                    ? 'bg-emerald/10 text-emerald border-emerald/30'
+                    : 'bg-sky-glow text-sky border-sky/30'
+                  : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+
+        {showMoreFilters && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-card/40 border border-ink-subtle rounded-lg animate-fade-in">
+          <select
+            value={easyApply === null ? '' : easyApply ? 'easy' : 'external'}
+            onChange={(e) => setEasyApply(e.target.value === '' ? null : e.target.value === 'easy')}
+            title="Filter by how you apply"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any apply type</option>
+            <option value="easy">Easy Apply</option>
+            <option value="external">External</option>
+          </select>
+
+          <select
             value={minSkill}
             onChange={(e) => {
               const v = e.target.value;
@@ -705,21 +767,6 @@ export default function JobsPage() {
             <option value="34">Skill match ≥ 34%</option>
             <option value="67">Skill match ≥ 67%</option>
             <option value="100">Skill match = 100%</option>
-          </select>
-
-          <select
-            value={companyTier}
-            onChange={(e) => setCompanyTier(e.target.value)}
-            title="Filter by AI company assessment"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
-          >
-            <option value="good,medium">Company: Good or Medium</option>
-            <option value="">Any company</option>
-            <option value="good">Company: Good</option>
-            <option value="medium">Company: Medium</option>
-            <option value="low">Company: Low</option>
-            <option value="unknown">Company: Unknown</option>
-            <option value="none">Company: Not assessed</option>
           </select>
 
           <select
@@ -767,7 +814,7 @@ export default function JobsPage() {
           </label>
 
           <label
-            title="Hide jobs you've already added to Applications (they live under Tailor & Apply)"
+            title="Hide jobs you've already sent to Tailor & Apply"
             className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
               hideInApplications ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
             }`}
@@ -778,13 +825,10 @@ export default function JobsPage() {
               onChange={(e) => setHideInApplications(e.target.checked)}
               className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
             />
-            Hide in Applications
+            Hide in Tailor &amp; Apply
           </label>
-
-          <button onClick={resetFilters} className="ml-1 text-[12px] text-slate-muted hover:text-sky underline">
-            Reset
-          </button>
         </div>
+        )}
 
         {/* Active-filter summary: the whole combination at a glance, clear any one */}
         {(() => {
@@ -804,7 +848,7 @@ export default function JobsPage() {
           if (easyApply !== null) chips.push({ key: 'ea', label: easyApply ? 'Easy Apply' : 'External', clear: () => setEasyApply(null) });
           if (hideApplied && status !== 'applied') chips.push({ key: 'ha', label: 'Hiding applied', clear: () => setHideApplied(false) });
           if (hideOpened && status !== 'opened') chips.push({ key: 'ho', label: 'Hiding opened', clear: () => setHideOpened(false) });
-          if (hideInApplications) chips.push({ key: 'hia', label: 'Hiding in Applications', clear: () => setHideInApplications(false) });
+          if (hideInApplications) chips.push({ key: 'hia', label: 'Hiding in Tailor & Apply', clear: () => setHideInApplications(false) });
           if (selectedRunIds.length) chips.push({ key: 'ru', label: `${selectedRunIds.length} run${selectedRunIds.length > 1 ? 's' : ''}`, clear: () => setSelectedRunIds([]) });
           if (chips.length === 0) return null;
           return (
@@ -871,10 +915,10 @@ export default function JobsPage() {
               <button
                 onClick={addToApplications}
                 disabled={bulkBusy}
-                title="Add the selected jobs to Applications to prepare a tailored résumé"
+                title="Send the selected jobs to Tailor & Apply to prepare a tailored résumé"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
               >
-                <FileText size={13} /> Add to Applications ({selected.size})
+                <FileText size={13} /> Send to Tailor &amp; Apply ({selected.size})
               </button>
               <button
                 onClick={markAppliedSelected}

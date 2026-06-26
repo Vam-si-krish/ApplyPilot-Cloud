@@ -51,6 +51,10 @@ export default function PastJobsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Which day groups are open. Default: only the most recent day, so you don't have to
+  // scroll through every day to reach older ones. User toggles persist across reloads
+  // (e.g. shortlisting a row) as long as that day is still in the list.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +94,32 @@ export default function PastJobsPage() {
   }
 
   const groups = groupByDate(jobs);
+  const groupKeys = groups.map((g) => g.key).join('|');
+
+  // Keep open state coherent as the list changes: keep the user's open days that still
+  // exist, and if nothing's open (first load, or a fresh search) open the most recent day.
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = new Set<string>();
+      for (const g of groups) if (prev.has(g.key)) next.add(g.key);
+      if (next.size === 0 && groups.length > 0) next.add(groups[0].key);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupKeys]);
+
+  function toggleGroup(key: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+  const allOpen = groups.length > 0 && groups.every((g) => openGroups.has(g.key));
+  function toggleAll() {
+    setOpenGroups(allOpen ? new Set() : new Set(groups.map((g) => g.key)));
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
@@ -134,14 +164,31 @@ export default function PastJobsPage() {
       ) : groups.length === 0 ? (
         <div className="bg-card border border-ink rounded-xl px-5 py-10 text-center text-slate-muted text-[13px]">No past jobs match these filters.</div>
       ) : (
-        <div className="space-y-6">
-          {groups.map((group) => (
+        <div className="space-y-4">
+          {groups.length > 1 && (
+            <div className="flex justify-end -mb-1">
+              <button onClick={toggleAll} className="text-[12px] text-slate-muted hover:text-sky underline">
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </button>
+            </div>
+          )}
+          {groups.map((group) => {
+            const groupOpen = openGroups.has(group.key);
+            return (
             <div key={group.key}>
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-[13px] font-semibold text-slate-text font-display">{group.label}</h2>
+              <button
+                onClick={() => toggleGroup(group.key)}
+                className="w-full flex items-center gap-3 mb-2 text-left group/day"
+                aria-expanded={groupOpen}
+              >
+                <span className="text-slate-muted group-hover/day:text-sky transition-colors shrink-0">
+                  {groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                </span>
+                <h2 className="text-[13px] font-semibold text-slate-text font-display group-hover/day:text-sky transition-colors">{group.label}</h2>
                 <span className="text-[11px] text-slate-muted">{group.jobs.length} job{group.jobs.length > 1 ? 's' : ''}</span>
                 <div className="flex-1 h-px bg-ink-subtle" />
-              </div>
+              </button>
+              {groupOpen && (
               <div className="bg-card border border-ink rounded-xl overflow-hidden">
                 <div className="divide-y divide-ink-subtle">
                   {group.jobs.map((job) => {
@@ -195,8 +242,10 @@ export default function PastJobsPage() {
                   })}
                 </div>
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

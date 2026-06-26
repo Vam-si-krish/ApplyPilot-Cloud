@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { FileSearch, FileText, Star, AlarmClock, Play, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { FileSearch, FileText, Star, AlarmClock, Play, RefreshCw, ExternalLink, ArrowRight } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import ScoringPanel from '@/components/ScoringPanel';
 import type { Job, Run } from '@/lib/types';
@@ -56,7 +57,7 @@ export default function DashboardPage() {
     { label: 'Discovered', value: s?.total ?? 0, icon: FileSearch, color: 'sky' as const },
     { label: 'Scored', value: s?.scored ?? 0, icon: FileText, color: 'amber' as const },
     { label: 'Shortlisted', value: s?.shortlisted ?? 0, icon: Star, color: 'emerald' as const },
-    { label: 'Queued to score', value: s?.unscored ?? 0, icon: AlarmClock, color: 'sky' as const },
+    { label: 'To score', value: s?.unscored ?? 0, icon: AlarmClock, color: 'sky' as const },
   ];
 
   return (
@@ -139,8 +140,11 @@ export default function DashboardPage() {
       )}
 
       <div className="bg-card border border-ink rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-ink-subtle">
+        <div className="px-5 py-4 border-b border-ink-subtle flex items-center justify-between">
           <h2 className="font-display text-[13px] font-semibold text-slate-text uppercase tracking-wider">Top Jobs</h2>
+          <Link href="/jobs" className="flex items-center gap-1 text-[12px] text-sky hover:text-sky/80 transition-colors">
+            View all <ArrowRight size={12} />
+          </Link>
         </div>
         <div className="divide-y divide-ink-subtle">
           {jobs.length === 0 ? (
@@ -149,16 +153,24 @@ export default function DashboardPage() {
             </div>
           ) : (
             jobs.map((job) => (
-              <div key={job.id} className="flex items-center gap-4 px-5 py-3 hover:bg-raised transition-colors">
+              <a
+                key={job.id}
+                href={job.application_url || job.url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open posting"
+                className="group flex items-center gap-4 px-5 py-3 hover:bg-raised transition-colors"
+              >
                 <ScoreBadge score={job.fit_score} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-slate-text text-[13px] font-medium truncate">{job.title}</p>
-                  <p className="text-slate-muted text-[11px]">
+                  <p className="text-slate-text text-[13px] font-medium truncate group-hover:text-sky transition-colors">{job.title}</p>
+                  <p className="text-slate-muted text-[11px] truncate">
                     {job.company} · {job.location || 'Unknown'}
                   </p>
                 </div>
-                {job.is_shortlisted && <Star size={14} className="text-emerald" />}
-              </div>
+                {job.is_shortlisted && <Star size={14} className="text-emerald shrink-0" />}
+                <ExternalLink size={13} className="text-slate-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+              </a>
             ))
           )}
         </div>
