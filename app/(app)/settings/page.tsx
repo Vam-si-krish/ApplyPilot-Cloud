@@ -41,9 +41,19 @@ const KEYWORD_SUGGESTIONS = [
   'Software Engineer', 'Backend Engineer', 'Frontend Engineer', 'Full Stack Engineer',
   'Data Engineer', 'Machine Learning Engineer', 'DevOps Engineer', 'Platform Engineer',
 ];
-const LOCATION_SUGGESTIONS = [
-  'Boston, MA', 'Cambridge, MA', 'Worcester, MA', 'Providence, RI', 'Hartford, CT',
-  'Stamford, CT', 'New York, NY', 'Manchester, NH', 'Portland, ME', 'Remote, US', 'United States',
+// Location suggestions grouped by area around Boston (ADR 0040). The point is to surface
+// the quieter suburban tech belts (Route 128 / I-495 / North Shore) — where postings get
+// far fewer applicants than "Boston, MA" — alongside the obvious core. All are real
+// software/tech hubs (Waltham, Burlington, Natick/MathWorks, Westford, Marlborough, …) and
+// recognized LinkedIn locations. Click any to add it to your saved + selected locations.
+const LOCATION_SUGGESTION_GROUPS: { label: string; items: string[] }[] = [
+  { label: 'Boston core · most competition', items: ['Boston, MA', 'Cambridge, MA', 'Somerville, MA', 'Watertown, MA'] },
+  { label: 'Route 128 · inner suburbs', items: ['Waltham, MA', 'Newton, MA', 'Needham, MA', 'Burlington, MA', 'Woburn, MA', 'Lexington, MA', 'Bedford, MA', 'Quincy, MA', 'Dedham, MA'] },
+  { label: 'I-495 / MetroWest · quieter, less competition', items: ['Marlborough, MA', 'Westborough, MA', 'Natick, MA', 'Framingham, MA', 'Hopkinton, MA', 'Maynard, MA', 'Acton, MA', 'Hudson, MA'] },
+  { label: 'North & Merrimack Valley · quieter', items: ['Westford, MA', 'Chelmsford, MA', 'Billerica, MA', 'Wilmington, MA', 'Tewksbury, MA', 'Andover, MA', 'North Andover, MA', 'Lowell, MA', 'Peabody, MA', 'Danvers, MA'] },
+  { label: 'South of Boston', items: ['Braintree, MA', 'Canton, MA', 'Norwood, MA', 'Mansfield, MA', 'Foxborough, MA'] },
+  { label: 'Worcester & NH border', items: ['Worcester, MA', 'Shrewsbury, MA', 'Nashua, NH', 'Manchester, NH', 'Portsmouth, NH'] },
+  { label: 'Broader / remote', items: ['Providence, RI', 'Portland, ME', 'Hartford, CT', 'Stamford, CT', 'New York, NY', 'Remote, US', 'United States'] },
 ];
 const SKILL_SUGGESTIONS = [
   'React', 'TypeScript', 'JavaScript', 'Node.js', 'Next.js', 'Python', 'SQL', 'AWS', 'GraphQL', 'Docker',
@@ -181,7 +191,7 @@ export default function SettingsPage() {
           label="Locations"
           options={s.location_options ?? []}
           selected={s.locations}
-          suggestions={LOCATION_SUGGESTIONS}
+          suggestionGroups={LOCATION_SUGGESTION_GROUPS}
           placeholder="Add a location…"
           onToggle={(v) => patch({ locations: s.locations.includes(v) ? s.locations.filter((x) => x !== v) : [...s.locations, v] })}
           onAdd={(v) =>
@@ -1116,6 +1126,7 @@ function LibraryPicker({
   options,
   selected,
   suggestions = [],
+  suggestionGroups,
   placeholder,
   onToggle,
   onAdd,
@@ -1125,6 +1136,9 @@ function LibraryPicker({
   options: string[];
   selected: string[];
   suggestions?: string[];
+  /** Optional categorized suggestions (e.g. locations grouped by area). When given,
+   *  they replace the flat `suggestions` row with labeled groups. */
+  suggestionGroups?: { label: string; items: string[] }[];
   placeholder?: string;
   onToggle: (v: string) => void;
   onAdd: (v: string) => void;
@@ -1189,7 +1203,32 @@ function LibraryPicker({
         </button>
       </div>
 
-      {freshSuggestions.length > 0 && (
+      {/* Categorized suggestions (locations) — labeled groups so the quieter, lower-
+          competition areas are easy to spot. Falls back to the flat row otherwise. */}
+      {suggestionGroups ? (
+        <div className="mt-3 space-y-2.5">
+          {suggestionGroups.map((group) => {
+            const fresh = group.items.filter((it) => !options.includes(it));
+            if (fresh.length === 0) return null;
+            return (
+              <div key={group.label}>
+                <p className="text-[10px] text-slate-muted/80 uppercase tracking-wider mb-1">{group.label}</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {fresh.map((sug) => (
+                    <button
+                      key={sug}
+                      onClick={() => onAdd(sug)}
+                      className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-slate-muted border border-ink border-dashed hover:text-sky hover:border-sky/40 rounded-md transition-all"
+                    >
+                      <Plus size={10} /> {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : freshSuggestions.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
           <span className="text-[11px] text-slate-muted">Suggestions:</span>
           {freshSuggestions.map((sug) => (
@@ -1202,7 +1241,7 @@ function LibraryPicker({
             </button>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

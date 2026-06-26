@@ -318,3 +318,16 @@ overwriting. Settings → **Re-scoring** amber toggle (persists on Save). Jobs t
 banner + the bulk button flips **Score selected → Re-score selected** (amber); the page re-reads the flag on
 mount. Flow: enable + Save → Jobs → Re-score → turn back off. Daily auto-scorer untouched. typecheck ✅ ·
 build ✅. **App-side → needs a deploy to go live (DB migration already applied).**
+
+---
+
+## 2026-06-26 — Boston-area location suggestions, grouped by tech belt (ADR 0040)
+User's job-hunt strategy: target the quieter suburban tech hubs around Boston (Route 128 / I-495) where
+postings get fewer applicants than "Boston, MA". Replaced the flat 11-item `LOCATION_SUGGESTIONS` with
+`LOCATION_SUGGESTION_GROUPS` — ~45 real software/tech cities grouped by area (Boston core · Route 128 inner ·
+I-495/MetroWest *quieter* · North & Merrimack Valley *quieter* · South of Boston · Worcester & NH border ·
+Broader/remote), with the low-competition belts labeled. `LibraryPicker` got an optional `suggestionGroups`
+prop that renders labeled groups of add-chips (keywords/skills keep the flat row); clicking adds to
+saved+selected locations as before. No schema/pipeline change — pure seed suggestions; selected cities flow
+through the existing Apify/LinkedIn fetch. Validated the hubs (Waltham, Burlington, Natick/MathWorks,
+Westford, Marlborough, Woburn…) via research. typecheck ✅ · build ✅. **App-side → needs a deploy to go live.**
