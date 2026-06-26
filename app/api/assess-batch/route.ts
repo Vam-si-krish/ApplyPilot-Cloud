@@ -10,8 +10,7 @@
 import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { buildScoringClient } from '@/lib/scoreRunner';
-import { assessCompany } from '@/lib/companyCheck';
-import { supabaseAdmin } from '@/lib/supabase';
+import { assessCompanyRows } from '@/lib/companyCheck';
 import { getSettings, getUnassessedHighScoreBatch, countUnassessedHighScore } from '@/lib/db';
 import { ASSESS_BATCH_SIZE, triggerAssessBatch } from '@/lib/pipeline';
 
@@ -33,15 +32,7 @@ export async function POST(req: Request) {
 
   const client = await buildScoringClient(settings);
 
-  let assessed = 0;
-  for (const job of batch) {
-    const { tier, note } = await assessCompany(job, client);
-    const { error } = await supabaseAdmin()
-      .from('jobs')
-      .update({ company_tier: tier, company_tier_note: note })
-      .eq('id', job.id);
-    if (!error) assessed++;
-  }
+  const assessed = await assessCompanyRows(batch, client);
 
   const remaining = await countUnassessedHighScore(minScore);
   if (remaining > 0) {

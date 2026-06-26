@@ -9,6 +9,7 @@
  * and any parse/LLM failure yields 'unknown' — never a fabricated tier.
  */
 import { getClient, ChatMessage, LLMClient } from './llm';
+import { supabaseAdmin } from './supabase';
 import type { CompanyTier, Job } from './types';
 
 export interface CompanyAssessment {
@@ -87,4 +88,42 @@ export async function assessCompany(
   } catch (e) {
     return { tier: 'unknown', note: `assessment error: ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+/**
+ * How many companies to assess concurrently. It's exactly ONE LLM call per job and the
+ * calls are independent, so running them in parallel (instead of one-at-a-time) is a pure
+ * latency win with NO change to output. The LLM client backs off on 429/503, so a small
+ * pool is safe; tune via env. Mirrors SCORE_CONCURRENCY in scoreRunner.
+ */
+const ASSESS_CONCURRENCY = Math.max(1, Number(process.env.ASSESS_CONCURRENCY) || 8);
+
+/**
+ * Assess the companies for the given job rows (tier + note), returning how many were
+ * written. LLM calls run concurrently, bounded by ASSESS_CONCURRENCY; ordering doesn't
+ * matter since each row writes itself. Shared by /company-check (user-picked) and
+ * /assess-batch (auto).
+ */
+export async function assessCompanyRows(rows: Job[], client?: LLMClient): Promise<number> {
+  let assessed = 0;
+  async function processRow(job: Job): Promise<void> {
+    try {
+      const { tier, note } = await assessCompany(job, client);
+      const { error } = await supabaseAdmin()
+        .from('jobs')
+        .update({ company_tier: tier, company_tier_note: note })
+        .eq('id', job.id);
+      if (!error) assessed++;
+    } catch {
+      /* assessCompany already yields 'unknown' on error; guard the DB write too */
+    }
+  }
+  const queue = [...rows];
+  const runWorker = async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) {
+      await processRow(job);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ASSESS_CONCURRENCY, rows.length) }, runWorker));
+  return assessed;
 }

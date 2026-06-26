@@ -9,8 +9,7 @@
 import { NextResponse } from 'next/server';
 import { getJobsByIds, getSettings } from '@/lib/db';
 import { buildScoringClient } from '@/lib/scoreRunner';
-import { assessCompany } from '@/lib/companyCheck';
-import { supabaseAdmin } from '@/lib/supabase';
+import { assessCompanyRows } from '@/lib/companyCheck';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -40,15 +39,7 @@ export async function POST(req: Request) {
   const settings = await getSettings();
   const client = await buildScoringClient(settings);
 
-  let assessed = 0;
-  for (const job of rows) {
-    const { tier, note } = await assessCompany(job, client);
-    const { error } = await supabaseAdmin()
-      .from('jobs')
-      .update({ company_tier: tier, company_tier_note: note })
-      .eq('id', job.id);
-    if (!error) assessed++;
-  }
+  const assessed = await assessCompanyRows(rows, client);
 
   return NextResponse.json({ ok: true, assessed });
 }

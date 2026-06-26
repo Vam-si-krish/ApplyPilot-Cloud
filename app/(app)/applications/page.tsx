@@ -24,6 +24,12 @@ const STATUS_STYLE: Record<ApplicationStatus, string> = {
 // Status tabs for the Tailor & Apply list (parity with the Jobs tab's status filter).
 const STATUS_FILTERS: Array<'all' | ApplicationStatus> = ['all', 'queued', 'generating', 'ready', 'applied', 'failed'];
 
+// How many résumés to generate at once in "Generate selected". Each app is an
+// independent worker pipeline (tailor → score → render); running a few in parallel is a
+// big latency win. Kept modest so the single résumé worker (LLM call + Puppeteer render)
+// isn't overwhelmed.
+const GEN_CONCURRENCY = 3;
+
 export default function ApplicationsPage() {
   const [view, setView] = useState<View>('list');
   const [apps, setApps] = useState<ApplicationWithJob[]>([]);
@@ -274,9 +280,10 @@ export default function ApplicationsPage() {
     setSelected(allSelected ? new Set() : new Set(selectableIds));
   }
 
-  // Generate tailored résumés for every selected application, sequentially (the worker
-  // is single-flight), driving one shared progress bar. Mirrors the single-generate
-  // flow per app: hand off → poll the row until ready/failed → score the new résumé.
+  // Generate tailored résumés for every selected application, a few at a time
+  // (GEN_CONCURRENCY) since each is an independent pipeline, driving one shared progress
+  // bar. Per app, it mirrors the single-generate flow: hand off → poll the row until
+  // ready/failed → score the new résumé → auto-create the PDF.
   async function generateSelected() {
     if (bulkBusy || bulkRunning || genId) return;
     const ids = [...selected].filter((id) => apps.find((a) => a.id === id)?.job);
@@ -287,42 +294,53 @@ export default function ApplicationsPage() {
     let ok = 0;
     let failed = 0;
     setBulkProgress({ label: 'Generating résumés & PDFs', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
-    try {
-      for (const id of ids) {
-        // Optimistic: show the row as generating immediately.
-        setApps((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'generating' } : x)));
-        try {
-          const r = await fetch(`/api/applications/${id}/generate`, { method: 'POST' });
-          if (!r.ok) {
-            failed++;
-          } else {
-            // Poll the row until the worker marks it ready/failed (cap ~3 min each).
-            const deadline = Date.now() + 180_000;
-            let row: ApplicationWithJob | null = null;
-            while (Date.now() < deadline) {
-              await new Promise((res) => setTimeout(res, 2500));
-              row = await fetchApp(id).catch(() => null);
-              if (row && (row.status === 'ready' || row.status === 'failed')) break;
-            }
-            if (row?.status === 'ready') {
-              ok++;
-              // Score the new résumé against its job (parity with single generate, ADR 0029).
-              await fetch(`/api/applications/${id}/score-tailored`, { method: 'POST' }).catch(() => {});
-              // Auto-create the PDF too, so every generated résumé is download-ready.
-              setRendering(id);
-              await doRender(id).catch(() => {});
-              setRendering(null);
-            } else {
-              failed++;
-            }
-          }
-        } catch {
+
+    // The full pipeline for one application. Self-contained so the pool can run several
+    // at once. (No per-row render spinner here — multiple render concurrently; the shared
+    // progress toast + each row's status cover the feedback.)
+    async function processApp(id: string): Promise<void> {
+      setApps((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'generating' } : x)));
+      try {
+        const r = await fetch(`/api/applications/${id}/generate`, { method: 'POST' });
+        if (!r.ok) {
           failed++;
+        } else {
+          // Poll the row until the worker marks it ready/failed (cap ~3 min each).
+          const deadline = Date.now() + 180_000;
+          let row: ApplicationWithJob | null = null;
+          while (Date.now() < deadline) {
+            await new Promise((res) => setTimeout(res, 2500));
+            row = await fetchApp(id).catch(() => null);
+            if (row && (row.status === 'ready' || row.status === 'failed')) break;
+          }
+          if (row?.status === 'ready') {
+            ok++;
+            // Score the new résumé against its job (parity with single generate, ADR 0029).
+            await fetch(`/api/applications/${id}/score-tailored`, { method: 'POST' }).catch(() => {});
+            // Auto-create the PDF too, so every generated résumé is download-ready.
+            await doRender(id).catch(() => {});
+          } else {
+            failed++;
+          }
         }
-        done++;
-        setBulkProgress({ label: 'Generating résumés & PDFs', done, total: ids.length, phase: 'running', tone: 'violet' });
-        load(true); // results light up live as each one lands
+      } catch {
+        failed++;
       }
+      done++;
+      setBulkProgress({ label: 'Generating résumés & PDFs', done, total: ids.length, phase: 'running', tone: 'violet' });
+      load(true); // results light up live as each one lands
+    }
+
+    try {
+      // Bounded-concurrency pool: up to GEN_CONCURRENCY pipelines in flight at once.
+      const queue = [...ids];
+      const runWorker = async () => {
+        for (let id = queue.shift(); id; id = queue.shift()) {
+          await processApp(id);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(GEN_CONCURRENCY, ids.length) }, runWorker));
+
       setBulkProgress({
         label: `Done — ${ok} generated${failed ? `, ${failed} failed` : ''}`,
         done: ids.length,
