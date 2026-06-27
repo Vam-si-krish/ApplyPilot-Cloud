@@ -211,14 +211,20 @@ export default function JobsPage() {
     return p;
   }, [search, minScore, maxScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent` refreshes the list in place WITHOUT flipping the full-card "Loading…" state.
+  // That's what kills the flicker during live scoring/assessment and single-row actions:
+  // the list stays mounted and only changed rows re-render (rows are keyed by id, and
+  // selection/expanded state live outside `jobs`, so they're preserved). Mirrors the
+  // Applications tab's silent reload. Non-silent is kept only for the initial mount and
+  // filter/search/run changes, where a brief loading state is expected.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const p = buildParams();
     p.set('limit', String(limit));
     const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
     setJobs(d.jobs ?? []);
     setTotal(d.total ?? 0);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [buildParams, limit]);
 
   useEffect(() => {
@@ -302,13 +308,13 @@ export default function JobsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    load();
+    load(true);
   }
 
   async function deleteJob(id: string) {
     if (!confirm('Are you sure you want to delete this job permanently?')) return;
     await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
-    load();
+    load(true);
     refreshStats();
   }
 
@@ -386,11 +392,11 @@ export default function JobsPage() {
         filtered += d.filtered ?? 0;
         done += chunk.length;
         setBulkProgress({ label: 'AI-scoring selected jobs', done, total: ids.length, phase: 'running', tone: 'sky' });
-        load(); // scores light up live as each chunk lands
+        load(true); // scores light up live as each chunk lands
       }
       setBulkProgress({ label: `Done — ${scored} scored${filtered ? `, ${filtered} filtered` : ''}`, done: ids.length, total: ids.length, phase: 'done', tone: 'sky' });
       setSelected(new Set());
-      load();
+      load(true);
       refreshStats();
     } catch {
       setBulkProgress({ label: 'Scoring failed', done, total: ids.length, phase: 'done', tone: 'sky' });
@@ -416,7 +422,7 @@ export default function JobsPage() {
       );
       setBulkMsg(`Archived ${ids.length}.`);
       setSelected(new Set());
-      load();
+      load(true);
       refreshStats();
     } catch {
       setBulkMsg('Archive failed.');
@@ -444,7 +450,7 @@ export default function JobsPage() {
       );
       setBulkMsg(`Marked ${ids.length} applied.`);
       setSelected(new Set());
-      load();
+      load(true);
       refreshStats();
     } catch {
       setBulkMsg('Failed to mark applied.');
@@ -476,11 +482,11 @@ export default function JobsPage() {
         assessed += d.assessed ?? 0;
         done += chunk.length;
         setBulkProgress({ label: 'AI-assessing companies', done, total: ids.length, phase: 'running', tone: 'violet' });
-        load(); // tiers light up live as each chunk lands
+        load(true); // tiers light up live as each chunk lands
       }
       setBulkProgress({ label: `Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}`, done: ids.length, total: ids.length, phase: 'done', tone: 'violet' });
       setSelected(new Set());
-      load();
+      load(true);
     } catch {
       setBulkProgress({ label: 'Company assessment failed', done, total: ids.length, phase: 'done', tone: 'violet' });
     } finally {
@@ -505,7 +511,7 @@ export default function JobsPage() {
       setBulkMsg(`Sent ${added} to Tailor & Apply${dupes > 0 ? ` (${dupes} already there)` : ''}.`);
       setSelected(new Set());
       // They now live under Tailor & Apply — drop them out of this list (when hidden).
-      if (hideInApplications) load();
+      if (hideInApplications) load(true);
     } catch {
       setBulkMsg('Could not send to Tailor & Apply.');
     } finally {
@@ -530,7 +536,7 @@ export default function JobsPage() {
       );
       setBulkMsg(`Deleted ${ids.length} jobs.`);
       setSelected(new Set());
-      load();
+      load(true);
       refreshStats();
     } catch {
       setBulkMsg('Delete failed.');
@@ -560,7 +566,7 @@ export default function JobsPage() {
       </div>
 
       {/* Live progress of the *automatic* scorer (daily run / webhook loop), if active. */}
-      <ScoringPanel onActivity={() => { load(); refreshStats(); }} />
+      <ScoringPanel onActivity={() => { load(true); refreshStats(); }} />
 
       {/* Re-scoring safety gate is ON (ADR 0039) — make it visible so it's deliberate. */}
       {allowRescore && (

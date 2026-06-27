@@ -56,8 +56,11 @@ export default function PastJobsPage() {
   // (e.g. shortlisting a row) as long as that day is still in the list.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent` skips the "Loading…" swap so single-row actions (shortlist/archive/delete)
+  // refresh the list in place instead of flashing the whole card. Non-silent stays for
+  // the initial load and search/status changes.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const p = new URLSearchParams({ limit: '500', recency: 'past', order: 'date' });
     if (search) p.set('search', search);
     if (status === 'applied') p.set('applied', 'true');
@@ -67,7 +70,7 @@ export default function PastJobsPage() {
     const d = await fetch(`/api/jobs?${p.toString()}`).then((r) => r.json());
     setJobs(d.jobs ?? []);
     setTotal(d.total ?? 0);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [search, status]);
 
   useEffect(() => {
@@ -77,12 +80,12 @@ export default function PastJobsPage() {
 
   async function patch(id: string, body: Record<string, unknown>) {
     await fetch(`/api/jobs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    load();
+    load(true);
   }
   async function deleteJob(id: string) {
     if (!confirm('Delete this job permanently?')) return;
     await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
-    load();
+    load(true);
   }
   function openJobLink(job: Job) {
     window.open(job.application_url || job.url, '_blank', 'noopener,noreferrer');

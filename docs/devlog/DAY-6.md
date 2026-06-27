@@ -331,3 +331,32 @@ prop that renders labeled groups of add-chips (keywords/skills keep the flat row
 saved+selected locations as before. No schema/pipeline change — pure seed suggestions; selected cities flow
 through the existing Apify/LinkedIn fetch. Validated the hubs (Waltham, Burlington, Natick/MathWorks,
 Westford, Marlborough, Woburn…) via research. typecheck ✅ · build ✅. **App-side → needs a deploy to go live.**
+
+---
+
+## 2026-06-26 — Kill the scoring flicker (silent in-place refreshes)
+User saw the Jobs list flash "Loading…" every ~5 jobs while scoring a selection. Cause: `load()` flipped
+`setLoading(true)` on every per-chunk refresh, so the whole list card swapped to the loading placeholder and
+back each chunk (chunk size = 5 → "every 5 jobs"). Fix: gave the Jobs `load` a `silent` param (like the
+Applications tab already had) — `if (!silent) setLoading(...)` — and switched every action/poll refresh to
+`load(true)`: scoreSelected, assessSelected, addToApplications, mark/archive/delete bulk + single, patch,
+deleteJob, and the **ScoringPanel `onActivity`** (so the *automatic* daily scorer is smooth too). Non-silent
+stays only for initial mount + filter/search/run changes. Same fix applied to **Past Jobs** (its
+shortlist/archive/delete `patch`/`deleteJob` flashed too). Audited the rest: Applications already silent;
+Inbox has no loading flag (sync doesn't swap); Dashboard/Tracker don't bulk-refresh — so those were already
+fine. Lists stay mounted now; rows are keyed by id and selection/expanded state live outside `jobs`, so they
+survive the refresh. typecheck ✅ · build ✅. **App-side → needs a deploy to go live.**
+
+---
+
+## 2026-06-26 — Mail classifier: OTPs and assessment precedence
+Two misclassifications reported. (1) Every OTP / verification code landed in **action_needed** — the prompt
+never covered transactional security mail. (2) An "submit this assessment to move forward" email went to
+**action_needed** instead of **assessment**, because it's both an assessment and "needed to proceed" with no
+precedence rule. Fixed `MAIL_CLASSIFY_PROMPT` only (no code/schema change): assessment now explicitly INCLUDES
+"complete this to proceed"-style invites and **takes precedence** over action_needed; `other` now explicitly
+catches OTP / 2FA / verification codes / password resets / sign-in alerts (ALWAYS other, never action_needed
+even when they say "action required"); action_needed lists those exclusions; added a precedence paragraph.
+Reminder of data sent per email: only FROM + SUBJECT + Gmail's short `snippet` (~200 chars, `format:metadata`,
+no body) — privacy-light but thin on context. Note: only NEW mail re-classifies; already-categorized emails
+keep their label unless re-run. typecheck ✅ · tests ✅ (parser). **App-side → needs a deploy to go live.**

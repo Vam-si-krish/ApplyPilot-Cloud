@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeTailored, addedSkills, buildTailorMessages, TAILOR_PROMPT } from './resumeTailor';
+import { mergeTailored, addedSkills, buildTailorMessages, TAILOR_PROMPT, totalExperienceYears, clampYoeClaims } from './resumeTailor';
 import { normalizeResume } from './resume';
 import type { ContentPart } from './llm';
 import type { ResumeDoc } from './types';
@@ -150,9 +150,61 @@ describe('buildTailorMessages', () => {
     expect(parts[0].cache).toBe(true); // base + length budget = the cached prefix
     expect(parts[0].text).toContain('BASE RÉSUMÉ');
     expect(parts[0].text).toContain('LENGTH BUDGET');
+    expect(parts[0].text).toContain('TOTAL PROFESSIONAL EXPERIENCE'); // the true-years ceiling (ADR 0041)
     expect(parts[1].cache).toBeUndefined(); // per-job tail is not cached
     expect(parts[1].text).toContain('Acme');
     expect(parts[1].text).toContain('React');
     expect(parts[1].text).toContain('Kubernetes');
+  });
+});
+
+describe('totalExperienceYears — true career span from dates (ADR 0041)', () => {
+  it('spans earliest start to latest end, flooring; an ongoing role counts to now', () => {
+    const b: ResumeDoc = {
+      ...base(),
+      work: [
+        { name: 'A', startDate: '2021', endDate: 'Present', highlights: [] },
+        { name: 'B', startDate: '2018-06', endDate: '2021', highlights: [] },
+      ],
+    };
+    expect(totalExperienceYears(b, new Date('2024-07-01'))).toBe(6); // 2018.5 → 2024.5
+  });
+
+  it('parses month names and MM/YYYY', () => {
+    const b: ResumeDoc = { ...base(), work: [{ name: 'A', startDate: 'Mar 2019', endDate: '06/2025', highlights: [] }] };
+    expect(totalExperienceYears(b, new Date('2026-01-01'))).toBe(6); // 2019.17 → 2025.42
+  });
+
+  it('returns null when no employment date parses (cannot bound the claim)', () => {
+    expect(totalExperienceYears({ ...base(), work: [{ name: 'A', highlights: [] }] })).toBeNull();
+  });
+});
+
+describe('clampYoeClaims — deterministic anti-inflation guard (ADR 0041)', () => {
+  it('clamps a claim above the true span down to it', () => {
+    expect(clampYoeClaims('8+ years of experience', 6)).toBe('6+ years of experience');
+    expect(clampYoeClaims('over 10 years', 6)).toBe('over 6 years');
+    expect(clampYoeClaims('9 yrs in frontend', 6)).toBe('6 yrs in frontend');
+  });
+
+  it('leaves a truthful claim within range untouched', () => {
+    expect(clampYoeClaims('5 years of experience', 6)).toBe('5 years of experience');
+    expect(clampYoeClaims('6+ years', 6)).toBe('6+ years');
+  });
+
+  it('is a no-op when the span is unknown', () => {
+    expect(clampYoeClaims('8+ years', null)).toBe('8+ years');
+  });
+
+  it('ignores four-digit years and unrelated numbers', () => {
+    expect(clampYoeClaims('shipped in 2019 across 12 teams', 6)).toBe('shipped in 2019 across 12 teams');
+  });
+
+  it('is applied through mergeTailored so an inflated summary cannot reach the résumé', () => {
+    const max = totalExperienceYears(base())!; // base spans 2018→present
+    const tailored: ResumeDoc = { ...base(), basics: { ...base().basics, summary: 'React developer with 25+ years of experience building UIs.' } };
+    const out = mergeTailored(base(), tailored);
+    expect(out.basics.summary).toContain(`${max}+ years of experience`);
+    expect(out.basics.summary).not.toContain('25');
   });
 });

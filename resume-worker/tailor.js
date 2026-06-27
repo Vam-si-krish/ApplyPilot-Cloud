@@ -354,6 +354,8 @@ HARD LIMITS — these verifiable facts (a background check would catch them) are
 
 STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority; it must hold up in an interview.
 
+NEVER INFLATE TENURE — total years of experience is a VERIFIABLE FACT that falls out of the employment dates, not a number you may round up to match the posting. The user message states the candidate's TRUE total years of professional experience. Do not claim, imply, or state a HIGHER figure anywhere (summary, label, or bullets); if you mention years of experience, use that number or fewer, and never assign a seniority the dates don't support.
+
 WRITE LIKE A HUMAN, NOT AN AI — recruiters and reviewers spot AI-written résumés instantly and it hurts the candidate:
 - Start every bullet with a strong, VARIED past-tense action verb (Architected, Built, Led, Migrated, Shipped, Designed, Cut, Scaled, Automated, Rebuilt). Do not reuse the same opener across bullets.
 - Be concrete and quantified: name the real system, the technology, the scale, and a measurable result. Never write vague filler like "responsible for", "worked on", or "helped with".
@@ -391,9 +393,15 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
   // STABLE prefix (system prompt + this block) — cached across every job in a session.
+  const years = totalExperienceYears(base);
+  const experienceLine =
+    years != null
+      ? `\n\nTOTAL PROFESSIONAL EXPERIENCE: about ${years} years (derived from the employment dates above). Do NOT claim, imply, or round up to more than ${years} years anywhere in the résumé.`
+      : '';
   const baseBlock =
     `BASE RÉSUMÉ (the candidate's real experience — anchor employers/titles/dates/education to this — JSON):\n${JSON.stringify(base)}\n\n` +
-    `LENGTH BUDGET (derived from the base — your output MUST stay within these so it fits one page):\n${lengthBudget(base)}`;
+    `LENGTH BUDGET (derived from the base — your output MUST stay within these so it fits one page):\n${lengthBudget(base)}` +
+    experienceLine;
   // VOLATILE tail — the per-job content, after the cache breakpoint.
   const jobBlock =
     `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
@@ -441,6 +449,63 @@ function skillBudget(base) {
   return Math.max(baseCount + 6, Math.ceil(baseCount * 1.4));
 }
 
+const MONTH_INDEX = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/** Parse a résumé date ("2019-03", "Mar 2019", "03/2019", "2019") to a fractional year.
+ *  An explicit "Present"/"Current" token → 'now'; empty/unparseable → null. */
+function parseYearFraction(raw) {
+  const t = (raw || '').trim();
+  if (!t) return null;
+  if (/^(present|current|now|ongoing|to date)$/i.test(t)) return 'now';
+  let m = t.match(/^(\d{4})[-/](\d{1,2})\b/);
+  if (m) return Number(m[1]) + (Number(m[2]) - 1) / 12;
+  m = t.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (m) return Number(m[2]) + (Number(m[1]) - 1) / 12;
+  m = t.match(/^([A-Za-z]{3,})\.?\s+(\d{4})$/);
+  if (m) {
+    const mon = MONTH_INDEX[m[1].slice(0, 3).toLowerCase()];
+    if (mon != null) return Number(m[2]) + mon / 12;
+  }
+  m = t.match(/\b(\d{4})\b/);
+  if (m) return Number(m[1]);
+  return null;
+}
+
+/**
+ * The candidate's TRUE total years of professional experience, derived from the base
+ * résumé's employment dates: earliest start → latest end (an open/Present role counts to
+ * `now`), floored to a whole year. The most generous DEFENSIBLE figure, so it doubles as
+ * the ceiling the tailorer may not exceed (ADR 0041). Returns null if no date parses.
+ */
+export function totalExperienceYears(base, now = new Date()) {
+  const nowFrac = now.getFullYear() + now.getMonth() / 12;
+  let earliest = null;
+  let latest = null;
+  for (const w of base.work) {
+    const start = parseYearFraction(w.startDate);
+    if (typeof start === 'number') earliest = earliest == null ? start : Math.min(earliest, start);
+    const end = parseYearFraction(w.endDate);
+    const endFrac = end === 'now' || end == null ? nowFrac : end;
+    latest = latest == null ? endFrac : Math.max(latest, endFrac);
+  }
+  if (earliest == null || latest == null) return null;
+  return Math.max(0, Math.floor(latest - earliest));
+}
+
+/**
+ * Deterministic anti-inflation guard (ADR 0041): clamp any "N years" / "N+ yrs" claim
+ * that EXCEEDS the candidate's true career span down to that span. A no-op when the span
+ * is unknown or the figure is already within range.
+ */
+export function clampYoeClaims(text, maxYears) {
+  if (!text || maxYears == null) return text;
+  return text.replace(/\b(\d{1,2})(\s*\+?\s*)(years?|yrs?)\b/gi, (full, num, mid, unit) =>
+    Number(num) > maxYears ? `${maxYears}${mid}${unit}` : full,
+  );
+}
+
 /** Take the model's summary but hard-cap it to the budget, trimmed at a word boundary. */
 function capSummary(base, tailored) {
   const t = (tailored || '').trim();
@@ -486,16 +551,21 @@ function capSkills(base, tailored) {
  *  capping bullet counts + summary length + skill count to keep it one page
  *  (ADR 0029/0031). Pure — never throws. */
 export function mergeTailored(base, tailored) {
+  // Years of experience is a verifiable fact derived from the dates (ADR 0041): clamp any
+  // claim that exceeds the candidate's true career span so the model can't inflate tenure.
+  const maxYears = totalExperienceYears(base);
+  const finish = (s) => cleanText(clampYoeClaims(s, maxYears));
   const cappedSummary = capSummary(base, tailored.basics.summary);
+  const rawLabel = tailored.basics.label?.trim() || base.basics.label;
   const basics = {
     ...base.basics,
-    summary: cappedSummary ? cleanText(cappedSummary) : cappedSummary,
-    label: tailored.basics.label?.trim() || base.basics.label,
+    summary: cappedSummary ? finish(cappedSummary) : cappedSummary,
+    label: rawLabel ? clampYoeClaims(rawLabel, maxYears) : rawLabel,
   };
-  const work = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(cleanText) }));
+  const work = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(finish) }));
   const tailoredSkills = tailored.skills.filter((g) => g.keywords.length > 0);
   const skills = tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
-  const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(cleanText) }));
+  const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(finish) }));
   return { basics, work, education: base.education, skills, projects };
 }
 
