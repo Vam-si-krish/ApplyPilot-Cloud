@@ -15,11 +15,16 @@
 import { NextResponse } from 'next/server';
 import { getJobsByIds, getScoringResumeText, getSettings } from '@/lib/db';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
+import { SUBSCRIPTION_PROVIDER } from '@/lib/llm';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const MAX_PER_CALL = 10; // keep one request comfortably under the serverless timeout
+// Subscription mode: each /llm call spawns an Agent SDK subprocess on the worker.
+// 8 concurrent subprocess calls take ~25s; capping at 5 keeps the total (one concurrent
+// round + setup) under ~20s, safely within the serverless function ceiling.
+const MAX_PER_CALL = 10;
+const MAX_PER_CALL_SUBSCRIPTION = 5;
 
 export async function POST(req: Request) {
   let body: { ids?: unknown };
@@ -29,14 +34,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid json' }, { status: 400 });
   }
 
-  const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string').slice(0, MAX_PER_CALL) : [];
-  if (ids.length === 0) {
-    return NextResponse.json({ error: 'no ids provided' }, { status: 400 });
-  }
-
   try {
-    const rows = await getJobsByIds(ids);
     const settings = await getSettings();
+    const provider = (settings.score_provider || settings.llm_provider || '').trim().toLowerCase();
+    const limit = provider === SUBSCRIPTION_PROVIDER ? MAX_PER_CALL_SUBSCRIPTION : MAX_PER_CALL;
+
+    const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string').slice(0, limit) : [];
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'no ids provided' }, { status: 400 });
+    }
+
+    const rows = await getJobsByIds(ids);
     // Re-scoring already-scored jobs is gated behind a Settings toggle (ADR 0039) so a stray
     // click can't overwrite scores or burn LLM calls. OFF (default): score only jobs with no
     // AI score yet (a chosen 'filtered' job is re-evaluated). ON: re-score every picked job.
