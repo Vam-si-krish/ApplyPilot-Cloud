@@ -9,6 +9,9 @@ const PROVIDERS = [
   { id: 'openai', label: 'OpenAI', model: 'gpt-4o-mini' },
   { id: 'deepseek', label: 'DeepSeek', model: 'deepseek-chat' },
   { id: 'anthropic', label: 'Anthropic Claude', model: 'claude-sonnet-4-6' },
+  // ADR 0042: run the task on your Claude subscription via the Agent SDK on the
+  // worker — no API key billed (uses the plan's monthly Agent-SDK credit).
+  { id: 'subscription', label: 'Claude subscription (no API key)', model: 'sonnet' },
 ];
 
 // Known models per provider — shown as dropdown options. A "Custom…" option keeps the
@@ -18,6 +21,8 @@ const MODELS: Record<string, string[]> = {
   anthropic: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8'],
   gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  // Agent-SDK model aliases (resolve to the current Claude models on the worker).
+  subscription: ['sonnet', 'opus', 'haiku'],
 };
 // Friendly labels for the dropdown (falls back to the raw id for anything unlisted).
 const MODEL_LABELS: Record<string, string> = {
@@ -25,6 +30,7 @@ const MODEL_LABELS: Record<string, string> = {
   'claude-haiku-4-5-20251001': 'Claude Haiku 4.5', 'claude-sonnet-4-6': 'Claude Sonnet 4.6', 'claude-opus-4-8': 'Claude Opus 4.8',
   'gemini-2.0-flash': 'Gemini 2.0 Flash', 'gemini-2.5-flash': 'Gemini 2.5 Flash', 'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'deepseek-chat': 'DeepSeek Chat', 'deepseek-reasoner': 'DeepSeek Reasoner',
+  sonnet: 'Claude Sonnet (latest)', opus: 'Claude Opus (latest)', haiku: 'Claude Haiku (latest)',
 };
 const CUSTOM_MODEL = '__custom__';
 const defaultModel = (provider: string) => MODELS[provider]?.[0] ?? '';
@@ -272,6 +278,13 @@ export default function SettingsPage() {
           cheap, consistent model. <span className="text-sky">Tailoring</span> rewrites your résumé for each job — pick a premium
           model. Each task uses the <span className="text-emerald">active key</span> for its provider (set in API Keys below);
           environment variables are only a fallback.
+        </p>
+        <p className="text-slate-muted text-[12px] mb-4">
+          <span className="text-emerald">Claude subscription (no API key)</span> runs the task on your Claude plan via the
+          worker — no per-token API spend. It needs the <span className="font-mono">worker</span> online (configured below) and a
+          one-time <span className="font-mono">claude setup-token</span> on that machine. Note: this draws from the plan&apos;s{' '}
+          <span className="text-sky">monthly Agent-SDK credit</span> (Pro $20 · Max5× $100 · Max20× $200), then standard API
+          rates — so for high-volume scoring a cheap API model is often the better pick, with the subscription on Tailoring.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <TaskModel

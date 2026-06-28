@@ -20,9 +20,29 @@ import {
 } from './supabase.js';
 import { renderResumeToOnePage, renderCoverLetterPdf, getBrowser, closeBrowser } from './render.js';
 import { makeClient, tailorResume, condenseResume } from './tailor.js';
+import { makeAgentClient } from './agentClient.js';
 import { generateCoverLetter } from './coverLetter.js';
 
 const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
+// ADR 0042: pseudo-provider that runs the task on the Claude subscription via the
+// Agent SDK (no vault key) instead of a paid API key.
+const SUBSCRIPTION_PROVIDER = 'subscription';
+
+/**
+ * Resolve the LLM client for a provider+model (ADR 0025/0042):
+ *  - 'subscription' → the Agent SDK client (no key; uses the Claude plan).
+ *  - an API provider → makeClient with its active vault key.
+ * Returns { client } on success, or { error } describing what's missing.
+ */
+async function resolveTaskClient(provider, model) {
+  if (provider === SUBSCRIPTION_PROVIDER) return { client: makeAgentClient(model) };
+  if (!LLM_PROVIDERS.has(provider)) {
+    return { error: `Provider "${provider || '(unset)'}" is not a supported LLM provider.` };
+  }
+  const key = await getActiveApiKey(provider);
+  if (!key) return { error: `No active ${provider} API key — add one under Settings → AI tokens.` };
+  return { client: makeClient(provider, model, key) };
+}
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -72,13 +92,8 @@ app.post('/generate', async (req, res) => {
       const settings = await getSettings();
       const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
       const model = (settings.tailor_model || settings.llm_model || '').trim();
-      if (LLM_PROVIDERS.has(provider)) {
-        const key = await getActiveApiKey(provider);
-        if (key) {
-          const client = makeClient(provider, model, key);
-          condenseFn = (resume, pass) => condenseResume(resume, client, pass);
-        }
-      }
+      const { client } = await resolveTaskClient(provider, model);
+      if (client) condenseFn = (resume, pass) => condenseResume(resume, client, pass);
     } catch {
       /* settings/key unavailable → deterministic backstop only */
     }
@@ -145,13 +160,8 @@ app.post('/tailor', async (req, res) => {
     const settings = await getSettings();
     const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
     const model = (settings.tailor_model || settings.llm_model || '').trim();
-    if (!LLM_PROVIDERS.has(provider)) {
-      return res.status(409).json({ error: `Tailoring provider "${provider || '(unset)'}" is not a supported LLM provider.` });
-    }
-    const key = await getActiveApiKey(provider);
-    if (!key) {
-      return res.status(409).json({ error: `No active ${provider} API key — add one under Settings → AI tokens.` });
-    }
+    const resolved = await resolveTaskClient(provider, model);
+    if (resolved.error) return res.status(409).json({ error: resolved.error });
 
     const job = appRow.job;
     const signals = {
@@ -165,7 +175,7 @@ app.post('/tailor', async (req, res) => {
     await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
     res.status(202).json({ ok: true, status: 'generating' });
 
-    const client = makeClient(provider, model, key);
+    const client = resolved.client;
     tailorResume(base, job, signals, client, appRow.tailor_instructions || '')
       .then(({ resume, changes }) =>
         // Clear any stale tailored score — the app re-scores the new résumé (ADR 0029).
@@ -215,20 +225,15 @@ app.post('/cover-letter', async (req, res) => {
     const settings = await getSettings();
     const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
     const model = (settings.tailor_model || settings.llm_model || '').trim();
-    if (!LLM_PROVIDERS.has(provider)) {
-      return res.status(409).json({ error: `Tailoring provider "${provider || '(unset)'}" is not a supported LLM provider.` });
-    }
-    const key = await getActiveApiKey(provider);
-    if (!key) {
-      return res.status(409).json({ error: `No active ${provider} API key — add one under Settings → AI tokens.` });
-    }
+    const resolved = await resolveTaskClient(provider, model);
+    if (resolved.error) return res.status(409).json({ error: resolved.error });
 
     const job = appRow.job;
     // All preconditions met — clear any prior error, ack, then do the slow work async.
     await updateApplication(id, { cover_letter_error: null }).catch(() => {});
     res.status(202).json({ ok: true });
 
-    const client = makeClient(provider, model, key);
+    const client = resolved.client;
     (async () => {
       const text = await generateCoverLetter(base, job, client);
       const pdf = await renderCoverLetterPdf(text, base.basics || {}, job, appRow.template || 'classic');
@@ -262,6 +267,32 @@ app.post('/render-inline', async (req, res) => {
     res.setHeader('X-Resume-Scale', String(scale));
     res.setHeader('X-Resume-Too-Long', String(tooLong));
     res.send(pdf);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/**
+ * POST /llm { messages, model?, temperature?, maxTokens? } → { text } (ADR 0042).
+ * Runs ONE single-turn completion on the Claude subscription via the Agent SDK. This
+ * is the backend for the cloud app's serverless AI lanes (scoring, company check, mail
+ * classify, assistant, résumé parse) when their provider is set to "subscription" —
+ * the model can only run here, where the `claude` CLI + subscription credentials live.
+ */
+app.post('/llm', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  const body = req.body || {};
+  if (!Array.isArray(body.messages) || body.messages.length === 0) {
+    return res.status(400).json({ error: 'messages[] required' });
+  }
+  const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : 'sonnet';
+  const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
+  const maxTokens = typeof body.maxTokens === 'number' ? body.maxTokens : undefined;
+
+  try {
+    const text = await makeAgentClient(model).chat(body.messages, { temperature, maxTokens });
+    res.json({ text });
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }

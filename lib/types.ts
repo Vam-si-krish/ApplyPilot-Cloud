@@ -133,7 +133,10 @@ export interface Settings {
   llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic' — global fallback
   llm_model: string;
   /** Per-task models (ADR 0025). Scoring is high-volume → cheap; tailoring is
-   *  quality → premium. Null falls back to llm_provider/llm_model. */
+   *  quality → premium. Null falls back to llm_provider/llm_model.
+   *  A provider of 'subscription' (ADR 0042) runs the lane on the Claude
+   *  subscription via the Agent SDK on the worker (no API key); the *_model holds an
+   *  Agent-SDK alias ('sonnet' | 'opus' | 'haiku'). */
   score_provider: string; // default 'openai'
   score_model: string; // default 'gpt-4o-mini'
   tailor_provider: string; // default 'anthropic'

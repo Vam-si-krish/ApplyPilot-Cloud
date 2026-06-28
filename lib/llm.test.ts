@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { detectProvider } from './llm';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { detectProvider, makeWorkerClient, WorkerLLMClient } from './llm';
 
 describe('detectProvider', () => {
   it('picks Gemini by default when only GEMINI_API_KEY is set', () => {
@@ -40,5 +40,48 @@ describe('detectProvider', () => {
 
   it('throws a clear error when no provider key is set', () => {
     expect(() => detectProvider({})).toThrow(/No LLM provider configured/);
+  });
+});
+
+describe('WorkerLLMClient (Claude-subscription mode, ADR 0042)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('POSTs messages + model to the worker /llm with the Bearer secret and returns text', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) =>
+      new Response(JSON.stringify({ text: 'SCORE: 7' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = makeWorkerClient('https://worker.example.com/', 'shh-secret', 'haiku');
+    const messages = [
+      { role: 'system' as const, content: 'be terse' },
+      { role: 'user' as const, content: 'rate this' },
+    ];
+    const out = await client.chat(messages, { temperature: 0.1, maxTokens: 1000 });
+
+    expect(out).toBe('SCORE: 7');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://worker.example.com/llm'); // trailing slash collapsed
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer shh-secret');
+    const body = JSON.parse(init.body as string);
+    expect(body).toMatchObject({ model: 'haiku', temperature: 0.1, maxTokens: 1000, messages });
+  });
+
+  it('defaults the model to sonnet when blank', () => {
+    expect(new WorkerLLMClient('u', 's', '').model).toBe('sonnet');
+    expect(makeWorkerClient('u', 's', '   ').model).toBe('sonnet');
+  });
+
+  it('surfaces the worker error message on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'not logged in' }), { status: 500 })));
+    const client = makeWorkerClient('https://worker.example.com', 's', 'sonnet');
+    await expect(client.chat([{ role: 'user', content: 'hi' }])).rejects.toThrow(/not logged in/);
+  });
+
+  it('reports an unreachable worker clearly', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('fetch failed'); }));
+    const client = makeWorkerClient('https://worker.example.com', 's', 'sonnet');
+    await expect(client.chat([{ role: 'user', content: 'hi' }])).rejects.toThrow(/Could not reach the worker/);
   });
 });

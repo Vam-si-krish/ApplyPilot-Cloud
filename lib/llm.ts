@@ -308,6 +308,74 @@ export function makeClient(provider: string, model: string, apiKey: string): LLM
   return new LLMClient(cfg.baseUrl, (model || '').trim() || cfg.defaultModel, apiKey);
 }
 
+/**
+ * Pseudo-provider id (ADR 0042): "run this task on my Claude subscription via the
+ * Agent SDK" instead of a paid API key. It has no PROVIDER_TABLE entry and no vault
+ * key — the actual model call happens on the always-on worker (the only place the
+ * `claude` CLI / Agent SDK can run), so picking it routes the lane through
+ * WorkerLLMClient → the worker's /llm endpoint.
+ */
+export const SUBSCRIPTION_PROVIDER = 'subscription';
+
+/** Per-call timeout for worker /llm requests; under typical serverless ceilings. */
+const WORKER_LLM_TIMEOUT_MS = Math.max(10_000, Number(process.env.WORKER_LLM_TIMEOUT_MS) || 60_000);
+
+/**
+ * An LLMClient that delegates the actual model call to the worker's `POST /llm`
+ * (ADR 0042). Same public `chat()` contract as the base class, so every call site
+ * (typed `LLMClient`) works unchanged — but the model runs on the worker's Claude
+ * subscription via the Agent SDK, with no API key billed. `model` is an Agent-SDK
+ * alias (e.g. 'sonnet' | 'opus' | 'haiku'), passed through to the worker.
+ */
+export class WorkerLLMClient extends LLMClient {
+  constructor(
+    private workerUrl: string,
+    private workerSecret: string,
+    model: string,
+  ) {
+    // baseUrl/apiKey are unused here (chat is fully overridden); pass placeholders.
+    // Default the model so an empty lane model still resolves to a real alias.
+    super('https://worker.invalid', (model || '').trim() || 'sonnet', '');
+  }
+
+  async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
+    const url = `${this.workerUrl.replace(/\/$/, '')}/llm`;
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.workerSecret}` },
+        body: JSON.stringify({
+          messages,
+          model: this.model,
+          temperature: opts.temperature ?? 0.0,
+          maxTokens: opts.maxTokens ?? 4096,
+        }),
+        signal: AbortSignal.timeout(WORKER_LLM_TIMEOUT_MS),
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const unreachable = /fetch|timeout|abort|network/i.test(msg);
+      throw new Error(
+        unreachable
+          ? 'Could not reach the worker for Claude-subscription scoring (is it running and reachable?).'
+          : `Worker /llm request failed: ${msg}`,
+      );
+    }
+    if (!resp.ok) {
+      const data = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || `worker /llm error (${resp.status})`);
+    }
+    const data = (await resp.json()) as { text?: string };
+    return data.text ?? '';
+  }
+}
+
+/** Build a subscription-backed client that calls the worker's /llm (ADR 0042). */
+export function makeWorkerClient(workerUrl: string, workerSecret: string, model: string): WorkerLLMClient {
+  return new WorkerLLMClient(workerUrl, workerSecret, model);
+}
+
 let _instance: LLMClient | null = null;
 
 /** Return (or create) the module-level LLMClient singleton. */

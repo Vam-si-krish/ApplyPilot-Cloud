@@ -8,7 +8,7 @@
  * jobs 'filtered' and skips the LLM.
  */
 import { scoreJob } from './scoring';
-import { makeClient, LLMClient } from './llm';
+import { makeClient, makeWorkerClient, SUBSCRIPTION_PROVIDER, LLMClient } from './llm';
 import { getActiveApiKey, isApiKeyProvider } from './credentials';
 import { supabaseAdmin } from './supabase';
 import type { Job, Settings } from './types';
@@ -25,12 +25,39 @@ function taskProviderModel(settings: Settings, task: LlmTask): { provider: strin
 }
 
 /**
- * Build the LLM client for a task from the active vault key for that task's
- * provider (ADR 0006/0025). Returns undefined when no key resolves, so the caller
- * falls back to the env-detected singleton.
+ * Resolve the worker URL + shared secret used to reach the always-on worker, the
+ * same way the render proxy does (DB value wins so Settings edits take effect with
+ * no redeploy; env var is the bootstrap fallback). Returns null when unconfigured.
+ */
+function resolveWorker(settings: Settings): { url: string; secret: string } | null {
+  const url = settings.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL || '';
+  const secret = settings.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET || '';
+  return url && secret ? { url, secret } : null;
+}
+
+/**
+ * Build the LLM client for a task (ADR 0006/0025/0042).
+ * - provider 'subscription' (ADR 0042): route the task to the worker's /llm, which
+ *   runs it on the Claude subscription via the Agent SDK — no API key billed. If the
+ *   worker isn't configured we THROW (never silently fall back to a paid env key,
+ *   which would defeat the point); for scoring this surfaces as a visible score-0.
+ * - an API provider: build from the active vault key; returns undefined when no key
+ *   resolves, so the caller falls back to the env-detected singleton.
  */
 export async function buildClientForTask(settings: Settings, task: LlmTask): Promise<LLMClient | undefined> {
   const { provider, model } = taskProviderModel(settings, task);
+
+  if (provider === SUBSCRIPTION_PROVIDER) {
+    const worker = resolveWorker(settings);
+    if (!worker) {
+      throw new Error(
+        'Claude-subscription mode is selected but the worker is not configured — ' +
+          'set the worker URL + secret under Settings (or RESUME_WORKER_URL / RESUME_WORKER_SECRET).',
+      );
+    }
+    return makeWorkerClient(worker.url, worker.secret, model);
+  }
+
   if (!isApiKeyProvider(provider)) return undefined;
   const key = await getActiveApiKey(provider);
   return key ? makeClient(provider, model, key) : undefined;

@@ -68,6 +68,22 @@ Netlify → Site settings → Environment variables, add:
 Redeploy (or it picks them up on the next deploy). Now **Applications → Generate → Create PDF → Download**
 works in production.
 
+## 6. (Optional) Claude subscription mode — run AI on your plan, not API tokens (ADR 0042)
+Lets scoring / tailoring / etc. run on your Claude Pro/Max subscription via the Agent SDK instead
+of a paid API key. The SDK can only run here (it drives the `claude` CLI), so it lives on this worker.
+```bash
+npm i -g @anthropic-ai/claude-code      # the CLI the Agent SDK drives
+claude setup-token                       # opens browser; prints a 1-year OAuth token (sk-ant-oat01-…)
+```
+Put the token in `.env` as `CLAUDE_CODE_OAUTH_TOKEN=…` (or run `claude login` once and leave it blank),
+then restart the worker (`./install-service.sh` reloads it). Verify auth: `claude /status` should show your
+subscription. **Do not** set `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` in this worker's env — they override
+the subscription and bill the API.
+
+In the app: **Settings → AI Models** → set Scoring and/or Tailoring provider to **"Claude subscription (no
+API key)"**. Note the plan's monthly Agent-SDK credit cap (Pro $20 · Max5× $100 · Max20× $200), then standard
+API rates — so high-volume scoring is often better left on a cheap API model.
+
 ## Security notes
 - The worker only accepts requests with `Authorization: Bearer <WORKER_SECRET>`; it refuses to run if
   `WORKER_SECRET` is unset.
