@@ -15,9 +15,13 @@ import {
   getBaseResume,
   getSettings,
   getActiveApiKey,
+  getJobsByIds,
+  getScoringResumeText,
+  updateJob,
   updateApplication,
   uploadPdf,
 } from './supabase.js';
+import { scoreJobWorker } from './scoring.js';
 import { renderResumeToOnePage, renderCoverLetterPdf, getBrowser, closeBrowser } from './render.js';
 import { makeClient, tailorResume, condenseResume } from './tailor.js';
 import { makeAgentClient } from './agentClient.js';
@@ -65,6 +69,75 @@ app.get('/health', async (_req, res) => {
     browser = false;
   }
   res.json({ ok: true, browser, ts: new Date().toISOString() });
+});
+
+/**
+ * POST /score-jobs {ids: string[]} → {ok, queued} (ADR 0042).
+ * Scores the given job IDs using the subscription provider (Agent SDK). Designed to
+ * be called by the cloud app's /api/score-selected when scoring provider is
+ * 'subscription' — the Netlify function times out waiting for individual /llm calls,
+ * so it delegates the whole batch here. Responds 200 immediately; scoring runs in
+ * the background and writes directly to Supabase.
+ */
+app.post('/score-jobs', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  const ids = req.body?.ids;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids[] required' });
+  }
+  if (ids.length > 20) {
+    return res.status(400).json({ error: 'max 20 ids per call' });
+  }
+
+  let settings, resolved;
+  try {
+    settings = await getSettings();
+    const provider = (settings.score_provider || settings.llm_provider || '').trim().toLowerCase();
+    const model = (settings.score_model || settings.llm_model || '').trim();
+    resolved = await resolveTaskClient(provider, model);
+    if (resolved.error) return res.status(409).json({ error: resolved.error });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // All preconditions met — ack immediately, score in background.
+  res.json({ ok: true, queued: ids.length });
+
+  const allowRescore = !!settings.allow_rescore;
+  const client = resolved.client;
+
+  (async () => {
+    const [jobs, resumeText] = await Promise.all([getJobsByIds(ids), getScoringResumeText()]);
+    const toScore = allowRescore ? jobs : jobs.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+    console.log(`[score-jobs] scoring ${toScore.length}/${ids.length} jobs`);
+
+    await Promise.all(
+      toScore.map(async (job) => {
+        try {
+          const result = await scoreJobWorker(resumeText, job, client);
+          const breakdown = result.breakdown
+            ? { ...result.breakdown, missing: result.missing ?? null, seniority: result.seniority ?? null }
+            : null;
+          await updateJob(job.id, {
+            fit_score: result.score,
+            score_note: result.note,
+            score_keywords: result.keywords,
+            score_reasoning: result.reasoning,
+            score_breakdown: breakdown,
+            employment_type: result.employment_type ?? null,
+            scored_at: new Date().toISOString(),
+            status: 'scored',
+          });
+          console.log(`[score-jobs] job ${job.id} scored ${result.score}`);
+        } catch (e) {
+          console.error(`[score-jobs] job ${job.id} failed:`, e instanceof Error ? e.message : String(e));
+        }
+      }),
+    );
+
+    console.log(`[score-jobs] done`);
+  })().catch((e) => console.error('[score-jobs] background error:', e instanceof Error ? e.message : String(e)));
 });
 
 app.post('/generate', async (req, res) => {

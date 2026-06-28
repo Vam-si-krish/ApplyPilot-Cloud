@@ -78,6 +78,69 @@ export async function updateApplication(id, patch) {
   if (error) throw new Error(`update application: ${error.message}`);
 }
 
+/** Fetch a set of job rows by their IDs (used by /score-jobs). */
+export async function getJobsByIds(ids) {
+  if (!ids || ids.length === 0) return [];
+  const { data, error } = await client().from('jobs').select('*').in('id', ids);
+  if (error) throw new Error(`load jobs: ${error.message}`);
+  return data ?? [];
+}
+
+/**
+ * The resume text used for scoring. Prefers the structured base_resume converted
+ * to text; falls back to the raw resume_text string (same logic as lib/db.ts).
+ */
+export async function getScoringResumeText() {
+  const { data, error } = await client().from('profile').select('base_resume, resume_text').eq('id', 1).single();
+  if (error) throw new Error(`load resume: ${error.message}`);
+  const base = data?.base_resume ?? null;
+  if (base) {
+    const out = [];
+    const b = base.basics || {};
+    if (b.name) out.push(b.name);
+    if (b.label) out.push(b.label);
+    if (b.summary) out.push(`\n${b.summary}`);
+    if (Array.isArray(base.work) && base.work.length) {
+      out.push('\nEXPERIENCE');
+      for (const w of base.work) {
+        const head = [w.position, w.name].filter(Boolean).join(' — ');
+        const dates = [w.startDate, w.endDate].filter(Boolean).join(' to ');
+        out.push([head, dates].filter(Boolean).join('  '));
+        for (const h of (w.highlights || [])) out.push(`- ${h}`);
+      }
+    }
+    if (Array.isArray(base.education) && base.education.length) {
+      out.push('\nEDUCATION');
+      for (const e of base.education) {
+        out.push([e.studyType, e.area, e.institution].filter(Boolean).join(', '));
+      }
+    }
+    if (Array.isArray(base.skills) && base.skills.length) {
+      out.push('\nSKILLS');
+      for (const s of base.skills) {
+        const kws = (s.keywords || []).join(', ');
+        out.push([s.name, kws].filter(Boolean).join(': '));
+      }
+    }
+    if (Array.isArray(base.projects) && base.projects.length) {
+      out.push('\nPROJECTS');
+      for (const p of base.projects) {
+        out.push([p.name, p.description].filter(Boolean).join(' — '));
+        for (const h of (p.highlights || [])) out.push(`- ${h}`);
+      }
+    }
+    const text = out.join('\n').trim();
+    if (text) return text;
+  }
+  return (data?.resume_text || '');
+}
+
+/** Write score fields onto a job row. */
+export async function updateJob(id, patch) {
+  const { error } = await client().from('jobs').update(patch).eq('id', id);
+  if (error) throw new Error(`update job ${id}: ${error.message}`);
+}
+
 /** Upload the PDF (overwrite) and return its storage path. */
 export async function uploadPdf(path, buffer) {
   const { error } = await client().storage.from(BUCKET).upload(path, buffer, {
