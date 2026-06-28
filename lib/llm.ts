@@ -339,6 +339,12 @@ export class WorkerLLMClient extends LLMClient {
   }
 
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
+    if (!this.workerUrl || !this.workerSecret) {
+      throw new Error(
+        'Claude-subscription mode is selected but the worker is not fully configured — ' +
+          'set the worker URL and secret in Settings (or RESUME_WORKER_URL / RESUME_WORKER_SECRET).',
+      );
+    }
     const url = `${this.workerUrl.replace(/\/$/, '')}/llm`;
     let resp: Response;
     try {

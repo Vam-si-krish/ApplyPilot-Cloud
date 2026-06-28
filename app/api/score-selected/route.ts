@@ -34,25 +34,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'no ids provided' }, { status: 400 });
   }
 
-  const rows = await getJobsByIds(ids);
-  const settings = await getSettings();
-  // Re-scoring already-scored jobs is gated behind a Settings toggle (ADR 0039) so a stray
-  // click can't overwrite scores or burn LLM calls. OFF (default): score only jobs with no
-  // AI score yet (a chosen 'filtered' job is re-evaluated). ON: re-score every picked job.
-  const toScore = settings.allow_rescore
-    ? rows
-    : rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
-  const skipped = rows.length - toScore.length;
+  try {
+    const rows = await getJobsByIds(ids);
+    const settings = await getSettings();
+    // Re-scoring already-scored jobs is gated behind a Settings toggle (ADR 0039) so a stray
+    // click can't overwrite scores or burn LLM calls. OFF (default): score only jobs with no
+    // AI score yet (a chosen 'filtered' job is re-evaluated). ON: re-score every picked job.
+    const toScore = settings.allow_rescore
+      ? rows
+      : rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+    const skipped = rows.length - toScore.length;
 
-  if (toScore.length === 0) {
-    return NextResponse.json({ ok: true, scored: 0, filtered: 0, skipped });
+    if (toScore.length === 0) {
+      return NextResponse.json({ ok: true, scored: 0, filtered: 0, skipped });
+    }
+
+    const resume = await getScoringResumeText();
+    const client = await buildScoringClient(settings);
+
+    // prefilterThreshold: null → bypass the gate; the manual selection overrides it.
+    const { scored, filtered, errors } = await scoreJobRows(toScore, { resume, client, prefilterThreshold: null });
+
+    return NextResponse.json({ ok: true, scored, filtered, errors, skipped });
+  } catch (e) {
+    // Never let an unexpected error escape as an opaque 502 — return a clean message.
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
-
-  const resume = await getScoringResumeText();
-  const client = await buildScoringClient(settings);
-
-  // prefilterThreshold: null → bypass the gate; the manual selection overrides it.
-  const { scored, filtered, errors } = await scoreJobRows(toScore, { resume, client, prefilterThreshold: null });
-
-  return NextResponse.json({ ok: true, scored, filtered, errors, skipped });
 }

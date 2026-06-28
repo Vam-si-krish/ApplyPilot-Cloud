@@ -48,14 +48,13 @@ export async function buildClientForTask(settings: Settings, task: LlmTask): Pro
   const { provider, model } = taskProviderModel(settings, task);
 
   if (provider === SUBSCRIPTION_PROVIDER) {
+    // Always return a worker client (never throw here — an unhandled throw inside a
+    // serverless handler surfaces to the browser as an opaque 502). If the worker
+    // URL/secret can't be resolved, the client fails legibly at call time, which the
+    // callers already handle (scoreJob → visible score-0 with the reason; assistant →
+    // clean error). We never silently fall back to a paid API key.
     const worker = resolveWorker(settings);
-    if (!worker) {
-      throw new Error(
-        'Claude-subscription mode is selected but the worker is not configured — ' +
-          'set the worker URL + secret under Settings (or RESUME_WORKER_URL / RESUME_WORKER_SECRET).',
-      );
-    }
-    return makeWorkerClient(worker.url, worker.secret, model);
+    return makeWorkerClient(worker?.url ?? '', worker?.secret ?? '', model);
   }
 
   if (!isApiKeyProvider(provider)) return undefined;
