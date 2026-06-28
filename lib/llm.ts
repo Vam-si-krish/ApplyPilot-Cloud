@@ -346,6 +346,7 @@ export class WorkerLLMClient extends LLMClient {
       );
     }
     const url = `${this.workerUrl.replace(/\/$/, '')}/llm`;
+    const t0 = Date.now();
     let resp: Response;
     try {
       resp = await fetch(url, {
@@ -362,6 +363,7 @@ export class WorkerLLMClient extends LLMClient {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const unreachable = /fetch|timeout|abort|network/i.test(msg);
+      console.error(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms transport error: ${msg}`);
       throw new Error(
         unreachable
           ? 'Could not reach the worker for Claude-subscription scoring (is it running and reachable?).'
@@ -370,9 +372,11 @@ export class WorkerLLMClient extends LLMClient {
     }
     if (!resp.ok) {
       const data = (await resp.json().catch(() => ({}))) as { error?: string };
+      console.error(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms HTTP ${resp.status}: ${data.error || '(no body)'}`);
       throw new Error(data.error || `worker /llm error (${resp.status})`);
     }
     const data = (await resp.json()) as { text?: string };
+    console.log(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms ok textLen=${(data.text ?? '').length}`);
     return data.text ?? '';
   }
 }

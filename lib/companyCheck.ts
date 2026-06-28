@@ -15,6 +15,16 @@ import type { CompanyTier, Job } from './types';
 export interface CompanyAssessment {
   tier: CompanyTier;
   note: string;
+  /** True when the tier is 'unknown' because the LLM/worker call FAILED (not because
+   *  the model legitimately answered 'unknown'). Lets callers report real failures
+   *  instead of silently writing 'unknown' and counting it as a success (ADR 0042). */
+  error?: boolean;
+}
+
+/** Counts from a batch assessment: real tiers written vs. calls that failed. */
+export interface AssessRunResult {
+  assessed: number;
+  errors: number;
 }
 
 // ── Prompt ───────────────────────────────────────────────────────────────────
@@ -86,7 +96,10 @@ export async function assessCompany(
     const response = await llm.chat(messages, { maxTokens: 256, temperature: 0 });
     return parseCompanyResponse(response);
   } catch (e) {
-    return { tier: 'unknown', note: `assessment error: ${e instanceof Error ? e.message : String(e)}` };
+    const msg = e instanceof Error ? e.message : String(e);
+    // Visible failure (never a fabricated tier), and logged so the cause is findable.
+    console.error(`[assessCompany] FAIL company="${job.company ?? ''}": ${msg}`);
+    return { tier: 'unknown', note: `assessment error: ${msg}`, error: true };
   }
 }
 
@@ -104,18 +117,22 @@ const ASSESS_CONCURRENCY = Math.max(1, Number(process.env.ASSESS_CONCURRENCY) ||
  * matter since each row writes itself. Shared by /company-check (user-picked) and
  * /assess-batch (auto).
  */
-export async function assessCompanyRows(rows: Job[], client?: LLMClient): Promise<number> {
-  let assessed = 0;
+export async function assessCompanyRows(rows: Job[], client?: LLMClient): Promise<AssessRunResult> {
+  let assessed = 0; // real tiers written (incl. a genuine model 'unknown')
+  let errors = 0; // LLM/worker failures (tier forced to 'unknown')
   async function processRow(job: Job): Promise<void> {
     try {
-      const { tier, note } = await assessCompany(job, client);
+      const { tier, note, error: assessError } = await assessCompany(job, client);
       const { error } = await supabaseAdmin()
         .from('jobs')
         .update({ company_tier: tier, company_tier_note: note })
         .eq('id', job.id);
-      if (!error) assessed++;
+      if (error) errors++;
+      else if (assessError) errors++;
+      else assessed++;
     } catch {
       /* assessCompany already yields 'unknown' on error; guard the DB write too */
+      errors++;
     }
   }
   const queue = [...rows];
@@ -125,5 +142,6 @@ export async function assessCompanyRows(rows: Job[], client?: LLMClient): Promis
     }
   };
   await Promise.all(Array.from({ length: Math.min(ASSESS_CONCURRENCY, rows.length) }, runWorker));
-  return assessed;
+  console.log(`[assessCompanyRows] rows=${rows.length} assessed=${assessed} errors=${errors}`);
+  return { assessed, errors };
 }

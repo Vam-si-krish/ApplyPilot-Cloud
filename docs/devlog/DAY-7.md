@@ -48,6 +48,35 @@ on tailoring.
    few jobs → real scores, **no usage on the API dashboards**. Then Tailoring = subscription →
    generate an application → tailored résumé + PDF.
 
+## Follow-up fixes (2026-06-28) — two subscription-mode bugs + logging
+Reported: (A) re-assessing companies "skips" them in a second; (B) generating a résumé on
+the subscription model "keeps loading" forever. Root causes + fixes:
+
+- **Bug B (résumé hang) — root cause: no timeout on the Agent SDK call.** `agentClient.js`
+  `query()` could stall (most likely an **auth stall**: the launchd Worker Mac has no
+  `CLAUDE_CODE_OAUTH_TOKEN` and may lack Keychain access), leaving the `/tailor` row stuck
+  `generating` → the UI's 180s poll gives up with "Still generating". Fix: bound every SDK
+  call with an `AbortController` timeout (160s, under the UI's 180s deadline) so it fails the
+  row VISIBLY (`failed` + reason) instead of hanging. Also added `unhandledRejection` /
+  `uncaughtException` logging to the worker (a crash mid-call would also strand the row).
+- **Bug A (assess "skips") — root cause: failures were invisible.** `assessCompany` swallows
+  any LLM/worker error into `tier:'unknown'` and `assessCompanyRows` still counted it as
+  "assessed" → a failing subscription `/llm` flips every company to 'unknown' in a second and
+  the UI says "Done". Fix: `assessCompany` now flags `error:true` on failure; `assessCompanyRows`
+  returns `{ assessed, errors }`; `/company-check` + `/assess-batch` return `errors`; the Jobs UI
+  shows "Assessed N, M failed — check the AI provider/worker".
+- **Logging everywhere in the subscription path** to pinpoint future issues:
+  - `agentClient.js`: per-call id, model, prompt/system sizes, **auth-env presence**
+    (`oauthToken`/`apiKey`/`authToken`/`HOME`), the CLI's **stderr**, duration, outcome.
+  - `server.js`: `/llm`, `/tailor`, `/cover-letter` log request → ack → completion/failure + timing.
+  - `lib/llm.ts` `WorkerLLMClient`: logs model, duration, HTTP status / transport errors (→ Vercel logs).
+  - `lib/companyCheck.ts`: per-failure `console.error` + a batch summary line.
+
+**To get the fix live:** the Worker Mac must `git pull` + `npm install` + restart the worker,
+AND be authenticated (`claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN` in `resume-worker/.env`,
+no `ANTHROPIC_API_KEY`). The new logs (`resume-worker/logs/worker.{out,err}.log`) will then show
+exactly what the SDK is doing.
+
 ## Open questions / follow-ups
 - **Temperature/max_tokens** aren't controllable via the SDK — subscription calls run at model
   defaults (scoring normally 0.1). Watch eval drift if scoring is moved onto the subscription.

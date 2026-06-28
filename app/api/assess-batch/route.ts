@@ -32,12 +32,12 @@ export async function POST(req: Request) {
 
   const client = await buildScoringClient(settings);
 
-  const assessed = await assessCompanyRows(batch, client);
+  const { assessed, errors } = await assessCompanyRows(batch, client);
 
   const remaining = await countUnassessedHighScore(minScore);
   if (remaining > 0) {
     triggerAssessBatch();
-    return NextResponse.json({ ok: true, assessed, remaining });
+    return NextResponse.json({ ok: true, assessed, errors, remaining });
   }
-  return NextResponse.json({ ok: true, assessed, remaining: 0, done: true });
+  return NextResponse.json({ ok: true, assessed, errors, remaining: 0, done: true });
 }

@@ -38,8 +38,8 @@ const SUBSCRIPTION_PROVIDER = 'subscription';
  *  - an API provider → makeClient with its active vault key.
  * Returns { client } on success, or { error } describing what's missing.
  */
-async function resolveTaskClient(provider, model) {
-  if (provider === SUBSCRIPTION_PROVIDER) return { client: makeAgentClient(model) };
+async function resolveTaskClient(provider, model, label = 'task') {
+  if (provider === SUBSCRIPTION_PROVIDER) return { client: makeAgentClient(model, label) };
   if (!LLM_PROVIDERS.has(provider)) {
     return { error: `Provider "${provider || '(unset)'}" is not a supported LLM provider.` };
   }
@@ -165,7 +165,7 @@ app.post('/generate', async (req, res) => {
       const settings = await getSettings();
       const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
       const model = (settings.tailor_model || settings.llm_model || '').trim();
-      const { client } = await resolveTaskClient(provider, model);
+      const { client } = await resolveTaskClient(provider, model, 'condense');
       if (client) condenseFn = (resume, pass) => condenseResume(resume, client, pass);
     } catch {
       /* settings/key unavailable → deterministic backstop only */
@@ -233,8 +233,11 @@ app.post('/tailor', async (req, res) => {
     const settings = await getSettings();
     const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
     const model = (settings.tailor_model || settings.llm_model || '').trim();
-    const resolved = await resolveTaskClient(provider, model);
-    if (resolved.error) return res.status(409).json({ error: resolved.error });
+    const resolved = await resolveTaskClient(provider, model, 'tailor');
+    if (resolved.error) {
+      console.error(`[/tailor] precondition failed id=${id} provider=${provider}: ${resolved.error}`);
+      return res.status(409).json({ error: resolved.error });
+    }
 
     const job = appRow.job;
     const signals = {
@@ -248,21 +251,25 @@ app.post('/tailor', async (req, res) => {
     await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
     res.status(202).json({ ok: true, status: 'generating' });
 
+    const tStart = Date.now();
+    console.log(`[/tailor] start id=${id} provider=${provider} model=${model}`);
     const client = resolved.client;
     tailorResume(base, job, signals, client, appRow.tailor_instructions || '')
-      .then(({ resume, changes }) =>
+      .then(({ resume, changes }) => {
+        console.log(`[/tailor] done id=${id} ${Date.now() - tStart}ms`);
         // Clear any stale tailored score — the app re-scores the new résumé (ADR 0029).
-        updateApplication(id, {
+        return updateApplication(id, {
           tailored_resume: resume,
           tailor_changes: changes,
           status: 'ready',
           error: null,
           tailored_fit_score: null,
           tailored_score_note: null,
-        }),
-      )
+        });
+      })
       .catch((e) => {
         const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[/tailor] FAIL id=${id} ${Date.now() - tStart}ms: ${msg}`);
         return updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
       });
   } catch (e) {
@@ -298,14 +305,19 @@ app.post('/cover-letter', async (req, res) => {
     const settings = await getSettings();
     const provider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
     const model = (settings.tailor_model || settings.llm_model || '').trim();
-    const resolved = await resolveTaskClient(provider, model);
-    if (resolved.error) return res.status(409).json({ error: resolved.error });
+    const resolved = await resolveTaskClient(provider, model, 'cover');
+    if (resolved.error) {
+      console.error(`[/cover-letter] precondition failed id=${id} provider=${provider}: ${resolved.error}`);
+      return res.status(409).json({ error: resolved.error });
+    }
 
     const job = appRow.job;
     // All preconditions met — clear any prior error, ack, then do the slow work async.
     await updateApplication(id, { cover_letter_error: null }).catch(() => {});
     res.status(202).json({ ok: true });
 
+    const tStart = Date.now();
+    console.log(`[/cover-letter] start id=${id} provider=${provider} model=${model}`);
     const client = resolved.client;
     (async () => {
       const text = await generateCoverLetter(base, job, client);
@@ -313,8 +325,10 @@ app.post('/cover-letter', async (req, res) => {
       const path = `${id}-cover.pdf`;
       await uploadPdf(path, pdf);
       await updateApplication(id, { cover_letter: text, cover_letter_pdf_path: path, cover_letter_error: null });
+      console.log(`[/cover-letter] done id=${id} ${Date.now() - tStart}ms`);
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[/cover-letter] FAIL id=${id} ${Date.now() - tStart}ms: ${msg}`);
       return updateApplication(id, { cover_letter_error: msg }).catch(() => {});
     });
   } catch (e) {
@@ -363,11 +377,16 @@ app.post('/llm', async (req, res) => {
   const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
   const maxTokens = typeof body.maxTokens === 'number' ? body.maxTokens : undefined;
 
+  const t0 = Date.now();
+  console.log(`[/llm] request model=${model} messages=${body.messages.length}`);
   try {
-    const text = await makeAgentClient(model).chat(body.messages, { temperature, maxTokens });
+    const text = await makeAgentClient(model, 'llm').chat(body.messages, { temperature, maxTokens });
+    console.log(`[/llm] ok model=${model} ${Date.now() - t0}ms textLen=${text.length}`);
     res.json({ text });
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[/llm] FAIL model=${model} ${Date.now() - t0}ms: ${msg}`);
+    res.status(500).json({ error: msg });
   }
 });
 
@@ -383,3 +402,15 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+// Diagnostics (ADR 0042): a crash mid-tailoring would leave the row stuck 'generating'
+// (the in-process timeout dies with the process), which looks like "keeps loading". Log
+// loudly so the cause is in the worker log. Keep running on an unhandled rejection (often
+// recoverable); on a truly uncaught exception, log then exit so launchd restarts cleanly.
+process.on('unhandledRejection', (reason) => {
+  console.error('[worker] UNHANDLED REJECTION:', reason instanceof Error ? reason.stack || reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[worker] UNCAUGHT EXCEPTION:', err instanceof Error ? err.stack || err.message : err);
+  process.exit(1);
+});

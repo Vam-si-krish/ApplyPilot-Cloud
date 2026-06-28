@@ -39,7 +39,9 @@ export async function POST(req: Request) {
   const settings = await getSettings();
   const client = await buildScoringClient(settings);
 
-  const assessed = await assessCompanyRows(rows, client);
+  const { assessed, errors } = await assessCompanyRows(rows, client);
 
-  return NextResponse.json({ ok: true, assessed });
+  // Surface errors so a failing AI backend (e.g. the subscription worker down) shows up
+  // as failures instead of silently writing 'unknown' and looking like it "skipped".
+  return NextResponse.json({ ok: true, assessed, errors });
 }

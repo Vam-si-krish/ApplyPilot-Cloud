@@ -469,6 +469,7 @@ export default function JobsPage() {
     if (ids.length > 20 && !confirm(`Assess / re-assess ${ids.length} companies? This runs one AI call per job and re-rates any that were already assessed.`)) return;
     setBulkBusy(true);
     let assessed = 0;
+    let errors = 0;
     let done = 0;
     setBulkProgress({ label: 'AI-assessing companies', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
     try {
@@ -480,11 +481,16 @@ export default function JobsPage() {
           body: JSON.stringify({ ids: chunk }),
         }).then((r) => r.json());
         assessed += d.assessed ?? 0;
+        errors += d.errors ?? 0;
         done += chunk.length;
         setBulkProgress({ label: 'AI-assessing companies', done, total: ids.length, phase: 'running', tone: 'violet' });
         load(true); // tiers light up live as each chunk lands
       }
-      setBulkProgress({ label: `Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}`, done: ids.length, total: ids.length, phase: 'done', tone: 'violet' });
+      // Show failures explicitly — a failing AI backend must not look like a silent "done".
+      const doneLabel = errors
+        ? `Assessed ${assessed}, ${errors} failed — check the AI provider/worker`
+        : `Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}`;
+      setBulkProgress({ label: doneLabel, done: ids.length, total: ids.length, phase: 'done', tone: 'violet' });
       setSelected(new Set());
       load(true);
     } catch {
