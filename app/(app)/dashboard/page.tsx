@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { FileSearch, FileText, Star, AlarmClock, Play, RefreshCw, ExternalLink, ArrowRight } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import ScoringPanel from '@/components/ScoringPanel';
+import PipelineFunnel from '@/components/PipelineFunnel';
 import type { Job, Run } from '@/lib/types';
 
 interface Stats {
@@ -90,6 +91,9 @@ export default function DashboardPage() {
 
       {/* Live AI fit-scoring progress + Stop (ADR 0028). */}
       <ScoringPanel onActivity={load} />
+
+      {/* Live funnel view of the auto-pipeline — which stage we're at + how the data narrows (ADR 0045). */}
+      <PipelineFunnel />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {cards.map(({ label, value, icon: Icon, color }) => (
