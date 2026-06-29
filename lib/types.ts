@@ -144,6 +144,11 @@ export interface Settings {
   apify_actor_id: string; // LinkedIn actor variant (others use PORTAL_CONFIG defaults)
   job_portals: string[]; // e.g. ['linkedin', 'indeed', 'glassdoor']
   auto_scrape_enabled: boolean;
+  /** When true, a nightly cron drains the Tailor & Apply queue (status 'queued') on the
+   *  worker — tailor + score + PDF per résumé — at auto_tailor_time (ADR 0043). Off by default. */
+  auto_tailor_enabled: boolean;
+  /** 'HH:MM' wall-clock (in `timezone`) the overnight tailoring drain fires, e.g. '04:00'. */
+  auto_tailor_time: string;
   /** When true, each run advances every provider's active key to the next stored one (ADR 0007). */
   auto_rotate_keys: boolean;
   /** When true, only jobs scoring >= prefilter_threshold on the cheap match gate reach the LLM (ADR 0008). */

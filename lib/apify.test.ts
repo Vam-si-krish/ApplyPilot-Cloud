@@ -26,6 +26,8 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     apify_actor_id: 'cheap_scraper~linkedin-job-scraper',
     job_portals: ['linkedin'],
     auto_scrape_enabled: true,
+    auto_tailor_enabled: false,
+    auto_tailor_time: '04:00',
     auto_rotate_keys: false,
     prefilter_enabled: false,
     prefilter_threshold: 30,

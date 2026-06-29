@@ -16,7 +16,9 @@ import {
   getSettings,
   getActiveApiKey,
   getJobsByIds,
+  getQueuedApplications,
   getScoringResumeText,
+  resumeToScoringText,
   updateJob,
   updateApplication,
   uploadPdf,
@@ -276,6 +278,174 @@ app.post('/tailor', async (req, res) => {
     const msg = e instanceof Error ? e.message : String(e);
     if (!res.headersSent) res.status(500).json({ error: msg });
   }
+});
+
+// Build the signals block the tailorer expects from a job row (shared by /tailor and the
+// queue drainer). Mirrors the inline shape in /tailor above.
+function tailorSignals(job) {
+  return {
+    missing: (job.score_breakdown && job.score_breakdown.missing) || null,
+    matched: job.matched_skills || null,
+    unmatched: job.unmatched_skills || null,
+    keywords: job.score_keywords || null,
+  };
+}
+
+/**
+ * Run the full per-application pipeline ONCE, synchronously: tailor → render+upload PDF →
+ * score the tailored résumé. Each step's failure is contained; the function throws only
+ * if tailoring itself fails (no résumé to render/score). Returns a small status object.
+ * Reused by the nightly queue drainer; mirrors the manual "Generate selected" pipeline.
+ */
+async function runFullPipeline({ appRow, base, tailorClient, scoreClient }) {
+  const id = appRow.id;
+  const job = appRow.job;
+
+  // 1. Tailor (the one expensive LLM call). Throwing here marks the row failed below.
+  await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
+  const { resume, changes } = await tailorResume(base, job, tailorSignals(job), tailorClient, appRow.tailor_instructions || '');
+  await updateApplication(id, {
+    tailored_resume: resume,
+    tailor_changes: changes,
+    status: 'ready',
+    error: null,
+    tailored_fit_score: null,
+    tailored_score_note: null,
+  });
+
+  // 2. Render + upload the PDF (best-effort — a render failure shouldn't lose the résumé).
+  let rendered = resume;
+  try {
+    const condenseFn = (r, pass) => condenseResume(r, tailorClient, pass);
+    const out = await renderResumeToOnePage(resume, appRow.template || 'classic', condenseFn);
+    await uploadPdf(`${id}.pdf`, out.pdf);
+    const update = {
+      pdf_path: `${id}.pdf`,
+      error: out.tooLong
+        ? 'Content is very long — shrunk to one page; consider shortening.'
+        : out.trimmed
+          ? 'Content ran long — trimmed the least-important detail to fit one page.'
+          : null,
+    };
+    if (out.condensed || out.trimmed) {
+      rendered = out.resume;
+      update.tailored_resume = out.resume;
+    }
+    await updateApplication(id, update);
+  } catch (e) {
+    console.error(`[/tailor-queue] render failed id=${id}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // 3. Score the tailored résumé (best-effort — a scoring failure shouldn't fail the row).
+  if (scoreClient) {
+    try {
+      const result = await scoreJobWorker(resumeToScoringText(rendered), job, scoreClient);
+      await updateApplication(id, { tailored_fit_score: result.score, tailored_score_note: result.note });
+    } catch (e) {
+      console.error(`[/tailor-queue] score failed id=${id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  return { id, status: 'ready' };
+}
+
+/** Current hour (0–23) in an IANA timezone, DST-correct. Falls back to UTC on a bad tz. */
+function hourInTz(tz) {
+  try {
+    const h = new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(new Date());
+    const n = parseInt(h, 10); // 'en-US' can render midnight as '24'
+    return Number.isFinite(n) ? n % 24 : new Date().getUTCHours();
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+/**
+ * POST /tailor-queue → drain the overnight tailoring queue (ADR 0043). Fetches every
+ * application in status 'queued' (awaiting tailoring) and runs the full pipeline for each
+ * — tailor → render+PDF → score — ONE AT A TIME (so a burst can't blow the Claude
+ * subscription window and so subscription account-failover works per call). Each row is
+ * independent: a failure marks that row 'failed' with a reason and the drain continues.
+ *
+ * SCHEDULING (the app is on Netlify — vercel.json crons do NOT fire here): the always-on
+ * Worker Mac's launchd job pings this HOURLY with `{ scheduled: true }`. When `scheduled`
+ * is set, the worker self-gates on the DB Settings: it no-ops unless `auto_tailor_enabled`
+ * is true AND the current hour in the user's timezone matches `auto_tailor_time` — so the
+ * Settings UI stays the source of truth for the time (change it on the web, no plist edit).
+ * A manual call (the "Run queue now" button, or any POST WITHOUT `scheduled`) bypasses the
+ * gate and drains immediately. The worker acks 202 then drains in the background.
+ */
+app.post('/tailor-queue', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  // Optional safety cap from the caller; default high.
+  const limit = Number.isFinite(req.body?.limit) && req.body.limit > 0 ? Math.floor(req.body.limit) : 200;
+  // launchd fires hourly with scheduled:true; only then do we honor the UI toggle + hour.
+  const scheduled = req.body?.scheduled === true;
+
+  let base, tailorClient, scoreClient, queued;
+  try {
+    const settings = await getSettings();
+
+    // Scheduled path: respect the Settings UI (enabled + the configured hour). Manual
+    // calls skip this so "Run queue now" always works regardless of schedule.
+    if (scheduled) {
+      if (settings.auto_tailor_enabled !== true) {
+        return res.json({ ok: true, skipped: true, reason: 'auto_tailor_enabled is false' });
+      }
+      const wantHour = parseInt(String(settings.auto_tailor_time || '04:00').split(':')[0], 10);
+      const nowHour = hourInTz(settings.timezone || 'UTC');
+      if (Number.isFinite(wantHour) && nowHour !== wantHour) {
+        return res.json({ ok: true, skipped: true, reason: `not the scheduled hour (now ${nowHour}, want ${wantHour})` });
+      }
+    }
+
+    base = await getBaseResume();
+    if (!base || !Array.isArray(base.work) || base.work.length === 0) {
+      return res.status(409).json({ error: 'No base résumé yet — build it under Applications → Base résumé first.' });
+    }
+
+    // Tailoring client (required) — the queue can't run without it.
+    const tProvider = (settings.tailor_provider || settings.llm_provider || '').trim().toLowerCase();
+    const tModel = (settings.tailor_model || settings.llm_model || '').trim();
+    const tResolved = await resolveTaskClient(tProvider, tModel, 'tailor');
+    if (tResolved.error) return res.status(409).json({ error: tResolved.error });
+    tailorClient = tResolved.client;
+
+    // Scoring client (optional) — if unconfigured, résumés are tailored+rendered but not scored.
+    const sProvider = (settings.score_provider || settings.llm_provider || '').trim().toLowerCase();
+    const sModel = (settings.score_model || settings.llm_model || '').trim();
+    const sResolved = await resolveTaskClient(sProvider, sModel, 'score');
+    scoreClient = sResolved.error ? null : sResolved.client;
+
+    queued = await getQueuedApplications();
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+
+  const batch = queued.slice(0, limit);
+  // Ack immediately — the drain runs for many minutes in the background.
+  res.status(202).json({ ok: true, queued: queued.length, processing: batch.length });
+
+  (async () => {
+    const t0 = Date.now();
+    let ok = 0;
+    let failed = 0;
+    console.log(`[/tailor-queue] start — ${batch.length} of ${queued.length} queued (limit ${limit})`);
+    for (const appRow of batch) {
+      try {
+        await runFullPipeline({ appRow, base, tailorClient, scoreClient });
+        ok++;
+        console.log(`[/tailor-queue] ok ${ok}/${batch.length} id=${appRow.id}`);
+      } catch (e) {
+        failed++;
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[/tailor-queue] FAIL id=${appRow.id}: ${msg}`);
+        await updateApplication(appRow.id, { status: 'failed', error: msg }).catch(() => {});
+      }
+    }
+    console.log(`[/tailor-queue] done — ${ok} generated, ${failed} failed in ${Math.round((Date.now() - t0) / 1000)}s`);
+  })().catch((e) => console.error('[/tailor-queue] drain error:', e instanceof Error ? e.message : String(e)));
 });
 
 /**

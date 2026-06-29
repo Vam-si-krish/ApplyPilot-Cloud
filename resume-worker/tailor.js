@@ -363,7 +363,7 @@ WRITE LIKE A HUMAN, NOT AN AI — recruiters and reviewers spot AI-written résu
 - Do NOT use these AI-tell / filler words: leverage, utilize, robust, seamless, spearhead, synergy, facilitate, foster, elevate, navigate, landscape, tapestry, realm, cutting-edge, state-of-the-art, "passionate about", "results-driven", "team player", and the "not just X, but Y" construction. Say it plainly: use (not utilize), built (not spearheaded), improve (not elevate).
 - Vary sentence structure and rhythm across bullets; do not make every bullet the same shape.
 
-DISCLOSURE — include a top-level "_changes" array of short strings listing (a) every skill you ADDED that wasn't in the base résumé, and (b) any notable points/scenarios you INVENTED or significantly embellished. Be honest and specific here.
+DISCLOSURE — include a top-level "_changes" array. Keep it SHORT (token budget): the FIRST entry is ONE sentence (≤ 200 chars) summarizing what you changed and why this candidate is a good fit for the role. Then add one short entry ONLY for each point/scenario you genuinely INVENTED or significantly embellished (something a background check or interview could expose) — omit routine rewording, reordering, and added skills (those are detected automatically). If you invented nothing, return just the single summary sentence.
 
 Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work" and "projects" in the SAME ORDER and SAME COUNT as the base (one entry per role/project), with "name" copied from the base purely so the bullets stay aligned to the right role:
 {
@@ -371,7 +371,7 @@ Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep 
   "work": [ { "name": "<company, copied from base>", "highlights": ["", ""] } ],
   "skills": [ { "name": "", "keywords": ["", ""] } ],
   "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
-  "_changes": ["Added Kubernetes (adjacent to your Docker/CI experience)", "Tightened a generic bullet into a detailed WebSockets real-time-collaboration one"]
+  "_changes": ["Reframed your summary and bullets around the role's cloud/CI focus and added Kubernetes — a strong fit given your Docker experience.", "Embellished: described leading a 5-engineer migration (you contributed but did not lead it)"]
 }
 Do NOT output name, contact, profiles, job titles, dates, locations, or education — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
 

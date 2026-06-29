@@ -180,6 +180,33 @@ export default function ApplicationsPage() {
     }
   }
 
+  // Trigger the overnight tailoring drain right now (same pipeline the 4am cron runs).
+  // The worker acks immediately and drains every 'queued' application in the background;
+  // rows light up as each finishes via the normal status polling. Use this to test the
+  // queue without waiting for the scheduled time.
+  async function runQueueNow() {
+    if (bulkBusy || bulkRunning || genId) return;
+    setBulkBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch('/api/tailor-queue', { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMsg(d.error || 'Could not start the queue.');
+      } else if ((d.processing ?? 0) === 0) {
+        setMsg('Nothing queued to tailor.');
+      } else {
+        setMsg(`Tailoring ${d.processing} queued résumé${d.processing === 1 ? '' : 's'} in the background — they’ll appear as each finishes.`);
+      }
+      load(true);
+    } catch {
+      setMsg('Could not reach the server to start the queue.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setMsg(null), 6000);
+    }
+  }
+
   // Fetch a single application's current row from the list endpoint (used to poll
   // for the worker's async tailoring result).
   async function fetchApp(id: string): Promise<ApplicationWithJob | null> {
@@ -276,6 +303,8 @@ export default function ApplicationsPage() {
   const selectableIds = filtered.map((a) => a.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const selectedGeneratable = [...selected].filter((id) => apps.find((a) => a.id === id)?.job).length;
+  // Applications waiting to be tailored — what the overnight drain (and "Run queue now") acts on.
+  const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.tailored_resume).length;
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(selectableIds));
   }
@@ -706,10 +735,18 @@ export default function ApplicationsPage() {
             </button>
           )}
           <button
+            onClick={runQueueNow}
+            disabled={bulkBusy || bulkRunning || !!genId || queuedCount === 0}
+            title="Tailor, score, and render every queued application now (the same pipeline the overnight schedule runs)"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+          >
+            <Clock size={13} /> Run queue now{queuedCount > 0 ? ` (${queuedCount})` : ''}
+          </button>
+          <button
             onClick={generateSelected}
             disabled={bulkBusy || bulkRunning || !!genId || selectedGeneratable === 0}
             title="Generate a tailored résumé for every selected application"
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
           >
             {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
             {bulkBusy ? 'Generating…' : `Generate selected${selectedGeneratable > 0 ? ` (${selectedGeneratable})` : ''}`}

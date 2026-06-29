@@ -71,6 +71,10 @@ export async function PUT(req: Request) {
     if (valid.length > 0) patch.job_portals = valid;
   }
   if (typeof body.auto_scrape_enabled === 'boolean') patch.auto_scrape_enabled = body.auto_scrape_enabled;
+  if (typeof body.auto_tailor_enabled === 'boolean') patch.auto_tailor_enabled = body.auto_tailor_enabled;
+  if (typeof body.auto_tailor_time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(body.auto_tailor_time)) {
+    patch.auto_tailor_time = body.auto_tailor_time;
+  }
   if (typeof body.auto_rotate_keys === 'boolean') patch.auto_rotate_keys = body.auto_rotate_keys;
   if (typeof body.prefilter_enabled === 'boolean') patch.prefilter_enabled = body.prefilter_enabled;
   if (Number.isFinite(Number(body.prefilter_threshold))) {

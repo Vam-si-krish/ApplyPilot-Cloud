@@ -31,6 +31,25 @@ export async function getApplicationWithJob(id) {
   return data;
 }
 
+/**
+ * Applications awaiting tailoring (ADR 0043) — status 'queued' and not yet generated,
+ * joined with their job (the queue worker needs the job text + signals). Rows whose job
+ * was removed are skipped here (inner-join semantics via the not-null filter) so the
+ * nightly batch only spends LLM calls on tailorable rows. Oldest first = FIFO drain.
+ */
+export async function getQueuedApplications() {
+  const { data, error } = await client()
+    .from('applications')
+    .select('*, job:jobs(*)')
+    .eq('status', 'queued')
+    .is('tailored_resume', null)
+    .not('job_id', 'is', null)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`load queued applications: ${error.message}`);
+  // Defensively drop any row whose job didn't join (deleted job) — those aren't tailorable.
+  return (data || []).filter((a) => a.job);
+}
+
 /** Settings row (id=1) — holds the per-task LLM provider/model (ADR 0025). */
 export async function getSettings() {
   const { data, error } = await client().from('settings').select('*').eq('id', 1).single();
@@ -87,52 +106,58 @@ export async function getJobsByIds(ids) {
 }
 
 /**
+ * Flatten a JSON-Resume doc to the plain-text shape the scorer expects (mirrors the
+ * cloud's resumeToText / lib/db). Used for both the base résumé (scoring jobs) and a
+ * TAILORED résumé (scoring it overnight, ADR 0043). Returns '' for an empty/invalid doc.
+ */
+export function resumeToScoringText(resume) {
+  if (!resume || typeof resume !== 'object') return '';
+  const out = [];
+  const b = resume.basics || {};
+  if (b.name) out.push(b.name);
+  if (b.label) out.push(b.label);
+  if (b.summary) out.push(`\n${b.summary}`);
+  if (Array.isArray(resume.work) && resume.work.length) {
+    out.push('\nEXPERIENCE');
+    for (const w of resume.work) {
+      const head = [w.position, w.name].filter(Boolean).join(' — ');
+      const dates = [w.startDate, w.endDate].filter(Boolean).join(' to ');
+      out.push([head, dates].filter(Boolean).join('  '));
+      for (const h of (w.highlights || [])) out.push(`- ${h}`);
+    }
+  }
+  if (Array.isArray(resume.education) && resume.education.length) {
+    out.push('\nEDUCATION');
+    for (const e of resume.education) {
+      out.push([e.studyType, e.area, e.institution].filter(Boolean).join(', '));
+    }
+  }
+  if (Array.isArray(resume.skills) && resume.skills.length) {
+    out.push('\nSKILLS');
+    for (const s of resume.skills) {
+      const kws = (s.keywords || []).join(', ');
+      out.push([s.name, kws].filter(Boolean).join(': '));
+    }
+  }
+  if (Array.isArray(resume.projects) && resume.projects.length) {
+    out.push('\nPROJECTS');
+    for (const p of resume.projects) {
+      out.push([p.name, p.description].filter(Boolean).join(' — '));
+      for (const h of (p.highlights || [])) out.push(`- ${h}`);
+    }
+  }
+  return out.join('\n').trim();
+}
+
+/**
  * The resume text used for scoring. Prefers the structured base_resume converted
  * to text; falls back to the raw resume_text string (same logic as lib/db.ts).
  */
 export async function getScoringResumeText() {
   const { data, error } = await client().from('profile').select('base_resume, resume_text').eq('id', 1).single();
   if (error) throw new Error(`load resume: ${error.message}`);
-  const base = data?.base_resume ?? null;
-  if (base) {
-    const out = [];
-    const b = base.basics || {};
-    if (b.name) out.push(b.name);
-    if (b.label) out.push(b.label);
-    if (b.summary) out.push(`\n${b.summary}`);
-    if (Array.isArray(base.work) && base.work.length) {
-      out.push('\nEXPERIENCE');
-      for (const w of base.work) {
-        const head = [w.position, w.name].filter(Boolean).join(' — ');
-        const dates = [w.startDate, w.endDate].filter(Boolean).join(' to ');
-        out.push([head, dates].filter(Boolean).join('  '));
-        for (const h of (w.highlights || [])) out.push(`- ${h}`);
-      }
-    }
-    if (Array.isArray(base.education) && base.education.length) {
-      out.push('\nEDUCATION');
-      for (const e of base.education) {
-        out.push([e.studyType, e.area, e.institution].filter(Boolean).join(', '));
-      }
-    }
-    if (Array.isArray(base.skills) && base.skills.length) {
-      out.push('\nSKILLS');
-      for (const s of base.skills) {
-        const kws = (s.keywords || []).join(', ');
-        out.push([s.name, kws].filter(Boolean).join(': '));
-      }
-    }
-    if (Array.isArray(base.projects) && base.projects.length) {
-      out.push('\nPROJECTS');
-      for (const p of base.projects) {
-        out.push([p.name, p.description].filter(Boolean).join(' — '));
-        for (const h of (p.highlights || [])) out.push(`- ${h}`);
-      }
-    }
-    const text = out.join('\n').trim();
-    if (text) return text;
-  }
-  return (data?.resume_text || '');
+  const text = resumeToScoringText(data?.base_resume ?? null);
+  return text || (data?.resume_text || '');
 }
 
 /** Write score fields onto a job row. */

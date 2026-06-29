@@ -163,6 +163,40 @@ export default function SettingsPage() {
           Vercel Cron triggers <span className="font-mono text-sky">/api/run</span> on a UTC schedule. Update{' '}
           <span className="font-mono text-sky">vercel.json</span> to match this time in UTC (see the README). Unchecking the box above will pause automated scrapes.
         </p>
+
+        <div className="mt-6 pt-5 border-t border-ink">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="auto_tailor_enabled"
+              checked={s.auto_tailor_enabled ?? false}
+              onChange={(e) => patch({ auto_tailor_enabled: e.target.checked })}
+              className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+            />
+            <label htmlFor="auto_tailor_enabled" className="text-[13px] text-slate-text">
+              Auto-tailor the Tailor &amp; Apply queue overnight
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <Field
+              label="Tailor time (HH:MM)"
+              value={s.auto_tailor_time ?? '04:00'}
+              onChange={(v) => patch({ auto_tailor_time: v })}
+              placeholder="04:00"
+            />
+          </div>
+          <p className="text-slate-muted text-[11px] mt-3">
+            At this time (in the timezone above), every résumé you&apos;ve queued in{' '}
+            <span className="text-sky">Tailor &amp; Apply</span> is tailored, scored, and rendered to a PDF on the worker — so
+            the heavy AI usage is spent overnight and the résumés are ready by morning. Runs one at a time; failed rows are
+            marked and skipped. Leave off to tailor manually with “Generate selected”.
+          </p>
+          <p className="text-slate-muted text-[11px] mt-2">
+            The schedule is driven by the always-on worker Mac (the app host doesn&apos;t run timers), so the worker must be
+            online and awake at this hour. Use <span className="text-sky">Run queue now</span> on Tailor &amp; Apply to test it
+            any time.
+          </p>
+        </div>
       </Section>
 
       {/* Search */}
