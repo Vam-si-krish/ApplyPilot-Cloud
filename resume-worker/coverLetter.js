@@ -17,7 +17,33 @@ Style:
 - Paragraph 3: a brief close and a call to talk.
 - Begin with "Dear Hiring Manager," on its own line. End with "Sincerely," on its own line, then the candidate's full name on the next line.
 
-Output ONLY the letter text — no preamble, no subject line, no address block, no date, no markdown.`;
+CRITICAL: Your entire response MUST start with "Dear Hiring Manager," — write NO sentence, acknowledgement, or commentary before it, and NOTHING after the candidate's name. No preamble, no subject line, no address block, no date, no markdown, no horizontal rules.`;
+
+/**
+ * Extract just the letter from the model's reply. The Agent SDK model tends to add a
+ * conversational preamble ("I'll write a compelling cover letter…") and/or a trailing
+ * note despite the prompt — that text must NOT reach the PDF. Keep from the "Dear …"
+ * salutation through the name line that follows the "Sincerely," sign-off.
+ */
+function extractLetter(raw) {
+  let t = String(raw || '').replace(/\r/g, '').replace(/—/g, ', ').trim();
+  // Drop any preamble before the salutation.
+  const dear = t.search(/(^|\n)[ \t]*Dear\b/i);
+  if (dear > 0) t = t.slice(dear).replace(/^\s+/, '');
+  // Remove stray markdown horizontal-rule lines the model inserts.
+  const lines = t.split('\n').filter((ln) => !/^\s*-{3,}\s*$/.test(ln));
+  // Cut any trailing commentary after the sign-off + name: keep through the first
+  // non-empty line after "Sincerely,".
+  const si = lines.findIndex((ln) => /^\s*Sincerely\b/i.test(ln));
+  if (si >= 0) {
+    let end = si;
+    for (let i = si + 1; i < lines.length; i++) {
+      if (lines[i].trim()) { end = i; break; }
+    }
+    return lines.slice(0, end + 1).join('\n').trim();
+  }
+  return lines.join('\n').trim();
+}
 
 /** A compact text view of the base résumé for the user message. */
 function resumeContext(base) {
@@ -44,14 +70,24 @@ function resumeContext(base) {
   return lines.join('\n');
 }
 
-function buildMessages(base, job) {
+/** The job description text. Jobs store it in `full_description` (HTML); fall back to
+ *  `description`. Strip tags + collapse whitespace, like tailor.js does. */
+function jobDescriptionText(job) {
+  return String(job.full_description || job.description || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 8000);
+}
+
+function buildMessages(base, job, jd) {
   const jobText = [
     `Role: ${job.title || ''}`,
     job.company ? `Company: ${job.company}` : '',
     job.location ? `Location: ${job.location}` : '',
     '',
     'Job description:',
-    String(job.description || '').slice(0, 8000),
+    jd,
   ]
     .filter(Boolean)
     .join('\n');
@@ -72,10 +108,20 @@ export async function generateCoverLetter(base, job, client) {
   if (!base || !Array.isArray(base.work) || base.work.length === 0) {
     throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
   }
-  const text = await client.chat(buildMessages(base, job), { maxTokens: 1200, temperature: 0.4 });
-  const cleaned = String(text || '')
-    .replace(/—/g, ', ') // strip em-dashes per house style
-    .trim();
+  // Guard: with no job description the model can only hedge ("please share the JD"),
+  // and that conversational reply would land in the PDF. Fail clearly instead.
+  const jd = jobDescriptionText(job);
+  if (jd.length < 30) {
+    throw new Error('This job has no description text saved — re-fetch the job before writing a cover letter.');
+  }
+
+  const text = await client.chat(buildMessages(base, job, jd), { maxTokens: 1200, temperature: 0.4 });
+  // Safety net: a real letter ends with "Sincerely,". If the model hedged or asked a
+  // question instead of writing one, don't render that into a PDF.
+  if (!/sincerely/i.test(String(text || ''))) {
+    throw new Error('The model did not return a proper cover letter (no sign-off) — please retry.');
+  }
+  const cleaned = extractLetter(text); // strip any preamble / trailing commentary
   if (!cleaned) throw new Error('The model returned an empty cover letter.');
   return cleaned;
 }

@@ -178,8 +178,11 @@ async function runOnce(messages, opts, account, model, label) {
   };
 
   const options = {
-    model,
-    maxTurns: 1, // single completion — never an agentic loop
+    // Headroom, not an agentic loop: with allowedTools:[] the model can't DO anything
+    // multi-step, but a large single completion (e.g. a full tailored résumé) can spill
+    // into a 2nd SDK "turn" — at maxTurns:1 that surfaces as error_max_turns. A small
+    // ceiling lets it finish; it still stops as soon as the text is produced.
+    maxTurns: Math.max(1, Number(process.env.AGENT_SDK_MAX_TURNS) || 8),
     allowedTools: [], // no tools: behave as a plain text model
     settingSources: [], // ignore any filesystem settings / project CLAUDE.md
     permissionMode: 'bypassPermissions',
@@ -187,6 +190,12 @@ async function runOnce(messages, opts, account, model, label) {
     env: subscriptionEnv(account),
     abortController: ac,
     stderr: onStderr,
+    // Disable extended thinking. These are single-shot structured generations (score,
+    // tailor, cover letter); the SDK's default adaptive 'high'-effort thinking burns
+    // thousands of thinking tokens and adds MINUTES of latency (~145s tailors) with no
+    // quality gain over the original API-mode calls (which never used thinking). Set
+    // AGENT_SDK_THINKING=enabled to restore it if ever needed.
+    ...(process.env.AGENT_SDK_THINKING === 'enabled' ? {} : { thinking: { type: 'disabled' } }),
   };
   if (system) options.systemPrompt = system; // custom string replaces the default
   if (process.env.CLAUDE_CLI_PATH) options.pathToClaudeCodeExecutable = process.env.CLAUDE_CLI_PATH;
