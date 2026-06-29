@@ -2,7 +2,7 @@
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
 import { resumeToText } from './resume';
-import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
+import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState, CompanyTier } from './types';
 
 // ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
 
@@ -332,6 +332,69 @@ export async function countUnassessedHighScore(minScore: number): Promise<number
     .is('company_tier', null);
   if (error) throw new Error(`Failed to count unassessed: ${error.message}`);
   return count ?? 0;
+}
+
+// ── Auto-pipeline stages (ADR 0044) ──────────────────────────────────────────
+// The pipeline ARCHIVES (never hard-deletes) jobs it rejects: status='archived' drops
+// them from the active Jobs list and excludes them from the unscored/assess queues, but
+// keeps the row recoverable and prevents re-fetch/re-score churn.
+
+/**
+ * Stage 2 — archive scraped jobs with NO skill match before scoring (ADR 0044). Only
+ * unscored rows with a computed skill_match_score strictly below the threshold are
+ * archived; a null score (skills not set / actor gave none) is LEFT to be scored, so the
+ * gate never silently drops everything when skill matching is unavailable. Returns the
+ * count archived. Threshold ≤ 0 is a no-op (the gate is off).
+ */
+export async function archiveBelowSkillMatch(threshold: number): Promise<number> {
+  if (!(threshold > 0)) return 0;
+  const { data, error } = await supabaseAdmin()
+    .from('jobs')
+    .update({ status: 'archived', updated_at: new Date().toISOString() })
+    .eq('status', 'unscored')
+    .not('skill_match_score', 'is', null)
+    .lt('skill_match_score', threshold)
+    .select('id');
+  if (error) throw new Error(`Failed to archive low-skill-match jobs: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+/**
+ * Stage 4 — archive scored jobs at/below a fit-score cutoff (ADR 0044), e.g. ≤ 5. Only
+ * touches rows already scored (fit_score not null) so it can't race the scorer. Returns
+ * the count archived.
+ */
+export async function archiveAtOrBelowScore(cutoff: number): Promise<number> {
+  const { data, error } = await supabaseAdmin()
+    .from('jobs')
+    .update({ status: 'archived', updated_at: new Date().toISOString() })
+    .eq('status', 'scored')
+    .not('fit_score', 'is', null)
+    .lte('fit_score', cutoff)
+    .select('id');
+  if (error) throw new Error(`Failed to archive low-score jobs: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+/**
+ * Stage 6 — the top-N surviving jobs to send to Tailor & Apply (ADR 0044). Scored jobs
+ * (status 'scored') whose company tier is acceptable — 'good', 'medium', or 'unknown'
+ * (don't punish an employer the model couldn't rate) and NOT 'low' — ordered by fit_score
+ * desc, capped at `limit`. Returns the job IDs; the caller hands them to addApplications.
+ */
+export async function getTopJobsForTailoring(limit: number): Promise<string[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('jobs')
+    .select('id, company_tier')
+    .eq('status', 'scored')
+    .not('fit_score', 'is', null)
+    .order('fit_score', { ascending: false })
+    .limit(limit * 2); // over-fetch, then drop 'low'-tier in JS (cheaper than an .or() filter)
+  if (error) throw new Error(`Failed to load top jobs for tailoring: ${error.message}`);
+  return (data ?? [])
+    .filter((j) => (j as { company_tier: CompanyTier | null }).company_tier !== 'low')
+    .slice(0, limit)
+    .map((j) => (j as { id: string }).id);
 }
 
 /** The most recent run still marked 'running', if any. */
