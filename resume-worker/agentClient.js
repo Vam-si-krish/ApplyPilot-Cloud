@@ -211,8 +211,10 @@ async function runOnce(messages, opts, account, model, label) {
         }
       } else if (msg.type === 'result') {
         resultText = typeof msg.result === 'string' ? msg.result : '';
+        const u = msg.usage || {};
         console.log(
-          `[agent ${rid}] result task=${label} account=${account.id} subtype=${msg.subtype} turns=${msg.num_turns ?? '?'} costUsd=${msg.total_cost_usd ?? '?'}`,
+          `[agent ${rid}] result task=${label} account=${account.id} subtype=${msg.subtype} turns=${msg.num_turns ?? '?'} costUsd=${msg.total_cost_usd ?? '?'} ` +
+            `tokens{in=${u.input_tokens ?? '?'} out=${u.output_tokens ?? '?'} cacheWrite=${u.cache_creation_input_tokens ?? 0} cacheRead=${u.cache_read_input_tokens ?? 0}}`,
         );
         if (msg.subtype && msg.subtype !== 'success') {
           failure = `Agent SDK ${msg.subtype}${resultText ? `: ${resultText}` : ''}`;
