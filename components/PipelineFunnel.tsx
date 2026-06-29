@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 /**
  * Live funnel view of the auto-pipeline (ADR 0044/0045). Reads /api/pipeline, which
@@ -23,28 +23,24 @@ type Stage = {
 type PipelineData = {
   enabled: boolean;
   cutoff: number;
-  stage: 'idle' | 'fetching' | 'scoring' | 'assessing' | 'tailoring' | 'done';
+  stage: 'idle' | 'fetching' | 'scoring';
   detail: string;
+  pending: string; // backlog summary, shown when idle (e.g. "230 to assess · 28 queued to tailor")
   stages: Stage[];
 };
 
-// Maps the live `stage` to the funnel box it belongs to, so we can highlight it.
+// Maps the live `stage` to the funnel box it highlights. Only genuinely-running stages
+// (fetch / score) light up; idle highlights nothing.
 const STAGE_TO_KEY: Record<PipelineData['stage'], string | null> = {
   idle: null,
   fetching: 'fetched',
   scoring: 'scored',
-  assessing: 'assessed',
-  tailoring: 'queued',
-  done: 'tailored',
 };
 
 const STAGE_LABEL: Record<PipelineData['stage'], string> = {
   idle: 'Idle',
-  fetching: 'Fetching / awaiting scoring',
+  fetching: 'Fetching',
   scoring: 'Scoring jobs',
-  assessing: 'Assessing companies',
-  tailoring: 'Tailoring queued résumés',
-  done: 'Complete',
 };
 
 const POLL_MS = 4000; // responsive live-step; data is on the always-on DB, cheap to read
@@ -102,14 +98,16 @@ export default function PipelineFunnel() {
   }
 
   const activeKey = STAGE_TO_KEY[data.stage];
-  const isRunning = data.stage === 'scoring' || data.stage === 'assessing' || data.stage === 'tailoring';
+  const isRunning = data.stage === 'fetching' || data.stage === 'scoring';
 
   return (
     <div className="mb-8 bg-card border border-ink rounded-xl p-5">
-      {/* Header: current step + connection indicator */}
+      {/* Header: current step + connection indicator. The boxes below are the CURRENT STATE
+          of all jobs in the system (cumulative), not one run — hence the "all jobs" label. */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h2 className="font-display text-[13px] font-semibold text-slate-text uppercase tracking-wider">Pipeline</h2>
+          <span className="text-[11px] text-slate-muted normal-case tracking-normal">· all jobs</span>
           {!data.enabled && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-raised border border-ink text-slate-muted uppercase tracking-wider">
               auto off
@@ -118,15 +116,15 @@ export default function PipelineFunnel() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-[12px]">
-            {data.stage === 'done' ? (
-              <CheckCircle2 size={13} className="text-emerald" />
-            ) : isRunning ? (
+            {isRunning ? (
               <Loader2 size={13} className="animate-spin text-sky" />
             ) : (
               <span className="w-2 h-2 rounded-full bg-slate-muted/50" />
             )}
-            <span className={isRunning ? 'text-sky' : 'text-slate-text'}>{STAGE_LABEL[data.stage]}</span>
-            {data.detail && <span className="text-slate-muted">· {data.detail}</span>}
+            <span className={isRunning ? 'text-sky' : 'text-slate-muted'}>{STAGE_LABEL[data.stage]}</span>
+            {/* When running: the live detail. When idle: the standing backlog, clearly NOT "running". */}
+            {isRunning && data.detail && <span className="text-slate-muted">· {data.detail}</span>}
+            {!isRunning && data.pending && <span className="text-slate-muted">· {data.pending} pending</span>}
           </div>
           {/* Live connection dot — green when the last poll succeeded, amber when degraded. */}
           <span

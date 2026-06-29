@@ -63,43 +63,44 @@ export async function GET() {
     const eligibleForTailor = Math.max(0, scored - lowTier); // good/medium/unknown survivors
 
     // ── Live current stage ──────────────────────────────────────────────────
-    // Priority: an active scrape (runs.status='running') → active scorer → unscored backlog
-    // → unassessed companies → queued-to-tailor → done. Each signal is from the DB, so this
-    // is identical whether read fresh on a refresh or on the poll interval.
+    // A stage is "running" ONLY when there's a genuine, fresh activity signal:
+    //   - an active Apify scrape (a runs row 'running', younger than 2h — older = orphaned), or
+    //   - the single-flight scorer holding a NON-stale lock (heartbeat within 120s).
+    // Assessment and tailoring have no equivalent "am I running" flag, and unfinished work
+    // (unscored rows, unassessed companies, queued apps) is just BACKLOG, not activity — so it
+    // must NOT be reported as a running stage. When nothing is genuinely running we report
+    // 'idle' and describe the backlog separately, so the UI never implies a run is happening
+    // when it isn't. (This is why old leftover data used to show as "Assessing companies".)
     const [st, latestRun] = await Promise.all([getScoringState(), getLatestRunningRun()]);
     const scoringActive = !!st?.active && !isScoringStale(st);
-    // A scrape finishes in minutes; a run still 'running' after ~2h is stuck/orphaned (it
-    // never finalized), so don't let it pin the funnel on "fetching" forever.
     const runningRun =
       latestRun && Date.now() - new Date(latestRun.started_at).getTime() < 2 * 60 * 60 * 1000 ? latestRun : null;
-    let stage: 'idle' | 'fetching' | 'scoring' | 'assessing' | 'tailoring' | 'done';
+
+    let stage: 'idle' | 'fetching' | 'scoring';
     let detail = '';
-    if (scoringActive) {
+    if (runningRun) {
+      stage = 'fetching';
+      detail = runningRun.jobs_found > 0 ? `${runningRun.jobs_found} found so far` : 'scraping…';
+    } else if (scoringActive) {
       stage = 'scoring';
       detail = `${st?.done ?? 0}/${st?.total ?? 0} scored`;
-    } else if (runningRun) {
-      stage = 'fetching'; // Apify scrape in progress (jobs may not have landed yet)
-      detail = runningRun.jobs_found > 0 ? `${runningRun.jobs_found} found so far` : 'scraping…';
-    } else if (unscored > 0) {
-      stage = 'scoring'; // rows awaiting scoring but the scorer isn't holding the lock yet
-      detail = `${unscored} awaiting scoring`;
-    } else if (assessCandidates - assessed > 0) {
-      stage = 'assessing';
-      detail = `${assessCandidates - assessed} companies left`;
-    } else if (queued > 0) {
-      stage = 'tailoring';
-      detail = `${queued} queued in Tailor & Apply`;
-    } else if (tailored > 0) {
-      stage = 'done';
-      detail = `${tailored} tailored`;
     } else {
       stage = 'idle';
     }
+
+    // Backlog summary — informative, shown only when idle, never styled as "running".
+    const unassessed = Math.max(0, assessCandidates - assessed);
+    const backlog: string[] = [];
+    if (unscored > 0) backlog.push(`${unscored} to score`);
+    if (unassessed > 0) backlog.push(`${unassessed} to assess`);
+    if (queued > 0) backlog.push(`${queued} queued to tailor`);
+    const pending = backlog.join(' · ');
 
     return NextResponse.json({
       enabled: !!settings.auto_pipeline_enabled,
       cutoff,
       stage,
+      pending,
       detail,
       stages: [
         { key: 'fetched', label: 'Fetched', count: fetched },
