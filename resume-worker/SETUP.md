@@ -84,6 +84,25 @@ In the app: **Settings → AI Models** → set Scoring and/or Tailoring provider
 API key)"**. Note the plan's monthly Agent-SDK credit cap (Pro $20 · Max5× $100 · Max20× $200), then standard
 API rates — so high-volume scoring is often better left on a cheap API model.
 
+### 6a. (Optional) Two Claude accounts — double the monthly credit, with failover
+Each Claude plan has its own monthly Agent-SDK credit pool, so a second account doubles the effective cap.
+The mechanism (the one Anthropic documents and tools like Meridian use): **each account is an isolated
+`CLAUDE_CONFIG_DIR` with its own login** — credentials are stored per-dir (not in the shared macOS Keychain),
+so the worker switches accounts just by pointing at a different dir.
+
+Set up the 2nd account once, in a browser, on this Mac:
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-acct2 claude     # then /login as ACCOUNT 2 (a different Claude account)
+```
+The worker **auto-detects** `~/.claude-acctN` once it exists. Account 1 keeps using its existing login.
+- **Manual switch:** `./switch-account.sh 2` (sets `CLAUDE_ACTIVE_ACCOUNT` + restarts) — or `./switch-account.sh`
+  to see status. The active account is tried first.
+- **Automatic failover:** if the active account fails *fast* (credit cap / auth / rate limit), the call
+  transparently retries on the other account. It does **not** fail over on a *timeout* (a stall), so one
+  tailoring call can't blow the app's 180s deadline doing 2×160s.
+- Verify a switch in `logs/worker.out.log`: the `[agent …] start … account=N configDir=…` line shows which
+  account each call used, and `[agent] account N failed → failing over to account M` shows a failover.
+
 ## Security notes
 - The worker only accepts requests with `Authorization: Bearer <WORKER_SECRET>`; it refuses to run if
   `WORKER_SECRET` is unset.
