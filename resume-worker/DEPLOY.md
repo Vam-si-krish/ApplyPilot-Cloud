@@ -36,6 +36,58 @@ to Supabase `settings.resume_worker_url`; you normally don't touch it.
 
 ---
 
+## 1a. THIS UPDATE — overnight tailoring queue + auto-pipeline (ADR 0043 / 0044)
+
+This release adds two things that affect the server laptop:
+
+- **Overnight tailoring queue** — the worker can drain the Tailor & Apply queue on a schedule
+  (e.g. 04:00): tailor + score + render a PDF for every `queued` application. The web app is on
+  Netlify (no Vercel cron), so **this machine owns the schedule** via a new launchd job.
+- **Auto-pipeline** — runs entirely in the cloud app; nothing to install here. The worker only
+  needs the standard `git pull` + restart so its `/tailor-queue` endpoint exists.
+
+Do the standard update in section 1 first (`git pull` → `npm install --prefix resume-worker`
+→ restart the worker). `npm install` is a no-op this time — **no new dependencies** were added.
+Then install the **one new launchd job** that fires the overnight queue (one-time):
+
+```bash
+cd ~/Desktop/projects/ApplyPilot-Cloud/resume-worker     # adjust path if yours differs
+
+./install-tailor-queue-cron.sh                # installs + starts com.applypilot.tailor-queue
+```
+
+That job fires **hourly at :00** and pings the local worker; the worker no-ops unless the
+current hour matches `auto_tailor_time` and `auto_tailor_enabled` is on (both set in the web
+app under **Settings → Daily Schedule**) — so the web UI stays the source of truth for the time.
+
+**Keep the laptop awake.** launchd only fires while the Mac is awake; if it sleeps at 4am the run
+is *deferred* until it next wakes (not skipped, but not at 4am). You said this machine never
+sleeps — confirm with `pmset -g | grep -E 'sleep|SleepDisabled'` (sleep should be `0`). If it can
+sleep, either disable sleep (System Settings → Battery/Lock Screen) or add a wake schedule:
+
+```bash
+sudo pmset repeat wakeorpoweron MTWRFSU 03:58:00     # wake ~2 min before a 04:00 run
+```
+
+Verify the cron job is loaded and test the trigger:
+
+```bash
+launchctl list | grep applypilot                      # expect com.applypilot.tailor-queue listed
+bash ./tailor-queue-trigger.sh                         # fires the scheduled path once now
+tail -n 5 logs/tailor-queue.out.log                    # see the result line
+#  → "...skipped...not the scheduled hour..."  ✅ working (it's not 4am, so it correctly no-ops)
+#  → "...processing N..."                        ✅ it IS the scheduled hour and drained N
+#  → "curl failed (worker down?)"                ⇒ worker not running — see section 2
+```
+
+To re-run the whole queue **right now** regardless of schedule, use the **Run queue now** button
+in the web app (Tailor & Apply) — that hits the worker's manual path and bypasses the hour gate.
+
+> ⚠️ **Database migrations are NOT applied from this machine.** ADR 0043/0044 added Supabase
+> columns; those are applied from the dev laptop. This machine only pulls code and restarts.
+
+---
+
 ## 2. If the worker isn't running at all (first-time / after a reboot problem)
 
 The launchd services should auto-start on boot. If they're missing, (re)install them from
@@ -47,6 +99,7 @@ npm install                                # one-time: also downloads headless C
 # ensure .env exists with WORKER_SECRET + SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
 ./install-service.sh                       # installs + starts com.applypilot.resume-worker
 ./install-tunnel-service.sh                # installs + starts com.applypilot.resume-tunnel
+./install-tailor-queue-cron.sh             # installs + starts com.applypilot.tailor-queue (overnight queue)
 ```
 
 Full first-time setup (tunnel DNS, Netlify env, etc.) is in `resume-worker/SETUP.md`.
@@ -86,12 +139,15 @@ Final smoke test from the **deployed app**: Tailor & Apply → open an applicati
 |---|---|
 | Worker launchd label | `com.applypilot.resume-worker` (port **8787**) |
 | Tunnel launchd label | `com.applypilot.resume-tunnel` (publishes URL → Supabase `settings.resume_worker_url`) |
+| Tailor-queue cron label | `com.applypilot.tailor-queue` (hourly trigger for the overnight queue, ADR 0043) |
 | Restart worker | `launchctl kickstart -k gui/$(id -u)/com.applypilot.resume-worker` |
 | Restart tunnel | `launchctl kickstart -k gui/$(id -u)/com.applypilot.resume-tunnel` |
+| Reinstall tailor cron | `./install-tailor-queue-cron.sh` (or `./install-tailor-queue-cron.sh remove`) |
 | Worker logs | `resume-worker/logs/worker.{out,err}.log` |
 | Tunnel logs | `resume-worker/logs/tunnel.{out,err}.log` |
+| Tailor-queue log | `resume-worker/logs/tailor-queue.out.log` (one line per hourly tick) |
 | Health | `GET http://localhost:8787/health` → `{ ok, browser }` |
-| Endpoints | `POST /tailor`, `POST /generate`, `POST /cover-letter` (all need `Authorization: Bearer <WORKER_SECRET>`) |
+| Endpoints | `POST /tailor`, `POST /generate`, `POST /cover-letter`, `POST /tailor-queue` (all need `Authorization: Bearer <WORKER_SECRET>`) |
 
 ---
 
@@ -111,3 +167,11 @@ Final smoke test from the **deployed app**: Tailor & Apply → open an applicati
 - **App can't reach the worker** — make sure the tunnel service is running
   (`launchctl list | grep applypilot`) and that `settings.resume_worker_url` matches the tunnel's
   current public URL (the tunnel republishes it on start; restart the tunnel if needed).
+- **Overnight queue didn't run at 4am** — check, in order: (1) `auto_tailor_enabled` is on and
+  `auto_tailor_time` is correct in Settings; (2) the cron job is loaded
+  (`launchctl list | grep com.applypilot.tailor-queue`); (3) the laptop was awake at that hour
+  (`pmset -g log | grep -i wake` around 04:00); (4) `logs/tailor-queue.out.log` for the tick at
+  that hour. A line saying `skipped … not the scheduled hour` at other hours is normal. If the
+  job is missing from `launchctl list`, re-run `./install-tailor-queue-cron.sh`.
+- **`POST /tailor-queue` returns 404 "Cannot POST …"** — same as the `/tailor` case above: the
+  worker is on old code. Re-pull and `launchctl kickstart -k` the worker.
