@@ -75,13 +75,6 @@ export async function PUT(req: Request) {
   if (typeof body.auto_tailor_time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(body.auto_tailor_time)) {
     patch.auto_tailor_time = body.auto_tailor_time;
   }
-  if (typeof body.auto_pipeline_enabled === 'boolean') patch.auto_pipeline_enabled = body.auto_pipeline_enabled;
-  if (Number.isFinite(Number(body.pipeline_score_cutoff))) {
-    patch.pipeline_score_cutoff = Math.max(0, Math.min(10, Math.round(Number(body.pipeline_score_cutoff))));
-  }
-  if (Number.isFinite(Number(body.pipeline_top_n))) {
-    patch.pipeline_top_n = Math.max(1, Math.min(500, Math.round(Number(body.pipeline_top_n))));
-  }
   if (typeof body.auto_rotate_keys === 'boolean') patch.auto_rotate_keys = body.auto_rotate_keys;
   if (typeof body.prefilter_enabled === 'boolean') patch.prefilter_enabled = body.prefilter_enabled;
   if (Number.isFinite(Number(body.prefilter_threshold))) {

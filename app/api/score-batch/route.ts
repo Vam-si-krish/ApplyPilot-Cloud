@@ -30,21 +30,17 @@ import {
   releaseScoringLock,
   consumeScoringRescan,
   requestScoringRescan,
-  archiveBelowSkillMatch,
 } from '@/lib/db';
 import { SCORE_BATCH_SIZE, triggerScoreBatch, triggerAssessBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-/** Close out a finished/stopped session: finalize the run + kick company assessment.
- *  The assess stage also carries the auto-pipeline's stages 4 & 6 (ADR 0044), so trigger
- *  it when EITHER auto-assess OR the pipeline is on (the pipeline needs that stage to run
- *  the low-score archive + top-N → Tailor finish even if company assessment itself is off). */
+/** Close out a finished/stopped session: finalize the run + kick company assessment. */
 async function finishUp(settings: Awaited<ReturnType<typeof getSettings>>): Promise<void> {
   const running = await getLatestRunningRun();
   if (running) await finalizeRun(running.id, 'succeeded').catch(() => {});
-  if (settings.auto_assess_enabled || settings.auto_pipeline_enabled) triggerAssessBatch();
+  if (settings.auto_assess_enabled) triggerAssessBatch();
 }
 
 export async function POST(req: Request) {
@@ -61,15 +57,7 @@ export async function POST(req: Request) {
   let baseErrors: number;
 
   if (!incoming) {
-    // START. Auto-pipeline stage 2 (ADR 0044): before scoring, archive scraped jobs with
-    // NO skill match so we never spend LLM calls on them. Runs once per chain start; idempotent
-    // (only touches unscored rows below the threshold). Gated by auto_pipeline_enabled so it
-    // can't surprise-archive when the pipeline is off.
-    if (settings.auto_pipeline_enabled && settings.min_skill_match > 0) {
-      const archived = await archiveBelowSkillMatch(settings.min_skill_match).catch(() => 0);
-      if (archived > 0) console.log(`[pipeline] archived ${archived} no-skill-match jobs before scoring`);
-    }
-    // nothing to do if the queue is empty; otherwise try to acquire the lock.
+    // START: nothing to do if the queue is empty; otherwise try to acquire the lock.
     const total = await countUnscored();
     if (total === 0) {
       await finishUp(settings);

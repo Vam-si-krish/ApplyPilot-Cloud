@@ -149,14 +149,6 @@ export interface Settings {
   auto_tailor_enabled: boolean;
   /** 'HH:MM' wall-clock (in `timezone`) the overnight tailoring drain fires, e.g. '04:00'. */
   auto_tailor_time: string;
-  /** When true, every daily fetch runs the full pipeline end-to-end (ADR 0044): archive
-   *  no-skill-match jobs → score → archive low-score jobs → assess companies → send the
-   *  top-N good/medium-company jobs to Tailor & Apply. Off by default. */
-  auto_pipeline_enabled: boolean;
-  /** Scored jobs with fit_score <= this are archived after scoring (ADR 0044). Default 5. */
-  pipeline_score_cutoff: number;
-  /** How many surviving jobs are sent to Tailor & Apply each run (ADR 0044). Default 50. */
-  pipeline_top_n: number;
   /** When true, each run advances every provider's active key to the next stored one (ADR 0007). */
   auto_rotate_keys: boolean;
   /** When true, only jobs scoring >= prefilter_threshold on the cheap match gate reach the LLM (ADR 0008). */

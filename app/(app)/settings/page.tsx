@@ -227,52 +227,6 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* Auto Pipeline (ADR 0044) */}
-      <Section title="Auto Pipeline">
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="auto_pipeline_enabled"
-            checked={s.auto_pipeline_enabled ?? false}
-            onChange={(e) => patch({ auto_pipeline_enabled: e.target.checked })}
-            className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
-          />
-          <label htmlFor="auto_pipeline_enabled" className="text-[13px] text-slate-text">
-            Run the full pipeline automatically on every fetch
-          </label>
-        </div>
-        <p className="text-slate-muted text-[12px] mt-3 leading-relaxed">
-          When on, each fetch runs end-to-end with no clicks:
-          <span className="text-slate-text"> fetch → archive jobs below your skill-match minimum → score every survivor →
-          archive jobs scoring at/below the cutoff → assess companies → send the top-N highest-scoring jobs at good or
-          medium (or unrated) companies to </span>
-          <span className="text-sky">Tailor &amp; Apply</span>
-          <span className="text-slate-text">, where the overnight queue tailors them.</span>
-        </p>
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <NumberField
-            label="Archive jobs scoring at/below"
-            value={s.pipeline_score_cutoff ?? 5}
-            min={0}
-            max={10}
-            onChange={(n) => patch({ pipeline_score_cutoff: n })}
-          />
-          <NumberField
-            label="Send top N to Tailor & Apply"
-            value={s.pipeline_top_n ?? 50}
-            min={1}
-            max={500}
-            onChange={(n) => patch({ pipeline_top_n: n })}
-          />
-        </div>
-        <p className="text-slate-muted text-[11px] mt-3">
-          The skill-match gate uses your <span className="text-sky">Min skill match</span> under Filters
-          {typeof s.min_skill_match === 'number' ? ` (currently ${s.min_skill_match}%)` : ''} — set it above 0 to archive
-          no-match jobs before scoring. Rejected jobs are <span className="text-slate-text">archived, not deleted</span> — they
-          leave the active Jobs list but stay recoverable and aren&apos;t re-fetched or re-scored.
-        </p>
-      </Section>
-
       {/* Search */}
       <Section title="Search Criteria">
         <p className="text-slate-muted text-[12px] mb-4">
@@ -1231,40 +1185,6 @@ function Field({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted transition-colors"
-      />
-    </div>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (n: number) => void;
-  min?: number;
-  max?: number;
-}) {
-  return (
-    <div>
-      <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">{label}</p>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => {
-          let n = Number(e.target.value);
-          if (!Number.isFinite(n)) n = min ?? 0;
-          if (min != null) n = Math.max(min, n);
-          if (max != null) n = Math.min(max, n);
-          onChange(Math.round(n));
-        }}
-        className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono transition-colors"
       />
     </div>
   );

@@ -1,7 +1,13 @@
 # ADR 0044 — Fully-automatic discovery → shortlist pipeline
 
 ## Status
-Accepted (2026-06-29)
+Reverted (2026-06-30) — superseded by [ADR 0046](0046-revert-auto-pipeline.md).
+
+> The auto-pipeline (and the ADR 0045 Dashboard funnel that visualized it) was removed at the
+> user's request: the fully-automatic fetch→archive→score→archive→assess→queue chain and its
+> `auto_pipeline_enabled` / `pipeline_score_cutoff` / `pipeline_top_n` settings are gone. The
+> individual stages (fetch, score, company-assess) still run as the pre-existing manual chain,
+> and résumé tailoring (ADR 0042/0043) is untouched. The rest of this ADR is kept for history.
 
 ## Context
 The app already had every *stage* of a discovery-to-shortlist funnel, but the user had to
