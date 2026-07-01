@@ -6,6 +6,7 @@ import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, Chevron
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
+import ResumeDiff from '@/components/ResumeDiff';
 import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 import { useProgress } from '@/components/ProgressContext';
@@ -46,6 +47,10 @@ export default function ApplicationsPage() {
 
   // Local editable draft of the expanded application's tailored résumé.
   const [draft, setDraft] = useState<ResumeDoc | null>(null);
+  // The base résumé (fetched once) — diff target for the "Review changes" view (ADR 0053).
+  const [baseResume, setBaseResume] = useState<ResumeDoc | null>(null);
+  // Expanded app view: edit the tailored résumé, or review the diff vs the base résumé.
+  const [reviewMode, setReviewMode] = useState(false);
   // Custom tailoring instructions for the expanded app (ADR 0037) — extra guidance the
   // AI applies on top of the job description (e.g. a recruiter's ask). Seeded on expand.
   const [instructions, setInstructions] = useState('');
@@ -112,6 +117,14 @@ export default function ApplicationsPage() {
     load();
   }, [load]);
 
+  // Load the base résumé once — the diff target for "Review changes" (ADR 0053).
+  useEffect(() => {
+    fetch('/api/base-resume')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.base_resume && setBaseResume(d.base_resume as ResumeDoc))
+      .catch(() => {});
+  }, []);
+
   // Ask "did you apply?" when the user returns after opening the posting.
   useEffect(() => {
     function onVisible() {
@@ -134,10 +147,12 @@ export default function ApplicationsPage() {
       setExpanded(null);
       setDraft(null);
       setInstructions('');
+      setReviewMode(false);
     } else {
       setExpanded(a.id);
       setDraft(a.tailored_resume ? structuredClone(a.tailored_resume) : null);
       setInstructions(a.tailor_instructions ?? '');
+      setReviewMode(false);
     }
   }
 
@@ -890,10 +905,35 @@ export default function ApplicationsPage() {
                         <div className="mb-3">
                           <ChangesReview changes={a.tailor_changes} />
                         </div>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[12px] text-slate-muted">Tailored résumé — edit freely, then create the PDF.</p>
+                        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                          <p className="text-[12px] text-slate-muted">
+                            {reviewMode
+                              ? 'Reviewing what tailoring changed vs your base résumé.'
+                              : 'Tailored résumé — edit freely, then create the PDF.'}
+                          </p>
+                          {/* Edit ⇄ Review-changes toggle (ADR 0053). */}
+                          <div className="flex items-center gap-0.5 bg-raised border border-ink rounded-lg p-0.5 shrink-0">
+                            <button
+                              onClick={() => setReviewMode(false)}
+                              className={`px-2.5 py-1 text-[12px] rounded-md transition-colors ${!reviewMode ? 'bg-sky/15 text-sky' : 'text-slate-muted hover:text-slate-text'}`}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setReviewMode(true)}
+                              title={baseResume ? 'Highlight what the AI added/removed vs your base résumé' : 'Set a base résumé first to see the diff'}
+                              disabled={!baseResume}
+                              className={`px-2.5 py-1 text-[12px] rounded-md transition-colors disabled:opacity-40 ${reviewMode ? 'bg-emerald/15 text-emerald' : 'text-slate-muted hover:text-slate-text'}`}
+                            >
+                              Review changes
+                            </button>
+                          </div>
                         </div>
-                        <ResumeFields value={draft} onChange={setDraft} />
+                        {reviewMode ? (
+                          <ResumeDiff base={baseResume} tailored={draft} />
+                        ) : (
+                          <ResumeFields value={draft} onChange={setDraft} />
+                        )}
                         <div className="flex items-center gap-3 mt-4">
                           <button
                             onClick={() => saveDraft(a.id)}

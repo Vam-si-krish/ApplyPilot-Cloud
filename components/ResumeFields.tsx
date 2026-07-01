@@ -27,11 +27,12 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
   }
 
   return (
-    <div className="rounded-xl border border-ink bg-[#f7f7f4] text-[#1a1a1a] shadow-inner overflow-hidden">
-      {/* The "paper". Serif type + generous spacing evoke the printed résumé. */}
+    <div className="rounded-xl border border-ink bg-card text-[#e2e8f0] overflow-hidden">
+      {/* The "paper" (dark on-screen; the downloaded PDF stays light). Serif type + generous
+          spacing evoke the printed résumé. */}
       <div className="mx-auto max-w-[820px] px-6 sm:px-10 py-8 font-serif">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <header className="text-center pb-4 border-b border-[#ddd]">
+        <header className="text-center pb-4 border-b border-[#1e1e38]">
           <PaperInline
             block
             value={d.basics.name}
@@ -44,9 +45,9 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
             value={d.basics.label}
             onChange={(v) => setBasics('label', v)}
             placeholder="Your Headline"
-            className="text-[14px] font-semibold text-[#444] text-center mt-0.5"
+            className="text-[14px] font-semibold text-[#64748b] text-center mt-0.5"
           />
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[12px] text-[#555]">
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[12px] text-[#64748b]">
             <PaperInline value={d.basics.email} onChange={(v) => setBasics('email', v)} placeholder="email" />
             <Dot />
             <PaperInline value={d.basics.phone} onChange={(v) => setBasics('phone', v)} placeholder="phone" />
@@ -56,17 +57,17 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
             <PaperInline value={d.basics.url} onChange={(v) => setBasics('url', v)} placeholder="website" />
           </div>
           {/* Links row */}
-          <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[12px] text-[#0369a1]">
+          <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[12px] text-[#38bdf8]">
             {profiles.map((p, i) => (
               <span key={i} className="group inline-flex items-center gap-1">
-                {i > 0 && <span className="text-[#bbb] mr-1">·</span>}
+                {i > 0 && <span className="text-[#475569] mr-1">·</span>}
                 <PaperInline
                   value={p.network}
                   onChange={(v) => setProfiles(profiles.map((it, j) => (j === i ? { ...it, network: v } : it)))}
                   placeholder="Label"
                   className="font-medium"
                 />
-                <span className="text-[#94a3b8]">:</span>
+                <span className="text-[#64748b]">:</span>
                 <PaperInline
                   value={p.url}
                   onChange={(v) => setProfiles(profiles.map((it, j) => (j === i ? { ...it, url: v } : it)))}
@@ -75,7 +76,7 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
                 <button
                   onClick={() => setProfiles(profiles.filter((_, j) => j !== i))}
                   title="Remove link"
-                  className="opacity-0 group-hover:opacity-100 text-[#aaa] hover:text-rose transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 text-[#475569] hover:text-rose transition-opacity"
                 >
                   <Trash2 size={11} />
                 </button>
@@ -92,7 +93,7 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
           onChange={(v) => setBasics('summary', v)}
           placeholder="A 2–3 line professional summary…"
           multiline
-          className="text-[12.5px] leading-relaxed text-[#333]"
+          className="text-[12.5px] leading-relaxed text-[#cbd5e1]"
         />
 
         {/* ── Experience ─────────────────────────────────────────────────────── */}
@@ -106,20 +107,20 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
             key={i}
             onRemove={() => update({ work: d.work.filter((_, j) => j !== i) })}
             titleLeft={
-              <PaperInline value={w.name} onChange={(v) => update({ work: patch(d.work, i, { name: v }) })} placeholder="Company" className="font-bold text-[13.5px] text-[#1a1a1a]" />
+              <PaperInline value={w.name} onChange={(v) => update({ work: patch(d.work, i, { name: v }) })} placeholder="Company" className="font-bold text-[13.5px] text-[#e2e8f0]" />
             }
             titleRight={
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#555] whitespace-nowrap">
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#64748b] whitespace-nowrap">
                 <PaperInline value={w.startDate} onChange={(v) => update({ work: patch(d.work, i, { startDate: v }) })} placeholder="Start" className="text-right" />
                 <span>–</span>
                 <PaperInline value={w.endDate} onChange={(v) => update({ work: patch(d.work, i, { endDate: v }) })} placeholder="End" />
               </span>
             }
             subLeft={
-              <PaperInline value={w.position} onChange={(v) => update({ work: patch(d.work, i, { position: v }) })} placeholder="Title" className="italic text-[12.5px] text-[#333]" />
+              <PaperInline value={w.position} onChange={(v) => update({ work: patch(d.work, i, { position: v }) })} placeholder="Title" className="italic text-[12.5px] text-[#cbd5e1]" />
             }
             subRight={
-              <PaperInline value={w.location} onChange={(v) => update({ work: patch(d.work, i, { location: v }) })} placeholder="Location" className="italic text-[12px] text-[#666]" />
+              <PaperInline value={w.location} onChange={(v) => update({ work: patch(d.work, i, { location: v }) })} placeholder="Location" className="italic text-[12px] text-[#64748b]" />
             }
           >
             <BulletList
@@ -138,17 +139,17 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
             key={i}
             onRemove={() => update({ education: d.education.filter((_, j) => j !== i) })}
             titleLeft={
-              <PaperInline value={e.institution} onChange={(v) => update({ education: patch(d.education, i, { institution: v }) })} placeholder="Institution" className="font-bold text-[13.5px] text-[#1a1a1a]" />
+              <PaperInline value={e.institution} onChange={(v) => update({ education: patch(d.education, i, { institution: v }) })} placeholder="Institution" className="font-bold text-[13.5px] text-[#e2e8f0]" />
             }
             titleRight={
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#555] whitespace-nowrap">
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#64748b] whitespace-nowrap">
                 <PaperInline value={e.startDate} onChange={(v) => update({ education: patch(d.education, i, { startDate: v }) })} placeholder="Start" className="text-right" />
                 <span>–</span>
                 <PaperInline value={e.endDate} onChange={(v) => update({ education: patch(d.education, i, { endDate: v }) })} placeholder="End" />
               </span>
             }
             subLeft={
-              <span className="italic text-[12.5px] text-[#333] inline-flex items-center gap-1">
+              <span className="italic text-[12.5px] text-[#cbd5e1] inline-flex items-center gap-1">
                 <PaperInline value={e.studyType} onChange={(v) => update({ education: patch(d.education, i, { studyType: v }) })} placeholder="Degree" />
                 <PaperInline value={e.area} onChange={(v) => update({ education: patch(d.education, i, { area: v }) })} placeholder="Field of study" />
               </span>
@@ -162,8 +163,8 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
         <div className="space-y-1">
           {d.skills.map((s, i) => (
             <div key={i} className="group flex items-baseline gap-1.5 text-[12.5px] leading-relaxed">
-              <PaperInline value={s.name} onChange={(v) => update({ skills: patch(d.skills, i, { name: v }) })} placeholder="Group" className="font-bold text-[#1a1a1a] whitespace-nowrap" />
-              <span className="text-[#1a1a1a] font-bold">:</span>
+              <PaperInline value={s.name} onChange={(v) => update({ skills: patch(d.skills, i, { name: v }) })} placeholder="Group" className="font-bold text-[#e2e8f0] whitespace-nowrap" />
+              <span className="text-[#e2e8f0] font-bold">:</span>
               <SkillKeywords
                 keywords={s.keywords || []}
                 onChange={(kw) => update({ skills: patch(d.skills, i, { keywords: kw }) })}
@@ -171,7 +172,7 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
               <button
                 onClick={() => update({ skills: d.skills.filter((_, j) => j !== i) })}
                 title="Remove group"
-                className="opacity-0 group-hover:opacity-100 text-[#bbb] hover:text-rose transition-opacity shrink-0 self-start mt-0.5"
+                className="opacity-0 group-hover:opacity-100 text-[#475569] hover:text-rose transition-opacity shrink-0 self-start mt-0.5"
               >
                 <Trash2 size={12} />
               </button>
@@ -187,13 +188,13 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
             key={i}
             onRemove={() => update({ projects: d.projects.filter((_, j) => j !== i) })}
             titleLeft={
-              <PaperInline value={p.name} onChange={(v) => update({ projects: patch(d.projects, i, { name: v }) })} placeholder="Project name" className="font-bold text-[13.5px] text-[#1a1a1a]" />
+              <PaperInline value={p.name} onChange={(v) => update({ projects: patch(d.projects, i, { name: v }) })} placeholder="Project name" className="font-bold text-[13.5px] text-[#e2e8f0]" />
             }
             titleRight={
-              <PaperInline value={p.url} onChange={(v) => update({ projects: patch(d.projects, i, { url: v }) })} placeholder="url" className="text-[12px] text-[#0369a1]" />
+              <PaperInline value={p.url} onChange={(v) => update({ projects: patch(d.projects, i, { url: v }) })} placeholder="url" className="text-[12px] text-[#38bdf8]" />
             }
             subLeft={
-              <PaperInline value={p.description} onChange={(v) => update({ projects: patch(d.projects, i, { description: v }) })} placeholder="Short description" className="italic text-[12.5px] text-[#333]" />
+              <PaperInline value={p.description} onChange={(v) => update({ projects: patch(d.projects, i, { description: v }) })} placeholder="Short description" className="italic text-[12.5px] text-[#cbd5e1]" />
             }
           >
             <BulletList
@@ -225,13 +226,13 @@ export function splitList(v: string): string[] {
 /** A section heading with an underline, matching the PDF's <h2>, plus an inline "+" add. */
 function SectionHead({ title, onAdd }: { title: string; onAdd?: () => void }) {
   return (
-    <div className="flex items-center gap-2 mt-5 mb-2 border-b border-[#999] pb-0.5">
-      <h2 className="text-[13px] font-bold uppercase tracking-wider text-[#1a1a1a]">{title}</h2>
+    <div className="flex items-center gap-2 mt-5 mb-2 border-b border-[#2a2a45] pb-0.5">
+      <h2 className="text-[13px] font-bold uppercase tracking-wider text-[#e2e8f0]">{title}</h2>
       {onAdd && (
         <button
           onClick={onAdd}
           title={`Add ${title.toLowerCase()}`}
-          className="ml-auto flex items-center gap-0.5 text-[11px] font-sans text-[#0369a1] hover:text-[#0284c7] transition-colors"
+          className="ml-auto flex items-center gap-0.5 text-[11px] font-sans text-[#38bdf8] hover:text-[#7dd3fc] transition-colors"
         >
           <Plus size={13} />
         </button>
@@ -263,7 +264,7 @@ function Entry({
       <button
         onClick={onRemove}
         title="Remove"
-        className="absolute -left-6 top-0.5 opacity-0 group-hover:opacity-100 text-[#bbb] hover:text-rose transition-opacity hidden sm:block"
+        className="absolute -left-6 top-0.5 opacity-0 group-hover:opacity-100 text-[#475569] hover:text-rose transition-opacity hidden sm:block"
       >
         <Trash2 size={13} />
       </button>
@@ -282,7 +283,7 @@ function Entry({
       <button
         onClick={onRemove}
         title="Remove"
-        className="sm:hidden mt-1 inline-flex items-center gap-1 text-[11px] text-[#bbb] hover:text-rose font-sans"
+        className="sm:hidden mt-1 inline-flex items-center gap-1 text-[11px] text-[#475569] hover:text-rose font-sans"
       >
         <Trash2 size={11} /> Remove
       </button>
@@ -304,14 +305,14 @@ function BulletList({ items, onChange, placeholder }: { items: string[]; onChang
   return (
     <ul className="space-y-0.5">
       {rows.map((h, i) => (
-        <li key={i} className="group/bullet flex gap-2 text-[12px] leading-relaxed text-[#222]">
-          <span className={`select-none mt-[1px] ${i < items.length ? 'text-[#666]' : 'text-[#ccc]'}`}>•</span>
+        <li key={i} className="group/bullet flex gap-2 text-[12px] leading-relaxed text-[#e2e8f0]">
+          <span className={`select-none mt-[1px] ${i < items.length ? 'text-[#64748b]' : 'text-[#475569]'}`}>•</span>
           <PaperText value={h} onChange={(v) => setRow(i, v)} placeholder={i === items.length ? placeholder : undefined} multiline className="flex-1" />
           {i < items.length && (
             <button
               onClick={() => onChange(items.filter((_, j) => j !== i))}
               title="Remove bullet"
-              className="opacity-0 group-hover/bullet:opacity-100 text-[#ccc] hover:text-rose transition-opacity shrink-0 self-start mt-0.5"
+              className="opacity-0 group-hover/bullet:opacity-100 text-[#475569] hover:text-rose transition-opacity shrink-0 self-start mt-0.5"
             >
               <Trash2 size={11} />
             </button>
@@ -344,7 +345,7 @@ function PaperInline({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       {...(block ? {} : { size: Math.max((value?.length || placeholder?.length || 4) + 2, 3) })}
-      className={`bg-transparent outline-none rounded px-1 -mx-1 py-0 hover:bg-black/[0.04] focus:bg-sky/10 focus:ring-1 focus:ring-sky/40 transition-colors placeholder:text-[#aaa] placeholder:italic ${block ? 'w-full' : 'max-w-full'} ${className}`}
+      className={`bg-transparent outline-none rounded px-1 -mx-1 py-0 hover:bg-white/[0.05] focus:bg-sky/10 focus:ring-1 focus:ring-sky/40 transition-colors placeholder:text-[#475569] placeholder:italic ${block ? 'w-full' : 'max-w-full'} ${className}`}
     />
   );
 }
@@ -384,7 +385,7 @@ function PaperText({
           el.style.height = `${el.scrollHeight}px`;
         }
       }}
-      className={`w-full bg-transparent outline-none rounded px-1 -mx-1 py-0 resize-none overflow-hidden hover:bg-black/[0.04] focus:bg-sky/10 focus:ring-1 focus:ring-sky/40 transition-colors placeholder:text-[#aaa] placeholder:italic ${className}`}
+      className={`w-full bg-transparent outline-none rounded px-1 -mx-1 py-0 resize-none overflow-hidden hover:bg-white/[0.05] focus:bg-sky/10 focus:ring-1 focus:ring-sky/40 transition-colors placeholder:text-[#475569] placeholder:italic ${className}`}
     />
   );
 }
@@ -419,14 +420,14 @@ function SkillKeywords({ keywords, onChange }: { keywords: string[]; onChange: (
           el.style.height = `${el.scrollHeight}px`;
         }
       }}
-      className="flex-1 text-[#333] bg-transparent outline-none rounded px-1 -mx-1 py-0 resize-none overflow-hidden hover:bg-black/[0.04] focus:bg-sky/10 focus:ring-1 focus:ring-sky/40 transition-colors placeholder:text-[#aaa] placeholder:italic"
+      className="flex-1 text-[#cbd5e1] bg-transparent outline-none rounded px-1 -mx-1 py-0 resize-none overflow-hidden hover:bg-white/[0.05] focus:bg-sky/10 focus:ring-1 focus:ring-sky/40 transition-colors placeholder:text-[#475569] placeholder:italic"
     />
   );
 }
 
 /** A small dot separator for the contact line. */
 function Dot() {
-  return <span className="text-[#bbb]">·</span>;
+  return <span className="text-[#475569]">·</span>;
 }
 
 /** A subtle sans-serif "+ add" affordance used inline within the paper. */
@@ -434,7 +435,7 @@ function AddInline({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="font-sans text-[11px] text-[#0369a1] hover:text-[#0284c7] hover:underline transition-colors"
+      className="font-sans text-[11px] text-[#38bdf8] hover:text-[#7dd3fc] hover:underline transition-colors"
     >
       {label}
     </button>
@@ -443,5 +444,5 @@ function AddInline({ label, onClick }: { label: string; onClick: () => void }) {
 
 /** An italic muted placeholder line shown when a section has no entries. */
 function EmptyLine({ children }: { children: React.ReactNode }) {
-  return <p className="text-[12px] italic text-[#999] mt-1">{children}</p>;
+  return <p className="text-[12px] italic text-[#64748b] mt-1">{children}</p>;
 }
