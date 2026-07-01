@@ -372,6 +372,14 @@ export default function JobsPage() {
   }
 
   // AI-score exactly the picked jobs (chunked to stay under the serverless timeout).
+  //
+  // Two backends, tracked differently:
+  //  - API-key mode: /api/score-selected scores SYNCHRONOUSLY, so each chunk's response is
+  //    real progress — accumulate scored/filtered and finish when the loop ends.
+  //  - Subscription mode: /api/score-selected returns `delegated:true` INSTANTLY (the worker
+  //    scores in the background). The response is NOT progress, so after handing off we POLL
+  //    /api/score-progress for the selected ids and drive the toast off real DB state until
+  //    they're all scored (or we hit the poll ceiling).
   async function scoreSelected() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy || bulkRunning) return;
@@ -379,6 +387,7 @@ export default function JobsPage() {
     let scored = 0;
     let filtered = 0;
     let done = 0;
+    let delegated = false;
     setBulkProgress({ label: 'AI-scoring selected jobs', done: 0, total: ids.length, phase: 'running', tone: 'sky' });
     try {
       for (let i = 0; i < ids.length; i += 5) {
@@ -388,12 +397,60 @@ export default function JobsPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: chunk }),
         }).then((r) => r.json());
-        scored += d.scored ?? 0;
-        filtered += d.filtered ?? 0;
-        done += chunk.length;
-        setBulkProgress({ label: 'AI-scoring selected jobs', done, total: ids.length, phase: 'running', tone: 'sky' });
-        load(true); // scores light up live as each chunk lands
+        if (d.delegated) {
+          // Worker is scoring in the background — don't count the ack as progress.
+          delegated = true;
+        } else {
+          scored += d.scored ?? 0;
+          filtered += d.filtered ?? 0;
+          done += chunk.length;
+          setBulkProgress({ label: 'AI-scoring selected jobs', done, total: ids.length, phase: 'running', tone: 'sky' });
+          load(true); // scores light up live as each chunk lands
+        }
       }
+
+      if (delegated) {
+        // Poll real state: every 2s, count how many selected ids have been scored. Cap the
+        // wait so a stuck/unreachable worker eventually resolves the toast instead of spinning
+        // forever (subscription scoring is ~a few s/job; 5min covers a full 10-job batch).
+        const started = Date.now();
+        const MAX_MS = 5 * 60 * 1000;
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 2000));
+          let progressed = 0;
+          try {
+            const p = await fetch('/api/score-progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            }).then((r) => r.json());
+            progressed = p.scored ?? 0;
+          } catch {
+            /* transient — keep polling until the ceiling */
+          }
+          setBulkProgress({ label: 'AI-scoring selected jobs', done: progressed, total: ids.length, phase: 'running', tone: 'sky' });
+          load(true); // scores light up live as the worker writes them
+          if (progressed >= ids.length) {
+            scored = progressed;
+            break;
+          }
+          if (Date.now() - started > MAX_MS) {
+            // Timed out waiting on the worker — report what landed, don't hang the toast.
+            setBulkProgress({
+              label: `Scored ${progressed}/${ids.length} — still working in the background`,
+              done: progressed,
+              total: ids.length,
+              phase: 'done',
+              tone: 'sky',
+            });
+            setSelected(new Set());
+            load(true);
+            refreshStats();
+            return;
+          }
+        }
+      }
+
       setBulkProgress({ label: `Done — ${scored} scored${filtered ? `, ${filtered} filtered` : ''}`, done: ids.length, total: ids.length, phase: 'done', tone: 'sky' });
       setSelected(new Set());
       load(true);
@@ -462,6 +519,11 @@ export default function JobsPage() {
 
   // AI-assess the companies behind the picked jobs (chunked, like scoreSelected).
   // Re-runs even on already-assessed jobs (overwrites the tier) — this IS the reassess path.
+  //
+  // Same two backends as scoreSelected: API-key mode assesses SYNCHRONOUSLY (each chunk's
+  // response is real progress); subscription mode returns `delegated:true` INSTANTLY (the
+  // worker assesses in the background), so we then POLL /api/score-progress (mode=assess)
+  // for the selected ids until they all have a fresh tier.
   async function assessSelected() {
     const ids = selectedVisibleIds();
     if (ids.length === 0 || bulkBusy || bulkRunning) return;
@@ -471,6 +533,7 @@ export default function JobsPage() {
     let assessed = 0;
     let errors = 0;
     let done = 0;
+    let delegated = false;
     setBulkProgress({ label: 'AI-assessing companies', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
     try {
       for (let i = 0; i < ids.length; i += 5) {
@@ -480,12 +543,57 @@ export default function JobsPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: chunk }),
         }).then((r) => r.json());
-        assessed += d.assessed ?? 0;
-        errors += d.errors ?? 0;
-        done += chunk.length;
-        setBulkProgress({ label: 'AI-assessing companies', done, total: ids.length, phase: 'running', tone: 'violet' });
-        load(true); // tiers light up live as each chunk lands
+        if (d.delegated) {
+          delegated = true;
+        } else {
+          assessed += d.assessed ?? 0;
+          errors += d.errors ?? 0;
+          done += chunk.length;
+          setBulkProgress({ label: 'AI-assessing companies', done, total: ids.length, phase: 'running', tone: 'violet' });
+          load(true); // tiers light up live as each chunk lands
+        }
       }
+
+      if (delegated) {
+        // Poll real state (mode=assess): count how many selected ids have a tier again. The
+        // route nulled their tier before handing off, so this reflects the worker's fresh
+        // writes. Cap the wait so a stuck worker resolves the toast instead of spinning.
+        const started = Date.now();
+        const MAX_MS = 5 * 60 * 1000;
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 2000));
+          let progressed = 0;
+          try {
+            const p = await fetch('/api/score-progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids, mode: 'assess' }),
+            }).then((r) => r.json());
+            progressed = p.scored ?? 0;
+          } catch {
+            /* transient — keep polling until the ceiling */
+          }
+          setBulkProgress({ label: 'AI-assessing companies', done: progressed, total: ids.length, phase: 'running', tone: 'violet' });
+          load(true); // tiers light up live as the worker writes them
+          if (progressed >= ids.length) {
+            assessed = progressed;
+            break;
+          }
+          if (Date.now() - started > MAX_MS) {
+            setBulkProgress({
+              label: `Assessed ${progressed}/${ids.length} — still working in the background`,
+              done: progressed,
+              total: ids.length,
+              phase: 'done',
+              tone: 'violet',
+            });
+            setSelected(new Set());
+            load(true);
+            return;
+          }
+        }
+      }
+
       // Show failures explicitly — a failing AI backend must not look like a silent "done".
       const doneLabel = errors
         ? `Assessed ${assessed}, ${errors} failed — check the AI provider/worker`

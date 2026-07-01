@@ -28,6 +28,7 @@ import {
   uploadPdf,
 } from './supabase.js';
 import { scoreJobWorker } from './scoring.js';
+import { assessCompany } from './companyCheck.js';
 import { renderResumeToOnePage, renderCoverLetterPdf, getBrowser, closeBrowser } from './render.js';
 import { makeClient, tailorResume, condenseResume } from './tailor.js';
 import { makeAgentClient } from './agentClient.js';
@@ -87,7 +88,7 @@ app.get('/health', async (_req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'llm', 'tailor-queue'];
+  const features = ['score-jobs-allow-rescore', 'assess-jobs', 'llm', 'tailor-queue'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -168,6 +169,58 @@ app.post('/score-jobs', async (req, res) => {
 
     console.log(`[score-jobs] done`);
   })().catch((e) => console.error('[score-jobs] background error:', e instanceof Error ? e.message : String(e)));
+});
+
+/**
+ * POST /assess-jobs {ids: string[]} → {ok, queued} (ADR 0009/0042). The company-assessment
+ * sibling of /score-jobs: assess the companies behind the given jobs (one LLM call each,
+ * writing company_tier / company_tier_note) using the SCORING provider. Called by the cloud
+ * app's /api/company-check when scoring is a subscription provider, so the slow Agent-SDK
+ * calls run here in the BACKGROUND instead of inside the serverless function's ~60s ceiling.
+ * Responds 200 immediately; the app polls /api/score-progress (mode=assess) for progress.
+ */
+app.post('/assess-jobs', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+
+  const ids = req.body?.ids;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids[] required' });
+  }
+  if (ids.length > 20) {
+    return res.status(400).json({ error: 'max 20 ids per call' });
+  }
+
+  let resolved;
+  try {
+    const settings = await getSettings();
+    const provider = (settings.score_provider || settings.llm_provider || '').trim().toLowerCase();
+    const model = (settings.score_model || settings.llm_model || '').trim();
+    resolved = await resolveTaskClient(provider, model, 'assess');
+    if (resolved.error) return res.status(409).json({ error: resolved.error });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // All preconditions met — ack immediately, assess in background.
+  res.json({ ok: true, queued: ids.length });
+
+  const client = resolved.client;
+  (async () => {
+    const jobs = await getJobsByIds(ids);
+    console.log(`[assess-jobs] assessing ${jobs.length}/${ids.length} companies`);
+    await Promise.all(
+      jobs.map(async (job) => {
+        try {
+          const { tier, note } = await assessCompany(job, client);
+          await updateJob(job.id, { company_tier: tier, company_tier_note: note });
+          console.log(`[assess-jobs] job ${job.id} → ${tier}`);
+        } catch (e) {
+          console.error(`[assess-jobs] job ${job.id} failed:`, e instanceof Error ? e.message : String(e));
+        }
+      }),
+    );
+    console.log(`[assess-jobs] done`);
+  })().catch((e) => console.error('[assess-jobs] background error:', e instanceof Error ? e.message : String(e)));
 });
 
 app.post('/generate', async (req, res) => {

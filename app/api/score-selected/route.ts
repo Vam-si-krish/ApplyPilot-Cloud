@@ -84,9 +84,11 @@ export async function POST(req: Request) {
 
       const d = (await resp.json()) as { queued?: number };
       console.log(tag, 'delegated ok queued=', d.queued);
-      // Return scored=queued so the UI toast shows the right count; actual scores
-      // appear on the next job list refresh (worker writes directly to Supabase).
-      return NextResponse.json({ ok: true, scored: d.queued ?? ids.length, filtered: 0, errors: 0, skipped: 0 });
+      // `delegated: true` tells the client the worker is scoring in the BACKGROUND — the
+      // response does NOT mean scoring finished. The client must poll /api/score-status for
+      // these ids to drive the progress toast off real state (scores are written to Supabase
+      // by the worker over the next ~30-60s). `queued` = how many were handed off.
+      return NextResponse.json({ ok: true, delegated: true, queued: d.queued ?? ids.length, scored: 0, filtered: 0, errors: 0, skipped: 0 });
     }
 
     // API-key path: score synchronously (fast enough to stay under the function limit).
