@@ -445,29 +445,30 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* Re-scoring safety gate (ADR 0039) */}
-      <Section title="Re-scoring">
+      {/* Delete-scores danger gate (ADR 0048) */}
+      <Section title="Delete scores">
         <p className="text-slate-muted text-[12px] mb-4">
-          Normally <span className="text-sky">Score selected</span> on the Jobs tab only scores jobs that haven&apos;t been
-          AI-scored yet — already-scored jobs are skipped, so a stray click can&apos;t overwrite your scores or spend tokens.
-          Turn this on <span className="text-amber-400">only when you deliberately want to re-score</span> already-scored jobs,
-          then turn it back off.
+          When on, the <span className="text-sky">Jobs</span> tab shows extra bulk actions on selected jobs to
+          <span className="text-rose"> delete</span> a job&apos;s AI fit score, company score, match score, or its tailored
+          résumé. This is destructive, so it&apos;s <span className="text-amber-400">off by default</span> — turn it on only when
+          you deliberately want to clear scores, then turn it back off. Deleting the fit score returns a job to
+          <span className="text-slate-text"> unscored</span>, so it can be freshly scored again.
         </p>
         <div className="flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3">
           <button
             role="switch"
-            aria-checked={s.allow_rescore ?? false}
-            onClick={() => patch({ allow_rescore: !(s.allow_rescore ?? false) })}
-            className={`mt-0.5 shrink-0 w-9 h-5 rounded-full transition-colors relative ${s.allow_rescore ? 'bg-amber-500/80' : 'bg-ink'}`}
+            aria-checked={s.allow_delete_scores ?? false}
+            onClick={() => patch({ allow_delete_scores: !(s.allow_delete_scores ?? false) })}
+            className={`mt-0.5 shrink-0 w-9 h-5 rounded-full transition-colors relative ${s.allow_delete_scores ? 'bg-rose/80' : 'bg-ink'}`}
           >
-            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${s.allow_rescore ? 'left-[18px]' : 'left-0.5'}`} />
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${s.allow_delete_scores ? 'left-[18px]' : 'left-0.5'}`} />
           </button>
           <div>
-            <p className="text-[13px] font-medium text-slate-text">Allow re-scoring already-scored jobs</p>
+            <p className="text-[13px] font-medium text-slate-text">Allow deleting scores</p>
             <p className="text-[11px] text-slate-muted mt-0.5">
-              When on, <span className="text-slate-text">Score selected</span> re-scores every selected job and overwrites its
-              existing score. <span className="text-amber-400">Save settings</span> to apply, then re-score from the Jobs tab —
-              and switch this back off when you&apos;re done.
+              When on, selecting jobs on the Jobs tab reveals <span className="text-slate-text">Delete fit / company / match /
+              tailored</span> actions. <span className="text-amber-400">Save settings</span> to apply, then delete from the Jobs
+              tab — and switch this back off when you&apos;re done.
             </p>
           </div>
         </div>

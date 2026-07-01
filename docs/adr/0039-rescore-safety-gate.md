@@ -1,6 +1,10 @@
 # ADR 0039 — Re-scoring already-scored jobs is gated behind a Settings toggle
 
-**Status:** accepted · **Date:** 2026-06-26
+**Status:** superseded by [ADR 0048](0048-delete-scores-gate.md) (2026-07-01) · **Date:** 2026-06-26
+
+> The `allow_rescore` toggle was **repurposed** into `allow_delete_scores` (ADR 0048). Re-scoring is now
+> done by *deleting* a job's fit score (which resets it to `unscored`), then scoring it again — so the
+> dedicated re-score gate is gone. The rest of this ADR is kept for history.
 
 ## Context
 The manual **Score selected** action on the Jobs tab (`/api/score-selected`) previously **skipped**

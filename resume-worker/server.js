@@ -133,12 +133,13 @@ app.post('/score-jobs', async (req, res) => {
   // All preconditions met — ack immediately, score in background.
   res.json({ ok: true, queued: ids.length });
 
-  const allowRescore = !!settings.allow_rescore;
   const client = resolved.client;
 
   (async () => {
     const [jobs, resumeText] = await Promise.all([getJobsByIds(ids), getScoringResumeText()]);
-    const toScore = allowRescore ? jobs : jobs.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+    // Only score jobs not yet AI-scored; to re-score, the user deletes the fit score first
+    // (Jobs tab, ADR 0048), which resets the job to 'unscored'.
+    const toScore = jobs.filter((j) => j.status === 'unscored' || j.status === 'filtered');
     console.log(`[score-jobs] scoring ${toScore.length}/${ids.length} jobs`);
 
     await Promise.all(

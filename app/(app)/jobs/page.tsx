@@ -82,7 +82,7 @@ export default function JobsPage() {
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
   const [hideInApplications, setHideInApplications] = useState(true); // jobs already queued for tailoring live under Tailor & Apply
   const [showMoreFilters, setShowMoreFilters] = useState(false); // collapsible secondary refinements (declutters the bar)
-  const [allowRescore, setAllowRescore] = useState(false); // Settings gate (ADR 0039): when on, "Score selected" re-scores already-scored jobs
+  const [allowDeleteScores, setAllowDeleteScores] = useState(false); // Settings gate (ADR 0048): when on, show bulk "delete score" actions
 
   // Run selector
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -166,7 +166,7 @@ export default function JobsPage() {
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setAllowRescore(!!d.allow_rescore))
+      .then((d) => d && setAllowDeleteScores(!!d.allow_delete_scores))
       .catch(() => {});
   }, []);
 
@@ -552,6 +552,40 @@ export default function JobsPage() {
     }
   }
 
+  // Bulk-delete a score/tailoring artifact for the selected jobs (ADR 0048). Gated by the
+  // Settings "Allow deleting scores" toggle (enforced again server-side). 'fit' resets the
+  // job to unscored so it can be freshly scored.
+  async function clearScores(target: 'fit' | 'company' | 'match' | 'tailored') {
+    const ids = selectedVisibleIds();
+    if (ids.length === 0 || bulkBusy) return;
+    const label = { fit: 'AI fit score', company: 'company score', match: 'match score', tailored: 'tailored résumé' }[target];
+    const extra = target === 'fit' ? ' They will reset to unscored.' : '';
+    if (!confirm(`Delete the ${label} for the ${ids.length} selected job${ids.length === 1 ? '' : 's'}?${extra} This can't be undone.`)) return;
+    setBulkBusy(true);
+    setBulkMsg(`Deleting ${label}…`);
+    try {
+      const r = await fetch('/api/jobs/clear-scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, target }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setBulkMsg(d.error || 'Delete failed.');
+        return;
+      }
+      setBulkMsg(`Deleted ${label} for ${d.cleared ?? ids.length} job${(d.cleared ?? ids.length) === 1 ? '' : 's'}.`);
+      setSelected(new Set());
+      load(true);
+      refreshStats();
+    } catch {
+      setBulkMsg('Delete failed.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setBulkMsg(null), 5000);
+    }
+  }
+
   async function markApplied(job: Job) {
     setApplyDialog(null);
     await patch(job.id, { applied_at: new Date().toISOString() });
@@ -574,13 +608,14 @@ export default function JobsPage() {
       {/* Live progress of the *automatic* scorer (daily run / webhook loop), if active. */}
       <ScoringPanel onActivity={() => { load(true); refreshStats(); }} />
 
-      {/* Re-scoring safety gate is ON (ADR 0039) — make it visible so it's deliberate. */}
-      {allowRescore && (
-        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-[12px] text-amber-400">
+      {/* Delete-scores danger gate is ON (ADR 0048) — make it visible so it's deliberate. */}
+      {allowDeleteScores && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-md bg-rose/10 border border-rose/30 text-[12px] text-rose">
           <AlertTriangle size={14} className="shrink-0" />
           <span>
-            Re-scoring is <strong>ON</strong> — “Score selected” will overwrite existing scores. Turn it off in{' '}
-            <Link href="/settings" className="underline hover:text-amber-300">Settings</Link> when you&apos;re done.
+            Deleting scores is <strong>ON</strong> — selecting jobs shows actions that permanently clear their scores.
+            Turn it off in{' '}
+            <Link href="/settings" className="underline hover:text-rose/80">Settings</Link> when you&apos;re done.
           </span>
         </div>
       )}
@@ -933,18 +968,10 @@ export default function JobsPage() {
               <button
                 onClick={scoreSelected}
                 disabled={bulkBusy || bulkRunning}
-                title={
-                  allowRescore
-                    ? 'Re-score the selected jobs — overwrites existing scores (re-scoring is ON in Settings)'
-                    : 'AI-score just the selected jobs (already-scored ones are skipped; skips the auto pre-filter)'
-                }
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border disabled:opacity-40 rounded-md transition-all ${
-                  allowRescore
-                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20'
-                    : 'text-sky bg-sky/10 border-sky/30 hover:bg-sky/20'
-                }`}
+                title="AI-score just the selected jobs (already-scored ones are skipped; skips the auto pre-filter). To re-score, delete the fit score first."
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
               >
-                <Sparkles size={13} /> {allowRescore ? 'Re-score' : 'Score'} selected ({selected.size})
+                <Sparkles size={13} /> Score selected ({selected.size})
               </button>
               <button
                 onClick={assessSelected}
@@ -986,6 +1013,44 @@ export default function JobsPage() {
               >
                 <Trash2 size={13} /> Delete selected
               </button>
+              {/* Delete-score actions (ADR 0048) — only when the Settings danger gate is on. */}
+              {allowDeleteScores && (
+                <>
+                  <span className="w-px h-5 bg-ink self-center" aria-hidden />
+                  <button
+                    onClick={() => clearScores('fit')}
+                    disabled={bulkBusy}
+                    title="Delete the AI fit score for the selected jobs and reset them to unscored"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                  >
+                    <Trash2 size={13} /> Delete fit score
+                  </button>
+                  <button
+                    onClick={() => clearScores('company')}
+                    disabled={bulkBusy}
+                    title="Delete the AI company assessment (tier + note) for the selected jobs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                  >
+                    <Trash2 size={13} /> Delete company score
+                  </button>
+                  <button
+                    onClick={() => clearScores('match')}
+                    disabled={bulkBusy}
+                    title="Delete the keyword/skill match score for the selected jobs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                  >
+                    <Trash2 size={13} /> Delete match score
+                  </button>
+                  <button
+                    onClick={() => clearScores('tailored')}
+                    disabled={bulkBusy}
+                    title="Delete the tailored résumé (and its score) for the selected jobs in Tailor & Apply"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                  >
+                    <Trash2 size={13} /> Delete tailored résumé
+                  </button>
+                </>
+              )}
               <button onClick={() => setSelected(new Set())} className="text-[12px] text-slate-muted hover:text-slate-text underline">
                 Clear
               </button>

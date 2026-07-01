@@ -166,10 +166,10 @@ export interface Settings {
   auto_assess_enabled: boolean;
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */
   auto_assess_min_score: number;
-  /** Safety gate (ADR 0039): when true, the manual "Score selected" action RE-scores
-   *  already-scored jobs (overwrites). Default false → it only scores unscored ones, so a
-   *  stray click can't re-score. Flip on, re-score, flip off. */
-  allow_rescore: boolean;
+  /** Danger gate (ADR 0048): when true, the Jobs tab surfaces bulk actions to DELETE a
+   *  job's fit score / company score / match score / tailored résumé. Default false so a
+   *  stray click can't wipe scores. Flip on, delete, flip off. (Renamed from allow_rescore.) */
+  allow_delete_scores: boolean;
   resume_worker_url: string | null;
   /** Shared Bearer secret for the worker (ADR 0027). Server-only; the settings GET
    *  masks it. Falls back to the RESUME_WORKER_SECRET env var when unset. */

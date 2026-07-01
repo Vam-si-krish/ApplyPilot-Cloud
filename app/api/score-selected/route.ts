@@ -5,9 +5,9 @@
  * selection IS the user's filter, so the pre-filter gate is bypassed here — a
  * chosen job is scored directly even if its match % is below the auto threshold.
  * By default only jobs not yet AI-scored ('unscored' or previously 'filtered') are
- * scored; already-'scored'/'archived' ones are reported as skipped. The `allow_rescore`
- * setting (ADR 0039) unlocks RE-scoring already-scored jobs — a deliberate, gated path
- * so a stray click can't overwrite scores or burn LLM calls.
+ * scored; already-'scored'/'archived' ones are reported as skipped. To re-score a job,
+ * delete its fit score first (Jobs tab, gated by allow_delete_scores, ADR 0048) — that
+ * resets it to 'unscored' so this path scores it again.
  *
  * Subscription provider (ADR 0042): each /llm call spawns an Agent SDK subprocess on
  * the worker. Calling N of them from Netlify times out the function. Instead the
@@ -93,9 +93,9 @@ export async function POST(req: Request) {
     const rows = await getJobsByIds(ids);
     console.log(tag, `rows=${rows.length}`);
 
-    const toScore = settings.allow_rescore
-      ? rows
-      : rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+    // Only score jobs not yet AI-scored; already-scored/archived are skipped. (To re-score,
+    // delete the fit score first — it resets the job to 'unscored'.)
+    const toScore = rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
     const skipped = rows.length - toScore.length;
     console.log(tag, `toScore=${toScore.length} skipped=${skipped}`);
 
