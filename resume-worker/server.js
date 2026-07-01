@@ -5,10 +5,14 @@
  * Tunnel; auth is a shared Bearer secret.
  *
  *   GET  /health           → { ok, browser }
+ *   GET  /version          → { commit, features } (redeploy check; no auth)
  *   POST /generate {id}    → render application <id> → upload → mark ready+pdf_path
  */
 import 'dotenv/config';
 import express from 'express';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 import {
   getApplication,
   getApplicationWithJob,
@@ -71,6 +75,29 @@ app.get('/health', async (_req, res) => {
     browser = false;
   }
   res.json({ ok: true, browser, ts: new Date().toISOString() });
+});
+
+/**
+ * GET /version → { commit, features } — a redeploy check. Reports the git commit of the
+ * checkout the worker is ACTUALLY running (resolved at request time from this file's dir),
+ * plus a static `features` list baked into this build. After pulling on the Worker Mac,
+ * `curl <worker>/version` confirms the new code is live: `features` must include
+ * "score-jobs-allow-rescore" (the fix that lets subscription re-scoring re-score already-
+ * scored jobs). No auth needed — it exposes no secrets.
+ */
+app.get('/version', (_req, res) => {
+  // Static marker: bump this list when adding a feature you want to verify post-deploy.
+  const features = ['score-jobs-allow-rescore', 'llm', 'tailor-queue'];
+  let commit = 'unknown';
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    commit = execSync('git rev-parse --short HEAD', { cwd: here, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim() || 'unknown';
+  } catch {
+    /* not a git checkout / git unavailable → leave 'unknown'; features still confirms the build */
+  }
+  res.json({ ok: true, commit, features, ts: new Date().toISOString() });
 });
 
 /**
