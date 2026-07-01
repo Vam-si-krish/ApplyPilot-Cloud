@@ -22,7 +22,6 @@ import {
   getJobsByIds,
   getQueuedApplications,
   getScoringResumeText,
-  resumeToScoringText,
   updateJob,
   updateApplication,
   uploadPdf,
@@ -338,17 +337,17 @@ app.post('/tailor', async (req, res) => {
     console.log(`[/tailor] start id=${id} provider=${provider} model=${model}`);
     const client = resolved.client;
     tailorResume(base, job, signals, client, appRow.tailor_instructions || '')
-      .then(({ resume, changes }) => {
+      .then(async ({ resume, changes, coverLetter }) => {
         console.log(`[/tailor] done id=${id} ${Date.now() - tStart}ms`);
-        // Clear any stale tailored score — the app re-scores the new résumé (ADR 0029).
-        return updateApplication(id, {
+        await updateApplication(id, {
           tailored_resume: resume,
           tailor_changes: changes,
           status: 'ready',
           error: null,
-          tailored_fit_score: null,
-          tailored_score_note: null,
         });
+        // The same call produced a cover letter (ADR 0051) — render + save it, no extra LLM
+        // call. Best-effort; on miss/failure the standalone "Cover letter" button still works.
+        await saveEmbeddedCoverLetter(appRow, base, coverLetter).catch(() => {});
       })
       .catch((e) => {
         const msg = e instanceof Error ? e.message : String(e);
@@ -373,29 +372,31 @@ function tailorSignals(job) {
 }
 
 /**
- * Run the full per-application pipeline ONCE, synchronously: tailor → render+upload PDF →
- * score the tailored résumé. Each step's failure is contained; the function throws only
- * if tailoring itself fails (no résumé to render/score). Returns a small status object.
- * Reused by the nightly queue drainer; mirrors the manual "Generate selected" pipeline.
+ * Run the full per-application pipeline ONCE, synchronously: tailor → render+upload PDF.
+ * Each step's failure is contained; the function throws only if tailoring itself fails (no
+ * résumé to render). Returns a small status object. Reused by the nightly queue drainer;
+ * mirrors the manual "Generate selected" pipeline.
+ *
+ * Scoring the tailored résumé is deliberately NOT done here (ADR 0050): the base fit_score
+ * already answers "how competitive is this once tailored?" (the rubric is tailoring-aware),
+ * so a second score on the same rubric is redundant + spends a call per résumé. The tailored
+ * fit is available on demand via the manual "Score résumé" button if ever wanted.
  */
-async function runFullPipeline({ appRow, base, tailorClient, scoreClient }) {
+async function runFullPipeline({ appRow, base, tailorClient }) {
   const id = appRow.id;
   const job = appRow.job;
 
   // 1. Tailor (the one expensive LLM call). Throwing here marks the row failed below.
   await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
-  const { resume, changes } = await tailorResume(base, job, tailorSignals(job), tailorClient, appRow.tailor_instructions || '');
+  const { resume, changes, coverLetter } = await tailorResume(base, job, tailorSignals(job), tailorClient, appRow.tailor_instructions || '');
   await updateApplication(id, {
     tailored_resume: resume,
     tailor_changes: changes,
     status: 'ready',
     error: null,
-    tailored_fit_score: null,
-    tailored_score_note: null,
   });
 
   // 2. Render + upload the PDF (best-effort — a render failure shouldn't lose the résumé).
-  let rendered = resume;
   try {
     const condenseFn = (r, pass) => condenseResume(r, tailorClient, pass);
     const out = await renderResumeToOnePage(resume, appRow.template || 'classic', condenseFn);
@@ -408,26 +409,38 @@ async function runFullPipeline({ appRow, base, tailorClient, scoreClient }) {
           ? 'Content ran long — trimmed the least-important detail to fit one page.'
           : null,
     };
-    if (out.condensed || out.trimmed) {
-      rendered = out.resume;
-      update.tailored_resume = out.resume;
-    }
+    if (out.condensed || out.trimmed) update.tailored_resume = out.resume;
     await updateApplication(id, update);
   } catch (e) {
     console.error(`[/tailor-queue] render failed id=${id}: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // 3. Score the tailored résumé (best-effort — a scoring failure shouldn't fail the row).
-  if (scoreClient) {
-    try {
-      const result = await scoreJobWorker(resumeToScoringText(rendered), job, scoreClient);
-      await updateApplication(id, { tailored_fit_score: result.score, tailored_score_note: result.note });
-    } catch (e) {
-      console.error(`[/tailor-queue] score failed id=${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
+  // 3. Cover letter (ADR 0051): the tailor call already produced one — render + save it, no
+  // extra LLM call. Best-effort; if the model omitted it (coverLetter null) or rendering
+  // fails, we leave it unset and the user's standalone "Cover letter" button still works.
+  await saveEmbeddedCoverLetter(appRow, base, coverLetter).catch(() => {});
 
   return { id, status: 'ready' };
+}
+
+/**
+ * Render + persist a cover letter that the tailor call already produced (ADR 0051). No LLM
+ * call here. No-op when `coverLetter` is null/blank. Failures are contained (logged, not
+ * thrown) — a cover-letter problem must never fail the résumé, and the standalone
+ * /cover-letter path remains available as the fallback.
+ */
+async function saveEmbeddedCoverLetter(appRow, base, coverLetter) {
+  if (!coverLetter || !coverLetter.trim()) return;
+  const id = appRow.id;
+  try {
+    const pdf = await renderCoverLetterPdf(coverLetter, base.basics || {}, appRow.job, appRow.template || 'classic');
+    const path = `${id}-cover.pdf`;
+    await uploadPdf(path, pdf);
+    await updateApplication(id, { cover_letter: coverLetter, cover_letter_pdf_path: path, cover_letter_error: null });
+    console.log(`[cover-letter] saved from tailor call id=${id}`);
+  } catch (e) {
+    console.error(`[cover-letter] embedded save failed id=${id}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /** Current hour (0–23) in an IANA timezone, DST-correct. Falls back to UTC on a bad tz. */
@@ -464,7 +477,7 @@ app.post('/tailor-queue', async (req, res) => {
   // launchd fires hourly with scheduled:true; only then do we honor the UI toggle + hour.
   const scheduled = req.body?.scheduled === true;
 
-  let base, tailorClient, scoreClient, queued;
+  let base, tailorClient, queued;
   try {
     const settings = await getSettings();
 
@@ -493,11 +506,7 @@ app.post('/tailor-queue', async (req, res) => {
     if (tResolved.error) return res.status(409).json({ error: tResolved.error });
     tailorClient = tResolved.client;
 
-    // Scoring client (optional) — if unconfigured, résumés are tailored+rendered but not scored.
-    const sProvider = (settings.score_provider || settings.llm_provider || '').trim().toLowerCase();
-    const sModel = (settings.score_model || settings.llm_model || '').trim();
-    const sResolved = await resolveTaskClient(sProvider, sModel, 'score');
-    scoreClient = sResolved.error ? null : sResolved.client;
+    // Scoring the tailored résumé was removed (ADR 0050) — the drain only tailors + renders.
 
     queued = await getQueuedApplications();
   } catch (e) {
@@ -515,7 +524,7 @@ app.post('/tailor-queue', async (req, res) => {
     console.log(`[/tailor-queue] start — ${batch.length} of ${queued.length} queued (limit ${limit})`);
     for (const appRow of batch) {
       try {
-        await runFullPipeline({ appRow, base, tailorClient, scoreClient });
+        await runFullPipeline({ appRow, base, tailorClient });
         ok++;
         console.log(`[/tailor-queue] ok ${ok}/${batch.length} id=${appRow.id}`);
       } catch (e) {

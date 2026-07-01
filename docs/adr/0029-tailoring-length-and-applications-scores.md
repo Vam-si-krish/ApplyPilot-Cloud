@@ -1,7 +1,9 @@
 # ADR 0029 — Length-neutral tailoring, tailored-résumé scoring, and visible bulk progress
 
 ## Status
-Accepted (2026-06-23)
+Accepted (2026-06-23) — the **tailored-résumé scoring** portion is superseded by
+[ADR 0050](0050-drop-tailored-resume-scoring.md) (2026-07-01); length-neutral tailoring and
+the bulk-progress toast remain in force.
 
 ## Context
 Three issues from real use:

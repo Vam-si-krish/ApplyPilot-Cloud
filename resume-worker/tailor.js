@@ -7,8 +7,11 @@
  *
  * ONE LLM call that rewrites the user's résumé to win interviews for a specific
  * job and pass ATS keyword screening, while anchoring verifiable facts (employers,
- * titles, dates, education) to the base résumé via mergeTailored.
+ * titles, dates, education) to the base résumé via mergeTailored. The SAME call also
+ * returns a matching cover letter (ADR 0051), so we don't pay a second round-trip +
+ * job-description send for it.
  */
+import { extractLetter } from './coverLetter.js';
 
 // ── LLM client (port of lib/llm.ts) ──────────────────────────────────────────
 
@@ -365,15 +368,21 @@ WRITE LIKE A HUMAN, NOT AN AI — recruiters and reviewers spot AI-written résu
 
 DISCLOSURE — include a top-level "_changes" array. Keep it SHORT (token budget): the FIRST entry is ONE sentence (≤ 200 chars) summarizing what you changed and why this candidate is a good fit for the role. Then add one short entry ONLY for each point/scenario you genuinely INVENTED or significantly embellished (something a background check or interview could expose) — omit routine rewording, reordering, and added skills (those are detected automatically). If you invented nothing, return just the single summary sentence.
 
+COVER LETTER — also write a matching cover letter in the "cover_letter" field (same truthfulness rules: use ONLY real experience from the base résumé, never invent employers, titles, dates, metrics, or skills). Style:
+- Exactly 3 short paragraphs, ~250-320 words total. Plain, specific, confident, in the candidate's voice. Same no-AI-tell and no-em-dash rules as above (use a comma, never "—").
+- Paragraph 1: name the role and company, and a one-line hook on why you fit. Paragraph 2: 2-3 concrete, relevant accomplishments/skills from the résumé that match the job. Paragraph 3: a brief close and a call to talk.
+- The field's value MUST begin with "Dear Hiring Manager," end with "Sincerely," on its own line then the candidate's full name, and contain NOTHING else (no subject, no address block, no date, no commentary).
+
 Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work" and "projects" in the SAME ORDER and SAME COUNT as the base (one entry per role/project), with "name" copied from the base purely so the bullets stay aligned to the right role:
 {
   "basics": { "summary": "", "label": "" },
   "work": [ { "name": "<company, copied from base>", "highlights": ["", ""] } ],
   "skills": [ { "name": "", "keywords": ["", ""] } ],
   "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
+  "cover_letter": "Dear Hiring Manager,\n\n<3 paragraphs>\n\nSincerely,\n<candidate full name>",
   "_changes": ["Reframed your summary and bullets around the role's cloud/CI focus and added Kubernetes — a strong fit given your Docker experience.", "Embellished: described leading a 5-engineer migration (you contributed but did not lead it)"]
 }
-Do NOT output name, contact, profiles, job titles, dates, locations, or education — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
+Do NOT output name, contact, profiles, job titles, dates, locations, or education in the résumé fields — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
 
 /** Per-section length budget derived from the base résumé (which already fits one page).
  *  Injected into the prompt and mirrored by the deterministic caps in mergeTailored. */
@@ -594,20 +603,43 @@ function extractChangeNotes(json) {
 }
 
 /**
- * Produce a tailored résumé for a job (ADR 0026). One LLM call. Returns the merged
- * résumé plus `changes` (added skills + the model's invented-point notes).
- * Throws on empty base / unparseable reply.
+ * Produce a tailored résumé for a job (ADR 0026). ONE LLM call. Returns the merged
+ * résumé, `changes` (added skills + the model's invented-point notes), and `coverLetter`
+ * (ADR 0051): a matching cover letter the same call produced, cleaned to just the letter,
+ * or `null` if the model omitted it or returned something unusable (the caller then falls
+ * back to the standalone /cover-letter path). Throws on empty base / unparseable résumé.
+ *
+ * maxTokens is raised to fit the résumé JSON AND the ~350-word letter without either
+ * crowding the other (the résumé is the priority; the letter is a bonus in the same call).
  */
 export async function tailorResume(base, job, signals, client, instructions = '') {
   if (!base || base.work.length === 0) {
     throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
   }
-  const response = await client.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 4000, temperature: 0.35 });
+  const response = await client.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 5200, temperature: 0.35 });
   const json = extractJsonObject(response);
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json));
-  return { resume, changes: { addedSkills: addedSkills(base, resume), notes } };
+  return { resume, changes: { addedSkills: addedSkills(base, resume), notes }, coverLetter: extractCoverLetter(json) };
+}
+
+/**
+ * Pull a usable cover letter out of the tailor JSON (ADR 0051). Returns the cleaned letter
+ * only if it's a real one (survives extractLetter and ends with "Sincerely,"); otherwise
+ * null so the caller silently falls back to the standalone cover-letter generation. Never
+ * throws — a bad/absent letter must not fail the résumé.
+ */
+function extractCoverLetter(json) {
+  try {
+    const raw = json && typeof json.cover_letter === 'string' ? json.cover_letter : '';
+    if (!raw.trim()) return null;
+    if (!/sincerely/i.test(raw)) return null; // no sign-off → not a real letter
+    const cleaned = extractLetter(raw);
+    return cleaned && cleaned.length > 40 ? cleaned : null;
+  } catch {
+    return null;
+  }
 }
 
 export const CONDENSE_PROMPT = `You are shortening an already-tailored résumé that currently OVERFLOWS one page (it would spill onto a second page). Make it fit on ONE page WITHOUT inventing anything new and WITHOUT changing employers, job titles, dates, locations, or education.

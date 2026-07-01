@@ -25,7 +25,7 @@ CRITICAL: Your entire response MUST start with "Dear Hiring Manager," — write 
  * note despite the prompt — that text must NOT reach the PDF. Keep from the "Dear …"
  * salutation through the name line that follows the "Sincerely," sign-off.
  */
-function extractLetter(raw) {
+export function extractLetter(raw) {
   let t = String(raw || '').replace(/\r/g, '').replace(/—/g, ', ').trim();
   // Drop any preamble before the salutation.
   const dear = t.search(/(^|\n)[ \t]*Dear\b/i);
