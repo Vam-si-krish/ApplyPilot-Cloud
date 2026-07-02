@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   planRuns, mapDatasetItemToJob, booleanKeywordQuery, parseLinkedInLocation,
-  buildLinkedInSearchUrl, titleSearchTerms, careerSiteLocations,
+  buildLinkedInSearchUrl, titleSearchTerms, careerSiteLocations, estimateRunCostUsd,
 } from './apify';
 import type { Settings } from './types';
 
@@ -203,6 +203,21 @@ describe('career_sites portal (ADR 0058, opt-in)', () => {
     expect(job?.salary).toBe('150000–180000 USD / YEAR');
     expect(job?.company_size).toBe('51-200');
     expect(job?.source).toBe('apify:career_sites');
+  });
+});
+
+describe('estimateRunCostUsd — the pre-run credit headroom a key must have (ADR 0059)', () => {
+  it('floors at $0.75 for a default LinkedIn-only fetch', () => {
+    // 4 roles × 2 locations × 50 = 400 jobs × $0.0007 × 1.3 ≈ $0.36 → floor.
+    expect(estimateRunCostUsd(makeSettings())).toBe(0.75);
+    // Even the user's 800-job hard cap stays under the floor (≈ $0.73).
+    expect(estimateRunCostUsd(makeSettings({ max_jobs_per_run: 800 }))).toBe(0.75);
+  });
+
+  it('scales with expensive portals (career_sites at $12/1k dominates)', () => {
+    const usd = estimateRunCostUsd(makeSettings({ job_portals: ['linkedin', 'career_sites'], career_sites_max_jobs: 150 }));
+    // (400×0.0007 + 150×0.012) × 1.3 = $2.70
+    expect(usd).toBeCloseTo(2.7, 2);
   });
 });
 

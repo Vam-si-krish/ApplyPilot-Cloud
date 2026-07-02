@@ -252,6 +252,9 @@ export interface ApiKey {
   label: string;
   key_value: string;
   is_active: boolean;
+  /** Low-credit park (ADR 0059): skipped by rotation/selection until this instant
+   *  (the account's monthly usage-cycle reset). Null = eligible. */
+  cooldown_until: string | null;
   created_at: string;
 }
 
@@ -262,6 +265,7 @@ export interface ApiKeyMasked {
   label: string;
   key_preview: string; // e.g. '••••••1234'
   is_active: boolean;
+  cooldown_until: string | null;
   created_at: string;
 }
 

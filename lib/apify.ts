@@ -323,6 +323,29 @@ export function planRuns(settings: Settings): RunSpec[] {
   return specs;
 }
 
+/** FREE-tier per-job prices (store headlines show the GOLD tier — always the free price here). */
+const PORTAL_PRICE_PER_JOB_USD: Record<string, number> = {
+  linkedin: 0.0007, // cheap_scraper
+  indeed: 0.003,
+  glassdoor: 0.003,
+  career_sites: 0.012, // fantastic.jobs on free/bronze
+};
+
+/**
+ * Worst-case cost of one full fetch across the enabled portals (ADR 0059): each
+ * run's hard cap × the actor's free-tier per-job price, +30% platform overhead
+ * (proxy/compute/queues), floored at $0.75. This is the credit headroom a key must
+ * have BEFORE a run starts, so a run never dies mid-scrape on an empty account.
+ */
+export function estimateRunCostUsd(settings: Settings): number {
+  let usd = 0;
+  for (const spec of planRuns(settings)) {
+    const cap = Number(spec.input.maxItems ?? spec.input.limit ?? 0) || 0;
+    usd += cap * (PORTAL_PRICE_PER_JOB_USD[spec.portal] ?? 0.001);
+  }
+  return Math.max(0.75, Math.round(usd * 1.3 * 100) / 100);
+}
+
 /**
  * Start all planned Apify runs in parallel — one per enabled portal. Every webhook
  * URL carries ?portal=<key> so the handler sets source correctly.

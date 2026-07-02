@@ -29,6 +29,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const { error } = await supabaseAdmin().from('jobs').update(patch).eq('id', params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Keep any Tailor & Apply row in agreement (both tabs show applied state; only
+  // jobs.applied_at feeds stats and the ADR-0057 apply-once guard, so they must match).
+  if ('applied_at' in patch) {
+    const { data: apps } = await supabaseAdmin()
+      .from('applications')
+      .select('id, status, tailored_resume')
+      .eq('job_id', params.id);
+    for (const app of apps ?? []) {
+      const sync: Record<string, unknown> = { applied_at: patch.applied_at, updated_at: new Date().toISOString() };
+      if (patch.applied_at) sync.status = 'applied';
+      else if (app.status === 'applied') sync.status = app.tailored_resume ? 'ready' : 'queued';
+      await supabaseAdmin().from('applications').update(sync).eq('id', app.id);
+    }
+  }
   return NextResponse.json({ ok: true });
 }
 

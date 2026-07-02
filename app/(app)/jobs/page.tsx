@@ -1403,16 +1403,21 @@ export default function JobsPage() {
                       </span>
                     )}
 
-                    {/* Applied badge */}
-                    {job.applied_at && (
-                      <span title={`Applied ${new Date(job.applied_at).toLocaleDateString()}`} className="shrink-0 text-emerald">
-                        <CheckCircle2 size={15} />
-                      </span>
-                    )}
-
                     {job.score_note && (
                       <p className="hidden lg:block max-w-xs truncate text-slate-muted text-[11px] italic">{job.score_note}</p>
                     )}
+                    {/* Mark applied — the popup-free way to record an apply (also un-marks). */}
+                    <button
+                      onClick={() =>
+                        job.applied_at
+                          ? window.confirm('Un-mark this job as applied?') && patch(job.id, { applied_at: null })
+                          : markApplied(job)
+                      }
+                      title={job.applied_at ? `Applied ${new Date(job.applied_at).toLocaleDateString()} — click to un-mark` : 'Mark applied'}
+                      className={job.applied_at ? 'text-emerald' : 'text-slate-muted hover:text-emerald'}
+                    >
+                      <CheckCircle2 size={15} />
+                    </button>
                     <button
                       onClick={() => patch(job.id, { is_shortlisted: !job.is_shortlisted })}
                       title="Shortlist"

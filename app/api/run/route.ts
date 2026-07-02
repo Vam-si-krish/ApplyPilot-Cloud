@@ -9,7 +9,7 @@
  * - POST is the manual "Run now" button (authorized by the session cookie).
  */
 import { NextResponse } from 'next/server';
-import { startAllPortalRuns } from '@/lib/apify';
+import { startAllPortalRuns, estimateRunCostUsd } from '@/lib/apify';
 import { rotateAllActiveKeys, ensureApifyKeyWithCredit } from '@/lib/credentials';
 import { getSettings, createRun, getLatestRun } from '@/lib/db';
 import { checkCronAuth, verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
@@ -63,12 +63,14 @@ async function handle(req: Request) {
     // run reads the Apify token (here) or the LLM key (later, in /api/score-batch).
     if (settings.auto_rotate_keys) await rotateAllActiveKeys();
 
-    // Never start a run on an exhausted Apify account (free keys cap at $5/month) —
-    // pick the next vault key with credit, or fail loudly when all are dry (ADR 0058).
-    const key = await ensureApifyKeyWithCredit();
+    // Never start a run on an Apify account that can't afford the WHOLE fetch
+    // (free keys cap at $5/month; a mid-scrape stop wastes the partial spend) —
+    // low keys are parked until their cycle reset, the next funded key activates,
+    // and when all are dry we fail loudly (ADR 0058/0059).
+    const key = await ensureApifyKeyWithCredit(estimateRunCostUsd(settings));
     if (!key.vaultEmpty && key.label === null) {
       return NextResponse.json(
-        { error: 'Every Apify key in the vault has exhausted its monthly credit — add a key or wait for the cycle reset.' },
+        { error: 'Every Apify key in the vault is out of credit for a full fetch — all parked until their monthly resets. Add a key or lower Max jobs/run.' },
         { status: 402 },
       );
     }

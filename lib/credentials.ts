@@ -38,8 +38,16 @@ function toMasked(row: ApiKey): ApiKeyMasked {
     label: row.label,
     key_preview: maskKey(row.key_value),
     is_active: row.is_active,
+    cooldown_until: row.cooldown_until ?? null,
     created_at: row.created_at,
   };
+}
+
+/** True when a key is parked for low credit and its reset instant hasn't passed (ADR 0059). */
+export function isCoolingDown(cooldownUntil: string | null | undefined, now = Date.now()): boolean {
+  if (!cooldownUntil) return false;
+  const t = new Date(cooldownUntil).getTime();
+  return Number.isFinite(t) && t > now;
 }
 
 /**
@@ -126,12 +134,15 @@ export function nextRotationIndex(count: number, currentActiveIndex: number): nu
 export async function rotateActiveKey(provider: ApiKeyProvider): Promise<void> {
   const { data, error } = await supabaseAdmin()
     .from('api_keys')
-    .select('id, is_active')
+    .select('id, is_active, cooldown_until')
     .eq('provider', provider)
     .order('created_at', { ascending: true });
   if (error) throw new Error(`Failed to load ${provider} keys for rotation: ${error.message}`);
 
-  const rows = (data ?? []) as { id: string; is_active: boolean }[];
+  const all = (data ?? []) as { id: string; is_active: boolean; cooldown_until: string | null }[];
+  // Low-credit keys parked until their cycle reset never re-enter the round-robin
+  // early (ADR 0059) — rotating onto one would kill the next run mid-scrape.
+  const rows = all.filter((r) => r.is_active || !isCoolingDown(r.cooldown_until));
   if (rows.length < 2) return; // nothing to rotate
 
   const currIdx = rows.findIndex((r) => r.is_active);
@@ -149,54 +160,77 @@ export async function rotateAllActiveKeys(): Promise<void> {
   for (const p of API_KEY_PROVIDERS) await rotateActiveKey(p);
 }
 
-/** Remaining monthly platform credit (USD) for an Apify token, or null when unknown. */
-async function apifyCreditHeadroomUsd(token: string): Promise<number | null> {
+/** Remaining monthly credit (USD) + cycle reset instant for an Apify token; nulls when unknown. */
+async function apifyCreditInfo(token: string): Promise<{ headroomUsd: number | null; resetsAt: string | null }> {
   try {
     const res = await fetch(`https://api.apify.com/v2/users/me/limits?token=${encodeURIComponent(token)}`);
-    if (!res.ok) return null;
+    if (!res.ok) return { headroomUsd: null, resetsAt: null };
     const body = (await res.json()) as {
-      data?: { limits?: { maxMonthlyUsageUsd?: number }; current?: { monthlyUsageUsd?: number } };
+      data?: {
+        monthlyUsageCycle?: { endAt?: string };
+        limits?: { maxMonthlyUsageUsd?: number };
+        current?: { monthlyUsageUsd?: number };
+      };
     };
     const max = body.data?.limits?.maxMonthlyUsageUsd;
     const used = body.data?.current?.monthlyUsageUsd;
-    if (typeof max !== 'number' || typeof used !== 'number') return null;
-    return max - used;
+    const resetsAt = body.data?.monthlyUsageCycle?.endAt ?? null;
+    return {
+      headroomUsd: typeof max === 'number' && typeof used === 'number' ? max - used : null,
+      resetsAt,
+    };
   } catch {
-    return null;
+    return { headroomUsd: null, resetsAt: null };
   }
 }
 
 /**
  * Free Apify accounts hard-cap at $5/month, and a run started on a maxed-out key
- * just fails — while sibling vault keys still have credit (ADR 0058). Called by
- * /api/run after the blind round-robin rotation: verifies the ACTIVE apify key has
- * at least `minHeadroomUsd` left, else activates the next stored key that does.
+ * just fails — or worse, dies mid-scrape — while sibling vault keys still have
+ * credit (ADR 0058/0059). Called by /api/run after the blind round-robin rotation:
+ * verifies the ACTIVE apify key can afford a full run (`minHeadroomUsd`, estimated
+ * from the fetch caps), else activates the next stored key that can.
+ *
+ * A key that can't afford the run is PARKED (`cooldown_until` = its usage-cycle
+ * reset from the limits API) so neither rotation nor this probe touches it again
+ * until its credit is actually back. A key that passes gets any stale park cleared.
  *
  * Returns the label of the key left active, or null when EVERY key is exhausted
  * (the caller should fail loudly rather than start a doomed run). `vaultEmpty`
  * distinguishes the env-fallback setup, where there is nothing to manage.
  */
 export async function ensureApifyKeyWithCredit(
-  minHeadroomUsd = 0.5,
+  minHeadroomUsd = 0.75,
 ): Promise<{ label: string | null; vaultEmpty: boolean }> {
   const { data, error } = await supabaseAdmin()
     .from('api_keys')
-    .select('id, label, key_value, is_active')
+    .select('id, label, key_value, is_active, cooldown_until')
     .eq('provider', 'apify')
     .order('created_at', { ascending: true });
   if (error) throw new Error(`Failed to load apify keys: ${error.message}`);
-  const rows = (data ?? []) as { id: string; label: string; key_value: string; is_active: boolean }[];
+  const rows = (data ?? []) as {
+    id: string; label: string; key_value: string; is_active: boolean; cooldown_until: string | null;
+  }[];
   if (!rows.length) return { label: null, vaultEmpty: true };
 
   const activeIdx = Math.max(0, rows.findIndex((r) => r.is_active));
   for (let i = 0; i < rows.length; i++) {
     const row = rows[(activeIdx + i) % rows.length];
-    const headroom = await apifyCreditHeadroomUsd(row.key_value);
+    if (isCoolingDown(row.cooldown_until)) continue; // parked — credit not back yet
+
+    const { headroomUsd, resetsAt } = await apifyCreditInfo(row.key_value);
     // Unknown headroom (limits API down) must not block the run — trust the key.
-    if (headroom === null || headroom >= minHeadroomUsd) {
+    if (headroomUsd === null || headroomUsd >= minHeadroomUsd) {
+      if (row.cooldown_until) {
+        await supabaseAdmin().from('api_keys').update({ cooldown_until: null }).eq('id', row.id);
+      }
       if (!row.is_active) await activateApiKey(row.id);
       return { label: row.label, vaultEmpty: false };
     }
+    // Can't afford this run — park until the account's cycle reset (fallback 24h so
+    // a missing endAt can never park a key forever).
+    const until = resetsAt ?? new Date(Date.now() + 24 * 3_600_000).toISOString();
+    await supabaseAdmin().from('api_keys').update({ cooldown_until: until }).eq('id', row.id);
   }
   return { label: null, vaultEmpty: false };
 }

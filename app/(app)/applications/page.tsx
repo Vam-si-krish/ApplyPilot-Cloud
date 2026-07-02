@@ -969,15 +969,18 @@ export default function ApplicationsPage() {
                   <span className="hidden md:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
                     <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
                   </span>
-                  {a.applied_at ? (
-                    <span title={`Applied ${new Date(a.applied_at).toLocaleDateString()}`} className="text-emerald shrink-0">
-                      <CheckCircle2 size={15} />
-                    </span>
-                  ) : (
-                    <button onClick={() => patch(a.id, { status: 'applied' })} title="Mark as applied" className="text-slate-muted hover:text-emerald shrink-0">
-                      <CheckCircle2 size={15} />
-                    </button>
-                  )}
+                  {/* Applied toggle — also syncs the Jobs-tab row (server-side). */}
+                  <button
+                    onClick={() =>
+                      a.applied_at
+                        ? window.confirm('Un-mark this application as applied?') && patch(a.id, { applied_at: null })
+                        : patch(a.id, { status: 'applied' })
+                    }
+                    title={a.applied_at ? `Applied ${new Date(a.applied_at).toLocaleDateString()} — click to un-mark` : 'Mark as applied'}
+                    className={a.applied_at ? 'text-emerald shrink-0' : 'text-slate-muted hover:text-emerald shrink-0'}
+                  >
+                    <CheckCircle2 size={15} />
+                  </button>
                   {job && (
                     <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" onClick={() => { pendingApply.current = a; }} title="Open posting (will ask if you applied)" className="text-slate-muted hover:text-sky shrink-0">
                       <ExternalLink size={15} />

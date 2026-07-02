@@ -41,8 +41,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin().from('applications').update(patch).eq('id', params.id);
+  // Unmarking an applied application also steps its status back so it doesn't
+  // stay green: 'ready' when a tailored résumé exists, else 'queued'.
+  if (patch.applied_at === null && !('status' in patch)) {
+    const { data: row } = await supabaseAdmin()
+      .from('applications')
+      .select('status, tailored_resume')
+      .eq('id', params.id)
+      .maybeSingle();
+    if (row?.status === 'applied') patch.status = row.tailored_resume ? 'ready' : 'queued';
+  }
+
+  const { data: updated, error } = await supabaseAdmin()
+    .from('applications')
+    .update(patch)
+    .eq('id', params.id)
+    .select('job_id')
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Keep the JOB row in agreement (the Jobs tab, stats, and the ADR-0057
+  // apply-once-per-requisition guard all read jobs.applied_at).
+  if ('applied_at' in patch && updated?.job_id) {
+    await supabaseAdmin().from('jobs').update({ applied_at: patch.applied_at }).eq('id', updated.job_id);
+  }
   return NextResponse.json({ ok: true });
 }
 

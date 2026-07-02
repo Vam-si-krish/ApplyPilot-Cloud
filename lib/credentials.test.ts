@@ -13,7 +13,7 @@ vi.mock('./supabase', () => {
   return { supabaseAdmin: () => builder };
 });
 
-import { maskKey, getActiveApiKey, isApiKeyProvider, nextRotationIndex } from './credentials';
+import { maskKey, getActiveApiKey, isApiKeyProvider, nextRotationIndex, isCoolingDown } from './credentials';
 
 describe('maskKey', () => {
   it('keeps the last 4 chars and dots the rest', () => {
@@ -47,6 +47,19 @@ describe('nextRotationIndex', () => {
   });
   it('stays at 0 for a single key', () => {
     expect(nextRotationIndex(1, 0)).toBe(0);
+  });
+});
+
+describe('isCoolingDown — low-credit key park (ADR 0059)', () => {
+  const now = Date.parse('2026-07-02T12:00:00Z');
+  it('true only while the reset instant is in the future', () => {
+    expect(isCoolingDown('2026-07-16T23:59:59Z', now)).toBe(true);
+    expect(isCoolingDown('2026-07-02T11:59:59Z', now)).toBe(false);
+  });
+  it('null/garbage never parks a key', () => {
+    expect(isCoolingDown(null, now)).toBe(false);
+    expect(isCoolingDown(undefined, now)).toBe(false);
+    expect(isCoolingDown('not-a-date', now)).toBe(false);
   });
 });
 

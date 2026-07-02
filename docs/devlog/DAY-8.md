@@ -166,3 +166,15 @@ outside saved metros) so locations were left alone; "Remote, US" was an ungeocod
 - Watch the first boolean-query run: confirm cheap_scraper passes quoted/OR keywords through
   (fallback = revert to per-role startUrls).
 - Cron still external (Netlify/worker-Mac launchd); auto_scrape_enabled is false — runs are manual.
+
+## ✅ Applied everywhere + key credit cooldown (ADR 0059)
+- Jobs tab now has a per-row Mark-applied toggle (the popup was the only way); Tailor & Apply's
+  applied badge toggles too. Both PATCH routes sync the OTHER table (jobs.applied_at feeds
+  stats + the ADR-0057 apply-once guard, applications.status drives T&A) — they can no longer
+  disagree.
+- Apify keys that can't afford a FULL fetch are parked (`api_keys.cooldown_until` = that
+  account's cycle reset from the limits API); rotation + the pre-run probe skip parked keys, so
+  a run never dies mid-scrape on a dry account. Threshold = estimateRunCostUsd(settings):
+  caps × free-tier price × 1.3, floor $0.75 (user's 800-cap LinkedIn run ≈ $0.73 worst case).
+  Settings → API Keys shows "⏸ low credit · resets <date>". Migration 0038 applied live.
+- Tests 158 green; typecheck + build green. App-side only.

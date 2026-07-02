@@ -795,6 +795,15 @@ function ProviderKeys({
                 {k.is_active ? 'Active' : 'Set active'}
               </button>
               <span className="text-[13px] text-slate-text truncate">{k.label || <span className="text-slate-muted italic">unlabeled</span>}</span>
+              {/* Low-credit park (ADR 0059): skipped by rotation until the account's monthly reset. */}
+              {k.cooldown_until && new Date(k.cooldown_until) > new Date() && (
+                <span
+                  title="Credit too low for a full fetch — rotation skips this key until the account's monthly usage cycle resets"
+                  className="shrink-0 px-2 py-0.5 rounded-md text-[11px] bg-amber-400/10 text-amber-400 border border-amber-400/30"
+                >
+                  ⏸ low credit · resets {new Date(k.cooldown_until).toLocaleDateString()}
+                </span>
+              )}
               <span className="text-[12px] text-slate-muted font-mono ml-auto">{k.key_preview}</span>
               <button onClick={() => onRemove(k.id)} title="Delete key" className="shrink-0 text-slate-muted hover:text-rose transition-colors">
                 <Trash2 size={14} />
