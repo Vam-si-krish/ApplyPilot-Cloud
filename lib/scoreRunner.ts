@@ -131,6 +131,44 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
         return;
       }
 
+      // Duplicate posting (ADR 0057): identical content to its canonical row, so it
+      // inherits the canonical's outcome instead of a fresh LLM call (the rubric does
+      // not score location — this is a copy, never a fabrication). getUnscoredBatch
+      // orders canonicals first, so the canonical is usually resolved by now; if it's
+      // still unscored (same concurrent batch), fall through and score normally.
+      if (job.duplicate_of) {
+        const { data: canonical } = await supabaseAdmin()
+          .from('jobs')
+          .select('fit_score, score_note, score_keywords, score_reasoning, score_breakdown, employment_type, status')
+          .eq('id', job.duplicate_of)
+          .maybeSingle();
+        if (canonical?.fit_score != null) {
+          await supabaseAdmin()
+            .from('jobs')
+            .update({
+              fit_score: canonical.fit_score,
+              score_note: canonical.score_note,
+              score_keywords: canonical.score_keywords,
+              score_reasoning: canonical.score_reasoning,
+              score_breakdown: canonical.score_breakdown,
+              employment_type: canonical.employment_type,
+              status: 'scored',
+              scored_at: new Date().toISOString(),
+            })
+            .eq('id', job.id);
+          scored++;
+          return;
+        }
+        if (canonical?.status === 'filtered') {
+          await supabaseAdmin()
+            .from('jobs')
+            .update({ status: 'filtered', scored_at: new Date().toISOString() })
+            .eq('id', job.id);
+          filtered++;
+          return;
+        }
+      }
+
       const result = await scoreJob(
         opts.resume,
         { title: job.title, company: job.company, location: job.location, full_description: job.full_description },

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw, Gauge } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw, Gauge, MapPin } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
@@ -1344,6 +1344,19 @@ export default function JobsPage() {
                     {/* AI company-tier badge */}
                     {job.company_tier && (
                       <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
+                    )}
+
+
+
+                    {/* Multi-location duplicate group (ADR 0057): this row is the canonical;
+                        the same posting exists in N other locations (see expanded panel). */}
+                    {(job.siblings?.length ?? 0) > 0 && (
+                      <span
+                        title={`Same posting in ${job.siblings!.length} other location${job.siblings!.length === 1 ? '' : 's'}: ${job.siblings!.map((s) => s.location || '—').slice(0, 6).join(' · ')}${job.siblings!.length > 6 ? ' · …' : ''} (scored once — expand the row to open a specific location)`}
+                        className="shrink-0 hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded"
+                      >
+                        <MapPin size={10} /> +{job.siblings!.length}
+                      </span>
                     )}
 
                     {/* Local ATS match badge (ADR 0053) — the first-filter signal */}

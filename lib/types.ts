@@ -55,6 +55,25 @@ export interface Job {
   discovered_at: string;
   scored_at: string | null;
   source: string | null;
+  /** Content fingerprint (ADR 0057): same company+title+body ⇒ same key, location excluded. */
+  content_key: string | null;
+  /** Set on later copies of a multi-location / reposted listing — points at the
+   *  first-seen canonical row. Duplicates are hidden from the default Jobs list
+   *  (unless the user interacted with them) and inherit the canonical's AI score. */
+  duplicate_of: string | null;
+  /** API-attached (not a DB column): the duplicate rows of THIS canonical, so the
+   *  UI can show "+N locations" and link each variant. */
+  siblings?: DuplicateSibling[];
+}
+
+/** Compact view of a duplicate posting variant (ADR 0057) — enough to list + open it. */
+export interface DuplicateSibling {
+  id: string;
+  location: string | null;
+  url: string;
+  application_url: string | null;
+  status: JobStatus;
+  applied_at: string | null;
 }
 
 /**

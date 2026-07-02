@@ -1,6 +1,7 @@
 /** GET /api/jobs — filtered, sorted job list (fit_score desc, then newest). */
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import type { Job, DuplicateSibling } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,11 @@ export async function GET(req: Request) {
   // Manually-added jobs live only under Tailor & Apply (ADR 0034) — keep them out of the
   // scraped Jobs list. (source IS NULL covers normal scraped rows.)
   q = q.or('source.is.null,source.neq.manual');
+
+  // Duplicate postings (ADR 0057): hide later copies of the same listing — the canonical
+  // row carries the group (with `siblings` attached below). A duplicate the user has
+  // interacted with (applied / shortlisted / opened) stays visible in its own right.
+  q = q.or('duplicate_of.is.null,applied_at.not.is.null,is_shortlisted.eq.true,clicked_at.not.is.null');
 
   if (search) q = q.or(`title.ilike.%${search}%,company.ilike.%${search}%,location.ilike.%${search}%`);
   if (minScore !== null && minScore !== '') q = q.gte('fit_score', Number(minScore));
@@ -104,5 +110,29 @@ export async function GET(req: Request) {
 
   const { data, error, count } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ jobs: data ?? [], total: count ?? 0 });
+
+  // Attach each canonical row's duplicate variants (ADR 0057) so the UI can show
+  // "+N locations" and let the user open/apply to a specific one.
+  const jobs = (data ?? []) as Job[];
+  const canonicalIds = jobs.filter((j) => !j.duplicate_of).map((j) => j.id);
+  if (canonicalIds.length > 0) {
+    const { data: sibs } = await supabaseAdmin()
+      .from('jobs')
+      .select('id, duplicate_of, location, url, application_url, status, applied_at')
+      .in('duplicate_of', canonicalIds);
+    if (sibs && sibs.length > 0) {
+      const byCanonical = new Map<string, DuplicateSibling[]>();
+      for (const s of sibs as (DuplicateSibling & { duplicate_of: string })[]) {
+        const list = byCanonical.get(s.duplicate_of) ?? [];
+        list.push({ id: s.id, location: s.location, url: s.url, application_url: s.application_url, status: s.status, applied_at: s.applied_at });
+        byCanonical.set(s.duplicate_of, list);
+      }
+      for (const j of jobs) {
+        const list = byCanonical.get(j.id);
+        if (list) j.siblings = list;
+      }
+    }
+  }
+
+  return NextResponse.json({ jobs, total: count ?? 0 });
 }

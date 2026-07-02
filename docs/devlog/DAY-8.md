@@ -114,6 +114,20 @@ prompt still hard-blocks titles and its old merge restores base positions. **Fix
   work honestly supports it (most recent role matters most)" instead of "you MAY adjust" — leaving
   a title unchanged is the exception, level inflation still forbidden.
 
+## ✅ Also shipped: duplicate-posting dedup (ADR 0057)
+User showed 12 identical Deloitte rows (one req blasted per metro). Measured: ~32% of the DB were
+copies; 561 LLM calls wasted; reposts re-arrive daily under fresh URLs so it compounds.
+- `lib/dedupe.ts` `jobContentKey` (md5 of company+title+normalized body; location excluded);
+  migration 0036 (`content_key`, `duplicate_of`, indexes) applied live.
+- Webhook links duplicates after insert (`linkDuplicateJobs`); an unscored duplicate whose
+  canonical is scored inherits the score verbatim (copy of a real score for identical content —
+  rubric doesn't score location). Scoring loop does the same; canonicals ordered first.
+- Jobs API hides duplicate rows (interacted ones stay), attaches `siblings`; UI shows a "+N"
+  location chip and the expanded panel lists each location as an openable link.
+- Backfill run: 2,367 rows keyed, 668 duplicates linked, 646 with scores; Deloitte cluster from
+  the screenshot is now 1 row + 11 variants. Tests 140 green; typecheck + build green.
+- No worker deploy needed for this one (all app-side).
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

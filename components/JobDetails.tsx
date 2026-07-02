@@ -55,6 +55,34 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           )}
         </div>
       )}
+      {/* Multi-location duplicate group (ADR 0057): same posting, other locations — each
+          openable so the user applies to the location they actually want. */}
+      {(job.siblings?.length ?? 0) > 0 && (
+        <div>
+          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">
+            Also posted in {job.siblings!.length} other location{job.siblings!.length === 1 ? '' : 's'} · scored once
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {job.siblings!.map((s) => (
+              <a
+                key={s.id}
+                href={s.application_url || s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open the ${s.location || 'unknown location'} posting${s.applied_at ? ' (applied)' : ''}`}
+                className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                  s.applied_at
+                    ? 'bg-emerald/10 border-emerald/25 text-emerald'
+                    : 'bg-raised border-ink text-slate-text hover:border-sky/40 hover:text-sky'
+                }`}
+              >
+                {s.location || '—'}
+                {s.applied_at ? ' ✓' : ''}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       {job.company_tier && (
         <div>
           <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Company rated by AI</p>

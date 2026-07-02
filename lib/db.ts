@@ -302,10 +302,88 @@ export async function getUnscoredBatch(limit: number): Promise<Job[]> {
     .from('jobs')
     .select('*')
     .eq('status', 'unscored')
+    // Canonicals before duplicates (ADR 0057): by the time a duplicate row is
+    // processed its canonical is usually scored, so it copies instead of calling the LLM.
+    .order('duplicate_of', { ascending: true, nullsFirst: true })
     .order('discovered_at', { ascending: true })
     .limit(limit);
   if (error) throw new Error(`Failed to load unscored batch: ${error.message}`);
   return (data ?? []) as Job[];
+}
+
+/**
+ * Link duplicate postings (ADR 0057). For each content key: the earliest still-unlinked
+ * row is (or stays) the canonical; every other unlinked row gets `duplicate_of`, and —
+ * when the canonical is already AI-scored and the duplicate isn't — a verbatim copy of
+ * the canonical's score (identical content; the rubric doesn't score location; zero LLM
+ * calls, never fabricated). Returns how many rows were linked.
+ */
+export async function linkDuplicateJobs(keys: (string | null)[]): Promise<number> {
+  const uniq = [...new Set(keys.filter((k): k is string => !!k))];
+  if (uniq.length === 0) return 0;
+
+  type Row = Pick<Job, 'id' | 'content_key' | 'duplicate_of' | 'fit_score' | 'score_note' | 'score_keywords' | 'score_reasoning' | 'score_breakdown' | 'employment_type' | 'status'>;
+  // PostgREST `in` filters travel in the URL — chunk the key list so a big batch
+  // (or the backfill) can't overflow the request line.
+  const rows: Row[] = [];
+  for (let i = 0; i < uniq.length; i += 100) {
+    const { data, error } = await supabaseAdmin()
+      .from('jobs')
+      .select('id, content_key, duplicate_of, fit_score, score_note, score_keywords, score_reasoning, score_breakdown, employment_type, status')
+      .in('content_key', uniq.slice(i, i + 100))
+      .order('discovered_at', { ascending: true });
+    if (error) throw new Error(`Failed to load duplicate groups: ${error.message}`);
+    rows.push(...((data ?? []) as Row[]));
+  }
+
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const g = groups.get(r.content_key!) ?? [];
+    g.push(r);
+    groups.set(r.content_key!, g);
+  }
+
+  let linked = 0;
+  for (const group of groups.values()) {
+    // Earliest unlinked row is the canonical (an already-linked group keeps its canonical).
+    const canonical = group.find((r) => r.duplicate_of == null);
+    if (!canonical) continue;
+    const dupes = group.filter((r) => r.id !== canonical.id && r.duplicate_of == null);
+    if (dupes.length === 0) continue;
+
+    // Unscored working rows inherit the canonical's score; rows with their own score
+    // (pre-0057 history) or archived rows are linked without being touched otherwise.
+    const canCopy = canonical.fit_score != null;
+    const copyIds = canCopy
+      ? dupes.filter((d) => d.fit_score == null && (d.status === 'unscored' || d.status === 'filtered')).map((d) => d.id)
+      : [];
+    const linkOnlyIds = dupes.map((d) => d.id).filter((id) => !copyIds.includes(id));
+
+    if (copyIds.length > 0) {
+      const { error: e1 } = await supabaseAdmin()
+        .from('jobs')
+        .update({
+          duplicate_of: canonical.id,
+          fit_score: canonical.fit_score,
+          score_note: canonical.score_note,
+          score_keywords: canonical.score_keywords,
+          score_reasoning: canonical.score_reasoning,
+          score_breakdown: canonical.score_breakdown,
+          employment_type: canonical.employment_type,
+          status: 'scored',
+          scored_at: new Date().toISOString(),
+        })
+        .in('id', copyIds);
+      if (e1) throw new Error(`Failed to copy scores to duplicates: ${e1.message}`);
+      linked += copyIds.length;
+    }
+    if (linkOnlyIds.length > 0) {
+      const { error: e2 } = await supabaseAdmin().from('jobs').update({ duplicate_of: canonical.id }).in('id', linkOnlyIds);
+      if (e2) throw new Error(`Failed to link duplicates: ${e2.message}`);
+      linked += linkOnlyIds.length;
+    }
+  }
+  return linked;
 }
 
 /** Scored jobs at/above minScore whose company hasn't been AI-assessed yet (ADR 0010). */

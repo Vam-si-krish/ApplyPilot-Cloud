@@ -9,8 +9,9 @@ import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
-import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getScoringResumeText, getSettings } from '@/lib/db';
+import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getScoringResumeText, getSettings, linkDuplicateJobs } from '@/lib/db';
 import { atsMatchScores } from '@/lib/prefilter';
+import { jobContentKey } from '@/lib/dedupe';
 import { triggerScoreBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
@@ -79,6 +80,9 @@ export async function POST(req: Request) {
       run_id: internalRunId,
       prefilter_score: scores.get(r.url)?.score ?? null,
       prefilter_breakdown: scores.get(r.url)?.breakdown ?? null,
+      // Content fingerprint (ADR 0057): multi-location blasts and daily reposts share
+      // a key even though every copy carries a fresh URL.
+      content_key: jobContentKey(r.company, r.title, r.full_description),
     }));
 
     let inserted = 0;
@@ -90,6 +94,15 @@ export async function POST(req: Request) {
         .select('id');
       if (error) throw new Error(error.message);
       inserted = data?.length ?? 0;
+
+      // Link duplicate postings (ADR 0057): later copies point at the first-seen
+      // canonical and inherit its AI score when it's already scored — they leave the
+      // unscored queue without an LLM call.
+      const linked = await linkDuplicateJobs(rows.map((r) => r.content_key)).catch((e) => {
+        console.error('[apify-webhook] duplicate linking failed:', e instanceof Error ? e.message : String(e));
+        return 0;
+      });
+      if (linked > 0) console.log(`[apify-webhook] linked ${linked} duplicate posting(s)`);
     }
 
     if (runId) await updateRunByApifyId(runId, { jobs_found: inserted });
