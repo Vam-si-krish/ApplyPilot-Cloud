@@ -50,18 +50,39 @@ export async function POST(req: Request) {
 
   // 'tailored' lives on the applications table (one per job_id), not on jobs.
   if (target === 'tailored') {
-    const { data, error } = await db
+    // Everything derived from the tailored résumé goes with it — including the PDF
+    // and the ATS-check scores, or the row would keep showing stale artifacts.
+    const wipe = {
+      tailored_resume: null,
+      tailor_changes: null,
+      tailored_fit_score: null,
+      tailored_score_note: null,
+      tailored_match_score: null,
+      tailored_match_breakdown: null,
+      base_match_score: null,
+      pdf_path: null,
+      error: null,
+      updated_at: new Date().toISOString(),
+    };
+    // Rows that aren't lifecycle-bound to the résumé ('queued'/'applied') just lose the
+    // artifacts — deleting a résumé must never un-apply an application.
+    const { data: kept, error: e1 } = await db
       .from('applications')
-      .update({
-        tailored_resume: null,
-        tailor_changes: null,
-        tailored_fit_score: null,
-        tailored_score_note: null,
-      })
+      .update(wipe)
       .in('job_id', ids)
+      .in('status', ['queued', 'applied'])
       .select('id');
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, cleared: data?.length ?? 0 });
+    if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
+    // 'ready'/'generating'/'failed' rows go BACK TO THE QUEUE — the résumé is gone, so
+    // the application is awaiting generation again (this was the stuck-on-ready bug).
+    const { data: requeued, error: e2 } = await db
+      .from('applications')
+      .update({ ...wipe, status: 'queued' })
+      .in('job_id', ids)
+      .in('status', ['ready', 'generating', 'failed'])
+      .select('id');
+    if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
+    return NextResponse.json({ ok: true, cleared: (kept?.length ?? 0) + (requeued?.length ?? 0) });
   }
 
   // The remaining targets are columns on the jobs table.

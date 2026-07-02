@@ -64,6 +64,15 @@ Scoring/company-check improvements from the same research (reasoning-before-scor
 table, model upgrade, outcome calibration, repost signals) are documented in the Day-8 assessment
 but NOT implemented — scoring changes need eval expansion first (CLAUDE.md discipline).
 
+## ✅ Also shipped: bulk ATS actions + before→after display + delete-résumé fix
+- **Jobs tab:** "ATS score (N)" in the selection toolbar → recompute-match for just those ids;
+  the route pads selections < 30 with a 50-job recent corpus so batch-IDF keywords stay comparable.
+- **Tailor & Apply:** "ATS check selected" bulk button (parallel ×4); the row gauge now shows
+  "base% → tailored%" permanently (`applications.base_match_score`, migration 0035, applied live).
+- **Bug fix:** clear-scores 'tailored' left rows stuck on 'ready' with no résumé — now resets
+  ready/generating/failed rows to 'queued' and clears pdf_path + tailor/ATS artifacts ('applied'
+  rows keep status). Live DB checked: no stuck rows needed repair.
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

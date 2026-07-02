@@ -49,6 +49,7 @@ export async function POST(req: Request) {
     await updateApplication(id, {
       tailored_match_score: tailored.score,
       tailored_match_breakdown: tailored.breakdown,
+      base_match_score: base?.score ?? null,
     });
 
     return NextResponse.json({ ok: true, base, tailored });

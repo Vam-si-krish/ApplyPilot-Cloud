@@ -538,6 +538,42 @@ export default function ApplicationsPage() {
     }
   }
 
+  // Bulk ATS re-check: run the local base→tailored ATS match for every selected
+  // application that has a résumé. Pure CPU on the server, no AI — parallel ×4.
+  async function atsCheckSelected() {
+    const targets = filtered.filter((a) => selected.has(a.id) && a.tailored_resume);
+    if (targets.length === 0) {
+      setMsg('None of the selected applications has a tailored résumé yet — generate first.');
+      setTimeout(() => setMsg(null), 5000);
+      return;
+    }
+    setBulkBusy(true);
+    setMsg(`ATS-checking ${targets.length} résumé${targets.length === 1 ? '' : 's'}…`);
+    let ok = 0;
+    let failed = 0;
+    const queue = [...targets];
+    const worker = async () => {
+      for (let a = queue.shift(); a; a = queue.shift()) {
+        try {
+          const r = await fetch('/api/applications/ats-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: a.id }),
+          });
+          if (r.ok) ok++;
+          else failed++;
+        } catch {
+          failed++;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, targets.length) }, () => worker()));
+    setMsg(`ATS checked ${ok} résumé${ok === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.`);
+    await load(true);
+    setBulkBusy(false);
+    setTimeout(() => setMsg(null), 6000);
+  }
+
   async function generateCoverLetter(a: ApplicationWithJob) {
     if (genCoverId || !a.job) return;
     setGenCoverId(a.id);
@@ -789,6 +825,14 @@ export default function ApplicationsPage() {
             {bulkBusy ? 'Generating…' : `Generate selected${selectedGeneratable > 0 ? ` (${selectedGeneratable})` : ''}`}
           </button>
           <button
+            onClick={atsCheckSelected}
+            disabled={bulkBusy || bulkRunning || !!genId || selected.size === 0}
+            title="Re-run the local ATS match (base → tailored) for every selected application that already has a tailored résumé. No AI, instant."
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+          >
+            <Gauge size={13} /> ATS check selected
+          </button>
+          <button
             onClick={deleteSelected}
             disabled={bulkBusy || selected.size === 0}
             title="Remove the selected applications permanently"
@@ -853,7 +897,7 @@ export default function ApplicationsPage() {
                         onClick={() => atsCheck(a)}
                         disabled={!!atsId}
                         title={
-                          'ATS match of the TAILORED résumé against this job (local, no AI) — click to re-check' +
+                          'ATS match: base résumé → tailored résumé against this job (local, no AI) — click to re-check' +
                           ((a.tailored_match_breakdown?.missing ?? []).length
                             ? `. Still missing: ${a.tailored_match_breakdown!.missing.slice(0, 6).join(', ')}`
                             : '') +
@@ -872,7 +916,16 @@ export default function ApplicationsPage() {
                         }`}
                       >
                         <Gauge size={13} />
-                        {a.tailored_match_score != null ? `${a.tailored_match_score}%` : <span className="hidden sm:inline">ATS</span>}
+                        {a.tailored_match_score != null ? (
+                          <>
+                            {a.base_match_score != null && a.base_match_score !== a.tailored_match_score && (
+                              <span className="opacity-60">{a.base_match_score}%→</span>
+                            )}
+                            {a.tailored_match_score}%
+                          </>
+                        ) : (
+                          <span className="hidden sm:inline">ATS</span>
+                        )}
                       </button>
                     ))}
                   {/* PDF — created automatically after generation; download straight from the

@@ -47,9 +47,24 @@ export async function POST(req: Request) {
     }
     if (rows.length === 0) return NextResponse.json({ ok: true, updated: 0 });
 
+    // Small selections would lose the batch-IDF keywords component (it needs a corpus),
+    // making their scores incomparable with batch-computed rows. Pad the scoring batch
+    // with recent jobs as IDF context — scored but NOT written.
+    const scoreRows: Row[] = [...rows];
+    if (ids.length > 0 && rows.length < 30) {
+      const { data: corpus } = await supabaseAdmin()
+        .from('jobs')
+        .select('id,title,full_description')
+        .neq('status', 'archived')
+        .order('discovered_at', { ascending: false })
+        .limit(50);
+      const have = new Set(rows.map((r) => r.id));
+      for (const c of (corpus ?? []) as Row[]) if (!have.has(c.id)) scoreRows.push(c);
+    }
+
     const scores = atsMatchScores(
       { text: resume, skills },
-      rows.map((r) => ({ id: r.id, title: r.title ?? '', text: r.full_description ?? '' })),
+      scoreRows.map((r) => ({ id: r.id, title: r.title ?? '', text: r.full_description ?? '' })),
     );
 
     let updated = 0;

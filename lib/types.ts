@@ -378,6 +378,9 @@ export interface Application {
    *  the Jobscan-style "rescan after tailoring" check. No LLM. Null = not checked. */
   tailored_match_score: number | null;
   tailored_match_breakdown: AtsMatchBreakdown | null;
+  /** The BASE résumé's score against the same job, computed in the same ats-check call
+   *  (method-identical to tailored_match_score) — the "before" in before→after. */
+  base_match_score: number | null;
   pdf_path: string | null;
   /** Cover letter (ADR 0035): generated text, its rendered PDF path, last error. */
   cover_letter: string | null;

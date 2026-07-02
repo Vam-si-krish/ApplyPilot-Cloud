@@ -57,9 +57,15 @@ the Jobscan loop (tailor → rescan → confirm gaps closed), free and instant:
 - **Single-job comparability fix:** batch-IDF is degenerate on tiny batches (terms shared with the
   résumé get weight 0), so below 5 jobs the keywords component is null and its weight redistributes
   to skills/title (`AtsMatchBreakdown.keywords` is now nullable).
-- **UI:** auto-runs after generation; a gauge button on each Tailor & Apply row shows the tailored
-  % (click to re-check, e.g. after manual edits); tooltip lists still-missing skills; the toast shows
-  "base% → tailored%".
+- **UI:** auto-runs after generation; a gauge button on each Tailor & Apply row shows
+  "base% → tailored%" (the base score persists in `applications.base_match_score`, migration 0035;
+  click to re-check, e.g. after manual edits); tooltip lists still-missing skills. Bulk actions:
+  "ATS check selected" on Tailor & Apply, "ATS score (N)" on the Jobs selection toolbar (the
+  recompute route pads small selections with a recent-jobs IDF corpus so numbers stay comparable
+  with batch-scored rows).
+- **Fix:** deleting a tailored résumé (Jobs → "Delete tailored résumé") now returns the
+  application to 'queued' and clears the PDF + ATS-check scores — it used to leave the row stuck
+  on 'ready' with no résumé ('applied' rows keep their status; artifacts still cleared).
 
 ## Consequences
 - The old threshold semantics changed (scores now run higher and mean more): 30–35% is a sensible

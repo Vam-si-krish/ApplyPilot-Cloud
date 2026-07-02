@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw, Gauge } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
@@ -327,6 +327,27 @@ export default function JobsPage() {
       setBulkMsg('Recompute failed.');
     } finally {
       setRecomputing(false);
+      setTimeout(() => setBulkMsg(null), 5000);
+    }
+  }
+
+  // ATS-score just the selected jobs (no AI). The server pads small selections with a
+  // recent-jobs IDF corpus so the numbers stay comparable with batch-computed rows.
+  async function atsScoreSelected() {
+    setBulkBusy(true);
+    setBulkMsg(`Computing ATS match for ${selected.size}…`);
+    try {
+      const d = await fetch('/api/jobs/recompute-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selected] }),
+      }).then((r) => r.json());
+      setBulkMsg(d.error ? `ATS match failed: ${d.error}` : `ATS match computed for ${d.updated} job${d.updated === 1 ? '' : 's'}.`);
+      await load(true);
+    } catch {
+      setBulkMsg('ATS match failed.');
+    } finally {
+      setBulkBusy(false);
       setTimeout(() => setBulkMsg(null), 5000);
     }
   }
@@ -1156,6 +1177,14 @@ export default function JobsPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
               >
                 <Building2 size={13} /> Assess / re-assess ({selected.size})
+              </button>
+              <button
+                onClick={atsScoreSelected}
+                disabled={bulkBusy || bulkRunning}
+                title="Recompute the local ATS match % for just the selected jobs (no AI, free)"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 rounded-md transition-all"
+              >
+                <Gauge size={13} /> ATS score ({selected.size})
               </button>
               <button
                 onClick={addToApplications}
