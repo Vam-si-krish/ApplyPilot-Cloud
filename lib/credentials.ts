@@ -149,6 +149,58 @@ export async function rotateAllActiveKeys(): Promise<void> {
   for (const p of API_KEY_PROVIDERS) await rotateActiveKey(p);
 }
 
+/** Remaining monthly platform credit (USD) for an Apify token, or null when unknown. */
+async function apifyCreditHeadroomUsd(token: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.apify.com/v2/users/me/limits?token=${encodeURIComponent(token)}`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      data?: { limits?: { maxMonthlyUsageUsd?: number }; current?: { monthlyUsageUsd?: number } };
+    };
+    const max = body.data?.limits?.maxMonthlyUsageUsd;
+    const used = body.data?.current?.monthlyUsageUsd;
+    if (typeof max !== 'number' || typeof used !== 'number') return null;
+    return max - used;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Free Apify accounts hard-cap at $5/month, and a run started on a maxed-out key
+ * just fails — while sibling vault keys still have credit (ADR 0058). Called by
+ * /api/run after the blind round-robin rotation: verifies the ACTIVE apify key has
+ * at least `minHeadroomUsd` left, else activates the next stored key that does.
+ *
+ * Returns the label of the key left active, or null when EVERY key is exhausted
+ * (the caller should fail loudly rather than start a doomed run). `vaultEmpty`
+ * distinguishes the env-fallback setup, where there is nothing to manage.
+ */
+export async function ensureApifyKeyWithCredit(
+  minHeadroomUsd = 0.5,
+): Promise<{ label: string | null; vaultEmpty: boolean }> {
+  const { data, error } = await supabaseAdmin()
+    .from('api_keys')
+    .select('id, label, key_value, is_active')
+    .eq('provider', 'apify')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`Failed to load apify keys: ${error.message}`);
+  const rows = (data ?? []) as { id: string; label: string; key_value: string; is_active: boolean }[];
+  if (!rows.length) return { label: null, vaultEmpty: true };
+
+  const activeIdx = Math.max(0, rows.findIndex((r) => r.is_active));
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[(activeIdx + i) % rows.length];
+    const headroom = await apifyCreditHeadroomUsd(row.key_value);
+    // Unknown headroom (limits API down) must not block the run — trust the key.
+    if (headroom === null || headroom >= minHeadroomUsd) {
+      if (!row.is_active) await activateApiKey(row.id);
+      return { label: row.label, vaultEmpty: false };
+    }
+  }
+  return { label: null, vaultEmpty: false };
+}
+
 /** Delete a key. If it was the active one, promote the newest remaining of its provider. */
 export async function deleteApiKey(id: string): Promise<void> {
   const { data: row, error: getErr } = await supabaseAdmin()

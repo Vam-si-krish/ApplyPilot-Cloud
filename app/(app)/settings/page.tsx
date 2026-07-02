@@ -54,6 +54,17 @@ const ACTORS = [
   { id: 'fascinating_lentil~linkedin-jobs-scraper', label: 'Alternative (fascinating_lentil)' },
 ];
 
+// LinkedIn f_E facet (ADR 0058). Mirrors LINKEDIN_EXPERIENCE_LEVELS in lib/apify.ts,
+// which is server-only (its module pulls in the service-role Supabase client).
+const EXPERIENCE_LEVELS = [
+  { value: '1', label: 'Internship' },
+  { value: '2', label: 'Entry level' },
+  { value: '3', label: 'Associate' },
+  { value: '4', label: 'Mid-Senior' },
+  { value: '5', label: 'Director' },
+  { value: '6', label: 'Executive' },
+];
+
 // One-click suggestions to seed the libraries (ADR 0016). Adding one drops it into
 // the saved list; it persists and can be selected/deselected like any other.
 const KEYWORD_SUGGESTIONS = [
@@ -489,9 +500,10 @@ export default function SettingsPage() {
         </p>
         <div className="flex flex-col gap-3 mb-5">
           {[
-            { key: 'linkedin',  label: 'LinkedIn',  actor: 'bebity~linkedin-jobs-scraper (configurable below)' },
-            { key: 'indeed',    label: 'Indeed',    actor: 'misceres~indeed-scraper' },
-            { key: 'glassdoor', label: 'Glassdoor', actor: 'bebity~glassdoor-jobs-scraper' },
+            { key: 'linkedin',     label: 'LinkedIn',     actor: 'bebity~linkedin-jobs-scraper (configurable below)' },
+            { key: 'indeed',       label: 'Indeed',       actor: 'misceres~indeed-scraper' },
+            { key: 'glassdoor',    label: 'Glassdoor',    actor: 'bebity~glassdoor-jobs-scraper' },
+            { key: 'career_sites', label: 'Career sites', actor: 'fantastic-jobs~career-site-job-listing-api · ⚠ $12 / 1k jobs on the free tier' },
           ].map(({ key, label, actor }) => {
             const portals = s.job_portals ?? ['linkedin'];
             const checked = portals.includes(key);
@@ -537,6 +549,55 @@ export default function SettingsPage() {
                 placeholder="bebity~linkedin-jobs-scraper"
               />
             </div>
+
+            {/* Experience-level facet (ADR 0058) — baked into the search URL (f_E),
+                so filtered-out jobs are never fetched or billed. */}
+            <p className="text-[11px] text-slate-muted mt-4 mb-2 font-medium uppercase tracking-wider">Experience Levels</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {EXPERIENCE_LEVELS.map(({ value, label }) => {
+                const levels = s.linkedin_experience_levels ?? [];
+                const checked = levels.includes(value);
+                return (
+                  <label key={value} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => patch({
+                        linkedin_experience_levels: e.target.checked
+                          ? [...levels, value]
+                          : levels.filter((l) => l !== value),
+                      })}
+                      className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+                    />
+                    <span className="text-[12px] text-slate-text">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-slate-muted mt-1.5">
+              Filters inside LinkedIn&apos;s search, <span className="text-slate-text">before</span> the pay-per-result actor
+              bills anything. None checked = no filter.
+            </p>
+          </div>
+        )}
+
+        {/* Career-sites cap — only shown when the portal is opted in */}
+        {(s.job_portals ?? ['linkedin']).includes('career_sites') && (
+          <div className="pt-4 border-t border-ink">
+            <p className="text-[11px] text-slate-muted mb-3 font-medium uppercase tracking-wider">Career Sites (ATS-direct)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field
+                label="Max jobs / run (spend dial)"
+                value={String(s.career_sites_max_jobs ?? 150)}
+                onChange={(v) => patch({ career_sites_max_jobs: Math.max(10, Math.min(5000, Number(v) || 150)) })}
+                placeholder="150"
+              />
+            </div>
+            <p className="text-[11px] text-amber-400 mt-2">
+              This actor bills <span className="font-mono">$12 / 1,000 jobs</span> on the Apify free tier
+              (150 jobs ≈ $1.80 per run) — the cap above is the only cost control. Sources: Greenhouse, Lever,
+              Workday, Ashby &amp; 50+ ATS platforms, deduplicated and with direct application URLs.
+            </p>
           </div>
         )}
 

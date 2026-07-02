@@ -87,6 +87,16 @@ export async function PUT(req: Request) {
     patch.max_jobs_per_run = Math.max(0, Math.round(Number(body.max_jobs_per_run)));
   }
   if (body.fetch_mode === 'url' || body.fetch_mode === 'keyword') patch.fetch_mode = body.fetch_mode;
+  // LinkedIn f_E facet values (ADR 0058) — only '1'…'6' survive.
+  if (Array.isArray(body.linkedin_experience_levels)) {
+    patch.linkedin_experience_levels = [
+      ...new Set((body.linkedin_experience_levels as unknown[]).map(String).filter((v) => /^[1-6]$/.test(v))),
+    ];
+  }
+  // Career-sites per-run cap (ADR 0058): the actor accepts 10–5,000.
+  if (Number.isFinite(Number(body.career_sites_max_jobs))) {
+    patch.career_sites_max_jobs = Math.max(10, Math.min(5000, Math.round(Number(body.career_sites_max_jobs))));
+  }
   if (typeof body.auto_assess_enabled === 'boolean') patch.auto_assess_enabled = body.auto_assess_enabled;
   if (Number.isFinite(Number(body.auto_assess_min_score))) {
     patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));

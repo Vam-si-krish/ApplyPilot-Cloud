@@ -280,13 +280,23 @@ export default function JobsPage() {
   }, []);
 
   // Kick off a fresh fetch from the empty state (same as the Dashboard "Run now").
-  async function runFetch() {
+  async function runFetch(force = false) {
     setFetching(true);
     setBulkMsg('Starting a fetch…');
     try {
-      const r = await fetch('/api/run', { method: 'POST' });
+      const r = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force }),
+      });
       const d = await r.json();
-      setBulkMsg(r.ok ? 'Fetch started — new jobs appear here in a few minutes and score automatically.' : `Error: ${d.error || 'could not start a fetch'}`);
+      if (r.ok && d.cooldown) {
+        // Billed-per-result guard (ADR 0058): let the user consciously re-buy the window.
+        if (window.confirm(`${d.reason}\n\nRun anyway?`)) return runFetch(true);
+        setBulkMsg('Fetch skipped — a recent run already covers this window.');
+      } else {
+        setBulkMsg(r.ok ? 'Fetch started — new jobs appear here in a few minutes and score automatically.' : `Error: ${d.error || 'could not start a fetch'}`);
+      }
     } catch {
       setBulkMsg('Could not start a fetch.');
     } finally {
@@ -1275,7 +1285,7 @@ export default function JobsPage() {
               This list strictly shows jobs discovered in the last 24 hours. If your filters aren't hiding them, it's time to run a fresh fetch.
             </p>
             <button
-              onClick={runFetch}
+              onClick={() => runFetch()}
               disabled={fetching}
               className="inline-flex items-center justify-center px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all disabled:opacity-50"
             >

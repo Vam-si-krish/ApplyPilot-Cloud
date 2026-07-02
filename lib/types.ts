@@ -197,9 +197,16 @@ export interface Settings {
   min_skill_match: number;
   /** Hard cap on jobs fetched per run (caps actor maxItems). 0 = no cap (ADR 0019). */
   max_jobs_per_run: number;
+  /** Per-run result cap for the career-sites portal (fantastic.jobs actor, ADR 0058).
+   *  The actor bills $4/1k jobs, so this is the daily spend dial (150 ≈ $0.60/run). */
+  career_sites_max_jobs: number;
   /** How the LinkedIn actor is driven (ADR 0023): 'url' = precise per-combo searches;
    *  'keyword' = actor-native keyword×location expansion (broader). */
   fetch_mode: 'url' | 'keyword';
+  /** LinkedIn experience-level facet values ('1' Internship … '6' Executive, ADR 0058).
+   *  Baked into the search URL (f_E) so filtered jobs are never fetched or billed.
+   *  Empty = no filter. */
+  linkedin_experience_levels: string[];
   /** When true, the pipeline auto-assesses companies for high-scoring jobs after scoring (ADR 0010). */
   auto_assess_enabled: boolean;
   /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */

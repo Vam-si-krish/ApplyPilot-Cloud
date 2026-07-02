@@ -146,3 +146,23 @@ clickable. Changes:
 - Lexicon is software/data-centric; extend `SKILL_GROUPS` (or just Settings→Skills, which
   auto-registers) if fetches broaden.
 - The user filters with "Weak match < 40%" + select-all + Delete selected as the manual first pass.
+
+## ✅ LinkedIn query refinement + spend guards (ADR 0058)
+Research request → implementation. Findings that shaped it: the vault rotates 6 free Apify
+accounts ($30/mo pool); the ACTIVE key was maxed ($5/$5) so fetching was silently dead; Jun 20/21
+had same-day duplicate runs re-billing the window; the user applies NATIONWIDE (127 applies
+outside saved metros) so locations were left alone; "Remote, US" was an ungeocodable search.
+- One boolean `"kw1" OR "kw2"…` search per location (30 → 6 searches); remote-ish locations →
+  `United States + f_WT=2`; `f_E` from new `linkedin_experience_levels` (live: 2,3,4) and
+  `f_JT=F,C` baked into URLs — all filter BEFORE per-result billing.
+- `/api/run`: 12h cooldown (confirm-and-force in UI) + `ensureApifyKeyWithCredit` (skips maxed
+  keys via the Apify limits API, 402 when all dry). Activated the fresh `1 vamsichiguruwada1` key.
+- career_sites portal (fantastic.jobs) fully wired but OFF: real price is **$12/1k on free tier**
+  (user: too high; screenshot + pricingInfos API both confirm; "$4/1k" is the GOLD-plan price).
+  Opt-in checkbox shows the price; `career_sites_max_jobs` (150) is the spend dial.
+- Migration 0037 applied live. Tests 154 green; typecheck + build green. No worker deploy needed.
+
+### Follow-ups
+- Watch the first boolean-query run: confirm cheap_scraper passes quoted/OR keywords through
+  (fallback = revert to per-role startUrls).
+- Cron still external (Netlify/worker-Mac launchd); auto_scrape_enabled is false — runs are manual.

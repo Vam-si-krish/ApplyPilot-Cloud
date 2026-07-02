@@ -37,13 +37,23 @@ export default function DashboardPage() {
     return () => clearInterval(t);
   }, [load]);
 
-  async function runNow() {
+  async function runNow(force = false) {
     setRunning(true);
     setMsg(null);
     try {
-      const r = await fetch('/api/run', { method: 'POST' });
+      const r = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force }),
+      });
       const d = await r.json();
-      setMsg(r.ok ? `Run started (Apify run ${d.apify_run_id}). Jobs will appear once the scrape finishes.` : `Error: ${d.error}`);
+      if (r.ok && d.cooldown) {
+        // Billed-per-result guard (ADR 0058): let the user consciously re-buy the window.
+        if (window.confirm(`${d.reason}\n\nRun anyway?`)) return runNow(true);
+        setMsg('Run skipped (recent fetch already covers this window).');
+      } else {
+        setMsg(r.ok ? `Run started (Apify run ${d.apify_run_id}). Jobs will appear once the scrape finishes.` : `Error: ${d.error}`);
+      }
     } catch (e) {
       setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -75,7 +85,7 @@ export default function DashboardPage() {
             <RefreshCw size={12} /> Refresh
           </button>
           <button
-            onClick={runNow}
+            onClick={() => runNow()}
             disabled={running}
             className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky-glow hover:bg-sky/10 rounded-md transition-all disabled:opacity-50"
           >

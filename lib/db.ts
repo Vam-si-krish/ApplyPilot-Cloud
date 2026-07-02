@@ -420,6 +420,18 @@ export async function countUnassessedHighScore(minScore: number): Promise<number
 }
 
 /** The most recent run still marked 'running', if any. */
+/** Newest run row regardless of status — the /api/run cooldown guard (ADR 0058). */
+export async function getLatestRun(): Promise<Run | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('runs')
+    .select('*')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load latest run: ${error.message}`);
+  return (data as Run) ?? null;
+}
+
 export async function getLatestRunningRun(): Promise<Run | null> {
   const { data, error } = await supabaseAdmin()
     .from('runs')
