@@ -28,7 +28,9 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
                 {job.prefilter_breakdown.title != null && (
                   <span>title <span className="text-slate-text">{job.prefilter_breakdown.title}</span>/100</span>
                 )}
-                <span>keywords <span className="text-slate-text">{job.prefilter_breakdown.keywords}</span>/100</span>
+                {job.prefilter_breakdown.keywords != null && (
+                  <span>keywords <span className="text-slate-text">{job.prefilter_breakdown.keywords}</span>/100</span>
+                )}
               </p>
               {(job.prefilter_breakdown.matched.length > 0 || job.prefilter_breakdown.missing.length > 0) && (
                 <p>

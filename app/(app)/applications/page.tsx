@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
@@ -38,6 +38,7 @@ export default function ApplicationsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [genId, setGenId] = useState<string | null>(null); // application currently generating
   const [genCoverId, setGenCoverId] = useState<string | null>(null); // application whose cover letter is generating
+  const [atsId, setAtsId] = useState<string | null>(null); // application whose tailored ATS check is running
   const [msg, setMsg] = useState<string | null>(null);
 
   // Filters (parity with the Jobs tab — the subset that maps to applications).
@@ -277,6 +278,9 @@ export default function ApplicationsPage() {
             ? 'Résumé and PDF ready — download from the row, or review and edit below.'
             : `Résumé ready — PDF render failed: ${pdf.error}. Use “Create PDF” below to retry.`,
         );
+        // Auto-run the local ATS re-check on the fresh tailored résumé (no AI, instant)
+        // so the row's gauge shows how the tailoring scores against this job.
+        atsCheck(row, true).catch(() => {});
       } else if (row?.status === 'failed') {
         setMsg(`Generation failed: ${row.error || 'unknown error'}`);
       } else {
@@ -501,6 +505,39 @@ export default function ApplicationsPage() {
 
   // Generate a cover letter for one application: hand off to the worker (async), poll
   // the row until the PDF lands (or it errors), then auto-download it (one-click flow).
+  // Local ATS re-check of the TAILORED résumé vs the job (ADR 0053 addendum) — the
+  // Jobscan loop: tailor → rescan → confirm the gaps closed. No AI call; instant.
+  async function atsCheck(a: ApplicationWithJob, silent = false) {
+    if (atsId || !a.tailored_resume) return;
+    setAtsId(a.id);
+    try {
+      const r = await fetch('/api/applications/ats-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: a.id }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (!silent) setMsg(`ATS check failed: ${d.error || 'unknown error'}`);
+        return;
+      }
+      if (!silent) {
+        const from = d.base?.score;
+        const missing = (d.tailored?.breakdown?.missing ?? []).slice(0, 4).join(', ');
+        setMsg(
+          `ATS match: ${typeof from === 'number' ? `${from}% → ` : ''}${d.tailored.score}% with the tailored résumé` +
+            (missing ? ` · still missing: ${missing}` : ''),
+        );
+      }
+      load(true);
+    } catch {
+      if (!silent) setMsg('ATS check failed.');
+    } finally {
+      setAtsId(null);
+      if (!silent) setTimeout(() => setMsg(null), 8000);
+    }
+  }
+
   async function generateCoverLetter(a: ApplicationWithJob) {
     if (genCoverId || !a.job) return;
     setGenCoverId(a.id);
@@ -804,6 +841,40 @@ export default function ApplicationsPage() {
                   >
                     <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate' : 'Generate'}
                   </button>
+                  {/* Local ATS check of the TAILORED résumé vs this job (ADR 0053 addendum).
+                      Auto-runs after generation; click to re-check (e.g. after edits). */}
+                  {a.tailored_resume &&
+                    (atsId === a.id ? (
+                      <span className="flex items-center gap-1 text-[11px] text-slate-muted shrink-0" title="Checking ATS match…">
+                        <Loader2 size={12} className="animate-spin" /> <span className="hidden sm:inline">ATS…</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => atsCheck(a)}
+                        disabled={!!atsId}
+                        title={
+                          'ATS match of the TAILORED résumé against this job (local, no AI) — click to re-check' +
+                          ((a.tailored_match_breakdown?.missing ?? []).length
+                            ? `. Still missing: ${a.tailored_match_breakdown!.missing.slice(0, 6).join(', ')}`
+                            : '') +
+                          ((a.tailored_match_breakdown?.flags ?? []).length
+                            ? `. ⚠ ${a.tailored_match_breakdown!.flags.join('; ')}`
+                            : '')
+                        }
+                        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium rounded-md border transition-all shrink-0 disabled:opacity-40 ${
+                          a.tailored_match_score == null
+                            ? 'text-slate-muted bg-raised border-ink hover:text-slate-text'
+                            : a.tailored_match_score >= 65
+                              ? 'text-emerald bg-emerald/10 border-emerald/30 hover:bg-emerald/20'
+                              : a.tailored_match_score >= 40
+                                ? 'text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20'
+                                : 'text-slate-muted bg-raised border-ink hover:text-slate-text'
+                        }`}
+                      >
+                        <Gauge size={13} />
+                        {a.tailored_match_score != null ? `${a.tailored_match_score}%` : <span className="hidden sm:inline">ATS</span>}
+                      </button>
+                    ))}
                   {/* PDF — created automatically after generation; download straight from the
                       row so there's no need to expand and scroll. Shows a spinner while rendering. */}
                   {rendering === a.id ? (

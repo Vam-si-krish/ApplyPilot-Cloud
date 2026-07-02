@@ -553,14 +553,20 @@ export function atsMatchScores(resume: AtsResumeInput, jobs: AtsJobInput[]): Map
   const resumeYears = resumeYearsOfExperience(resumeText);
   const resumeHasAdvancedDegree = ADVANCED_DEGREE.test(resumeText);
 
-  // Keywords component: v1 IDF coverage over the stripped texts.
+  // Keywords component: v1 IDF coverage over the stripped texts. IDF needs a
+  // corpus — with only a couple of docs, terms shared with the résumé all get
+  // weight 0 and the component degenerates to ~0. Below MIN_IDF_BATCH the
+  // component is null and its weight moves to skills/title (this is how the
+  // single-job tailored-résumé ATS check stays comparable).
+  const MIN_IDF_BATCH = 5;
+  const useKeywords = jobs.length >= MIN_IDF_BATCH;
   const jobTexts = jobs.map((j) => joinCompounds(stripHtml(`${j.title ?? ''}\n${j.text ?? ''}`)));
   const jobTokens = jobTexts.map((t) => tokenize(t));
   const idf = computeIdf([resumeTokens, ...jobTokens]);
 
   jobs.forEach((job, i) => {
     const text = jobTexts[i];
-    const keywords = Math.round(coverageScore(resumeTerms, jobTokens[i], idf) * 100);
+    const keywords = useKeywords ? Math.round(coverageScore(resumeTerms, jobTokens[i], idf) * 100) : null;
 
     // Skills component: weighted coverage of the JD's extracted skills.
     const { freq, section } = extractJdSkills(text);

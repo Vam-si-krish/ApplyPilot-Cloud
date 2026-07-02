@@ -65,7 +65,7 @@ export interface Job {
 export interface AtsMatchBreakdown {
   skills: number | null; // 0–100 weighted coverage of the JD's extracted skills
   title: number | null; // 0–100 job-title ↔ résumé role alignment
-  keywords: number; // 0–100 IDF-weighted coverage of the remaining JD vocabulary
+  keywords: number | null; // 0–100 IDF coverage of the remaining JD vocabulary; null on tiny batches (IDF needs a corpus)
   matched: string[]; // top JD skills the résumé has (by JD weight)
   missing: string[]; // top JD skills the résumé lacks
   flags: string[]; // penalty / hard-cap reasons, human-readable
@@ -370,9 +370,14 @@ export interface Application {
   tailor_changes: TailorChanges | null;
   /** Custom tailoring guidance for the AI (ADR 0037), e.g. a recruiter's ask. Null = none. */
   tailor_instructions: string | null;
-  /** Fit (0–10) of the TAILORED résumé to this job (ADR 0029); null = not scored yet. */
+  /** Fit (0–10) of the TAILORED résumé to this job (ADR 0029); null = not scored yet.
+   *  LEGACY render-only — LLM re-scoring of tailored résumés was dropped (ADR 0050). */
   tailored_fit_score: number | null;
   tailored_score_note: string | null;
+  /** Local ATS match (0–100) of the TAILORED résumé to this job (ADR 0053 addendum) —
+   *  the Jobscan-style "rescan after tailoring" check. No LLM. Null = not checked. */
+  tailored_match_score: number | null;
+  tailored_match_breakdown: AtsMatchBreakdown | null;
   pdf_path: string | null;
   /** Cover letter (ADR 0035): generated text, its rendered PDF path, last error. */
   cover_letter: string | null;

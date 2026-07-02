@@ -32,6 +32,17 @@ Jobscan match-rate docs (hard skills ≫ title > education > other keywords; fre
 ats-screener (MIT, TS — taxonomy + synonyms + required/preferred sections + per-ATS weights);
 srbhr/Resume-Matcher (simpler than our v1); embeddings rejected again (spread/explainability).
 
+## ✅ Also shipped: tailored-résumé ATS check (ADR 0053 addendum)
+Asked-for follow-up: after tailoring in Tailor & Apply, re-check the ATS match with the NEW résumé.
+This is the local scorer, not the dropped LLM re-score (ADR 0050 stays in force):
+- Migration 0034 (applied live): `applications.tailored_match_score` + `tailored_match_breakdown`.
+- `POST /api/applications/ats-check` — tailored + base scored against the same job in one call
+  (single-job mode drops the batch-IDF keywords component on both sides so the pair is comparable;
+  `AtsMatchBreakdown.keywords` is now nullable below 5-job batches).
+- UI: auto-runs after generation; gauge button per row shows tailored % (click to re-check after
+  edits); toast reports "base% → tailored% · still missing: …".
+- Tests 131 green, typecheck + build green.
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

@@ -205,4 +205,27 @@ describe('atsMatchScores', () => {
   it('returns an empty map when the résumé is empty (caller treats null as pass)', () => {
     expect(atsMatchScores({ text: '' }, jobs).size).toBe(0);
   });
+
+  it('drops the batch-IDF keywords component on tiny batches (single-job ATS check)', () => {
+    const one = atsMatchScores({ text: RESUME }, [jobs[0]]).get('swe')!;
+    expect(one.breakdown.keywords).toBeNull(); // IDF over 1 job is degenerate
+    expect(one.score).toBeGreaterThanOrEqual(60); // skills+title carry the score
+
+    const five = atsMatchScores(
+      { text: RESUME },
+      [jobs[0], jobs[1], jobs[2], { id: 'a', title: 'QA', text: 'Selenium testing' }, { id: 'b', title: 'PM', text: 'Roadmaps' }],
+    ).get('swe')!;
+    expect(five.breakdown.keywords).not.toBeNull();
+  });
+
+  it('a tailored résumé that closes skill gaps scores higher than the base (same method)', () => {
+    const job = [{ id: 'j', title: 'Frontend Engineer', text: 'Requirements: React, TypeScript, Kubernetes, GraphQL and Terraform' }];
+    const base = 'Software Engineer\nReact and TypeScript apps.\nEngineer 2019 - Present';
+    const tailored = base + '\nKubernetes deployments, GraphQL APIs, Terraform infrastructure.';
+    const before = atsMatchScores({ text: base }, job).get('j')!;
+    const after = atsMatchScores({ text: tailored }, job).get('j')!;
+    expect(after.score).toBeGreaterThan(before.score);
+    expect(before.breakdown.missing).toContain('kubernetes');
+    expect(after.breakdown.missing).not.toContain('kubernetes');
+  });
 });

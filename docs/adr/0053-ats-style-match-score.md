@@ -47,6 +47,20 @@ avg ATS rises monotonically with every fit band (fit 1 → 19.6 avg ATS; fit 10 
 Deleting below 35% would have removed ~73% of fit≤5 jobs while losing ~16% of fit≥8 — the intended
 first-filter trade-off; below 25% loses only ~11% of good jobs.
 
+## Addendum (same day) — tailored-résumé ATS check in Tailor & Apply
+The user asked to re-check the score with the AI-tailored résumé. The *LLM* re-score of tailored
+résumés was dropped deliberately (ADR 0050) and stays dropped; this is the local ATS scorer instead —
+the Jobscan loop (tailor → rescan → confirm gaps closed), free and instant:
+- `POST /api/applications/ats-check { id }` scores the tailored résumé (`resumeToText`) against the
+  application's job; the base résumé is scored in the same call so before→after is method-identical.
+  Stored in `applications.tailored_match_score` / `tailored_match_breakdown` (migration 0034).
+- **Single-job comparability fix:** batch-IDF is degenerate on tiny batches (terms shared with the
+  résumé get weight 0), so below 5 jobs the keywords component is null and its weight redistributes
+  to skills/title (`AtsMatchBreakdown.keywords` is now nullable).
+- **UI:** auto-runs after generation; a gauge button on each Tailor & Apply row shows the tailored
+  % (click to re-check, e.g. after manual edits); tooltip lists still-missing skills; the toast shows
+  "base% → tailored%".
+
 ## Consequences
 - The old threshold semantics changed (scores now run higher and mean more): 30–35% is a sensible
   gate where the old default 30% was aggressive for IDF coverage.
