@@ -10,6 +10,7 @@
  */
 
 import { getClient, ChatMessage, LLMClient } from "./llm";
+import { stripHtml } from "./prefilter";
 import type { ScorableJob, ScoreResult, ScoreBreakdown, EmploymentType } from "./types";
 
 // ── Scoring Prompt (v2 weighted rubric) ──────────────────────────────────────
@@ -130,12 +131,22 @@ export function parseScoreResponse(response: string): ScoreResult {
   return { score, keywords, note, reasoning, employment_type, seniority, missing, breakdown };
 }
 
-/** Build the user message (job description truncated to 15000 chars). */
+/**
+ * Build the user message. The description is HTML-stripped BEFORE the 15000-char
+ * truncation (ADR 0056): scraped descriptions are stored as HTML, and tags were both
+ * burning ~20-40% of the job tokens and pushing real content past the cut.
+ *
+ * Prompt caching (ADR 0056): system prompt + résumé are identical for every job in a
+ * run, so the résumé segment carries a cache breakpoint — on Anthropic the prefix
+ * (system + résumé) bills at ~0.1× from the second job on; OpenAI/DeepSeek/Gemini
+ * flatten the parts to the same string as before, keeping their implicit prefix
+ * caching intact. Only the JOB POSTING tail is new tokens per job.
+ */
 export function buildScoreMessages(
   resumeText: string,
   job: ScorableJob,
 ): ChatMessage[] {
-  const description = (job.full_description || job.description || "").slice(0, 15000);
+  const description = stripHtml(job.full_description || job.description || "").slice(0, 15000);
   const jobText =
     `TITLE: ${job.title ?? ""}\n` +
     `COMPANY: ${job.company ?? ""}\n` +
@@ -146,7 +157,12 @@ export function buildScoreMessages(
     { role: "system", content: SCORE_PROMPT },
     {
       role: "user",
-      content: `RESUME:\n${resumeText}\n\n---\n\nJOB POSTING:\n${jobText}`,
+      // flattenContent joins parts with '\n\n', reproducing the exact pre-parts string
+      // for providers without cache_control (their implicit prefix caching still applies).
+      content: [
+        { text: `RESUME:\n${resumeText}\n\n---`, cache: true },
+        { text: `JOB POSTING:\n${jobText}` },
+      ],
     },
   ];
 }

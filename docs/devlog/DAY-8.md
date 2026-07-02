@@ -83,6 +83,23 @@ User request: tailoring never touched role titles (hard-anchored since ADR 0026)
 - Both prompt copies updated (JOB TITLES section; `position` in the output schema).
   Tests 134 green; typecheck + build green. ⚠ Worker Mac `git pull` + restart required.
 
+## ✅ Also shipped: prompt-caching audit + scoring token cuts (ADR 0056)
+Audited every LLM call path for caching correctness and token waste:
+- **Tailoring** — already correct (cached base-block prefix, ADR 0031; verified in both copies;
+  `chatAnthropic` maps `cache:true` → `cache_control` and the breakpoint covers system as prefix).
+- **Scoring (the fix)** — was scoring RAW HTML (tags ≈ 20-40% of job tokens, and the 15000-char cut
+  ate real content) with zero cache breakpoints. Now: `stripHtml` before truncation + the résumé
+  segment is a cache breakpoint (`[{résumé, cache:true}, {job}]`) in `lib/scoring.ts` AND the worker
+  port `resume-worker/scoring.js`. Non-Anthropic providers flatten back to the byte-identical old
+  string (implicit prefix caching preserved); Agent-SDK path flattens too (verified agentClient.js).
+- **scoreJobRows warm-first** — first row scored alone to write the cache, then the ×8 pool reads it
+  (parallel first-wave all missed before).
+- **Left alone deliberately**: company check + mail classify (prompts below the 1024–4096-token
+  minimum cacheable prefix), assistant (low-volume interactive), cover letter (low volume).
+- SCORE_PROMPT/rubric/parsing untouched; scoring tests extended (HTML strip, breakpoint placement,
+  flatten parity); 136 tests + typecheck + build green. CLAUDE.md scoring line updated.
+- ⚠ Worker Mac `git pull` + restart to pick up the scoring-port change.
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

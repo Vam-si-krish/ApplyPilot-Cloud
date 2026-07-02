@@ -13,7 +13,8 @@ ApplyPilot-Lite scorer (the old "copy it byte-for-byte" rule is retired; see ADR
 holds, non-negotiably: **exactly one LLM call per job**; the model scores 0–10 and the threshold/sort
 decides; a parse failure or LLM error yields score `0` (visible), **never a fabricated score**; output
 is line-prefixed and parsed defensively (clamped 0–10, extra fields optional). The user-message is
-still resume + job with the description truncated to 15000 chars. The scorer also reports
+still resume + job — description HTML-stripped then truncated to 15000 chars, with the résumé
+segment marked as a prompt-cache breakpoint (ADR 0056). The scorer also reports
 `employment_type` (so contract roles are flagged, not demoted) and a sub-score `breakdown`. Eval cases
 (`evals/cases/`) are the regression net — keep them green when touching scoring.
 

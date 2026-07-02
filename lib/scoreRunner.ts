@@ -163,15 +163,24 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
     }
   }
 
+  // Warm the prompt cache before fanning out (ADR 0056): a cache entry only becomes
+  // readable once the first response starts, so N parallel first requests would ALL
+  // pay the full system+résumé price. Scoring the first row alone writes the cached
+  // prefix; the concurrent pool then reads it. Costs one row of parallelism once.
+  const queue = [...rows];
+  if (queue.length > 1) {
+    const first = queue.shift();
+    if (first) await processRow(first);
+  }
+
   // Bounded-concurrency pool: up to SCORE_CONCURRENCY rows in flight at once. Workers
   // pull from a shared queue until it's drained.
-  const queue = [...rows];
   const runWorker = async () => {
     for (let job = queue.shift(); job; job = queue.shift()) {
       await processRow(job);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(SCORE_CONCURRENCY, rows.length) }, runWorker));
+  await Promise.all(Array.from({ length: Math.min(SCORE_CONCURRENCY, queue.length) }, runWorker));
 
   return { scored, filtered, errors };
 }

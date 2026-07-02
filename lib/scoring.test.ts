@@ -84,10 +84,17 @@ describe('buildScoreMessages', () => {
     expect(msgs[0]).toEqual({ role: 'system', content: SCORE_PROMPT });
   });
 
+  // The user message is [résumé segment (cached), job segment] (ADR 0056); providers
+  // without cache_control flatten the parts with '\n\n' back to the exact old string.
+  const flatten = (msgs: ReturnType<typeof buildScoreMessages>): string => {
+    const c = msgs[1].content;
+    return typeof c === 'string' ? c : c.map((p) => p.text).join('\n\n');
+  };
+
   it('embeds resume and job, truncating description to 15000 chars', () => {
     const longDesc = 'x'.repeat(16000);
     const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', location: 'NYC', full_description: longDesc });
-    const user = msgs[1].content as string; // scoring messages are always plain strings
+    const user = flatten(msgs);
     expect(user.startsWith('RESUME:\nRES\n\n---\n\nJOB POSTING:\n')).toBe(true);
     expect(user).toContain('TITLE: T');
     expect(user).toContain('COMPANY: C');
@@ -96,9 +103,34 @@ describe('buildScoreMessages', () => {
     expect(user).not.toContain('x'.repeat(15001));
   });
 
+  it('marks the résumé segment as a cache breakpoint; the job stays in the volatile tail (ADR 0056)', () => {
+    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', full_description: 'desc' });
+    const parts = msgs[1].content as { text: string; cache?: boolean }[];
+    expect(parts[0].cache).toBe(true);
+    expect(parts[0].text).toContain('RESUME:\nRES');
+    expect(parts[0].text).not.toContain('JOB POSTING'); // per-job content must not poison the cached prefix
+    expect(parts[1].cache).toBeUndefined();
+    expect(parts[1].text).toContain('JOB POSTING:');
+  });
+
+  it('strips HTML from the description before truncation (ADR 0056)', () => {
+    const msgs = buildScoreMessages('R', {
+      title: 'T',
+      company: 'C',
+      full_description: '<p>Build <strong>React</strong> apps</p><ul><li>5+ years</li></ul>',
+    });
+    const user = flatten(msgs);
+    expect(user).toContain('Build');
+    expect(user).toContain('React');
+    expect(user).toContain('5+ years');
+    expect(user).not.toContain('<p>');
+    expect(user).not.toContain('<strong>');
+  });
+
   it('falls back to description when full_description is missing and defaults location to N/A', () => {
     const msgs = buildScoreMessages('R', { title: 'T', company: 'C', description: 'fallback' });
-    expect(msgs[1].content).toContain('LOCATION: N/A');
-    expect(msgs[1].content).toContain('DESCRIPTION:\nfallback');
+    const user = flatten(msgs);
+    expect(user).toContain('LOCATION: N/A');
+    expect(user).toContain('DESCRIPTION:\nfallback');
   });
 });

@@ -100,8 +100,30 @@ export function parseScoreResponse(response) {
   return { score, keywords, note, reasoning, employment_type, seniority, missing, breakdown };
 }
 
+/** Strip HTML to plain text (port of lib/prefilter.ts stripHtml) — scraped descriptions
+ *  are stored as HTML; tags burned ~20-40% of the job tokens (ADR 0056). */
+function stripHtml(html) {
+  if (!html) return '';
+  let t = String(html)
+    .replace(/<\s*(?:br|\/p|\/li|\/div|\/h[1-6]|\/ul|\/ol|\/tr)\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ');
+  t = t
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#x27;|&#39;|&apos;/gi, "'")
+    .replace(/&#\d+;/g, ' ');
+  return t.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').trim();
+}
+
+/** Port of lib/scoring.ts buildScoreMessages (ADR 0056): HTML stripped before the
+ *  15000-char cut; the résumé segment carries a prompt-cache breakpoint so the
+ *  system+résumé prefix is billed at ~0.1× from the second job of a run on Anthropic
+ *  (the Agent-SDK /llm path flattens parts — caching there is up to the SDK). */
 export function buildScoreMessages(resumeText, job) {
-  const description = (job.full_description || job.description || '').slice(0, 15000);
+  const description = stripHtml(job.full_description || job.description || '').slice(0, 15000);
   const jobText =
     `TITLE: ${job.title ?? ''}\n` +
     `COMPANY: ${job.company ?? ''}\n` +
@@ -109,7 +131,13 @@ export function buildScoreMessages(resumeText, job) {
     `DESCRIPTION:\n${description}`;
   return [
     { role: 'system', content: SCORE_PROMPT },
-    { role: 'user', content: `RESUME:\n${resumeText}\n\n---\n\nJOB POSTING:\n${jobText}` },
+    {
+      role: 'user',
+      content: [
+        { text: `RESUME:\n${resumeText}\n\n---`, cache: true },
+        { text: `JOB POSTING:\n${jobText}` },
+      ],
+    },
   ];
 }
 
