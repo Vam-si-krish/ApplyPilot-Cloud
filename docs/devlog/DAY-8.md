@@ -73,6 +73,16 @@ but NOT implemented — scoring changes need eval expansion first (CLAUDE.md dis
   ready/generating/failed rows to 'queued' and clears pdf_path + tailor/ATS artifacts ('applied'
   rows keep status). Live DB checked: no stuck rows needed repair.
 
+## ✅ Also shipped: tailorable job titles (ADR 0055)
+User request: tailoring never touched role titles (hard-anchored since ADR 0026). Now:
+- `mergeTailored` accepts the model's `work[i].position` (discipline reframe, never level —
+  prompt-enforced; empty keeps base). Employers/dates/education stay hard-anchored.
+- Deterministic disclosure: `titleChanges()` → `TailorChanges.titleChanges` ("Company: old → new"),
+  shown as "Job titles adjusted" in ChangesReview + the download confirm; ResumeDiff already
+  diffs `position`, so before/after shows it with no changes needed.
+- Both prompt copies updated (JOB TITLES section; `position` in the output schema).
+  Tests 134 green; typecheck + build green. ⚠ Worker Mac `git pull` + restart required.
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

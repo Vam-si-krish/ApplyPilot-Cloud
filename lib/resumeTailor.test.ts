@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeTailored, addedSkills, buildTailorMessages, TAILOR_PROMPT, totalExperienceYears, clampYoeClaims } from './resumeTailor';
+import { mergeTailored, addedSkills, titleChanges, buildTailorMessages, TAILOR_PROMPT, totalExperienceYears, clampYoeClaims } from './resumeTailor';
 import { normalizeResume } from './resume';
 import type { ContentPart } from './llm';
 import type { ResumeDoc } from './types';
@@ -18,19 +18,37 @@ function base(): ResumeDoc {
 }
 
 describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026)', () => {
-  it('keeps employers, titles, and dates from the base even if the model changes them', () => {
+  it('keeps employers and dates from the base but accepts an adjusted job title (ADR 0055)', () => {
     const tailored: ResumeDoc = {
       ...base(),
       work: [
-        { name: 'Google', position: 'Staff Engineer', startDate: '2015', endDate: 'Present', highlights: ['Reframed bullet'] },
-        { name: 'Yash', position: 'Frontend Dev', startDate: '2018', endDate: '2021', highlights: ['Reframed angular'] },
+        { name: 'Google', position: 'Frontend Engineer', startDate: '2015', endDate: 'Present', highlights: ['Reframed bullet'] },
+        { name: 'Yash', position: '', startDate: '2018', endDate: '2021', highlights: ['Reframed angular'] },
       ],
     };
     const out = mergeTailored(base(), tailored);
     expect(out.work[0].name).toBe('JPMorgan'); // model's "Google" rejected
-    expect(out.work[0].position).toBe('Senior Frontend Dev');
+    expect(out.work[0].position).toBe('Frontend Engineer'); // honest title reframe accepted (ADR 0055)
     expect(out.work[0].startDate).toBe('2021');
     expect(out.work[0].highlights).toEqual(['Reframed bullet']); // wording accepted
+    expect(out.work[1].position).toBe(base().work[1].position); // empty/omitted → base title kept
+  });
+
+  it('titleChanges reports every adjusted title as "old → new" (and nothing when unchanged)', () => {
+    const tailored: ResumeDoc = {
+      ...base(),
+      work: [
+        { name: 'JPMorgan', position: 'Frontend Engineer', startDate: '2021', endDate: 'Present', highlights: [] },
+        { name: 'Yash', position: '', startDate: '2018', endDate: '2021', highlights: [] },
+      ],
+    };
+    const merged = mergeTailored(base(), tailored);
+    const changes = titleChanges(base(), merged);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toContain('JPMorgan');
+    expect(changes[0]).toContain('Senior Frontend Dev');
+    expect(changes[0]).toContain('Frontend Engineer');
+    expect(titleChanges(base(), mergeTailored(base(), base()))).toEqual([]); // no-op tailor → no changes
   });
 
   it('KEEPS added skills the model introduces (enhancement allowed)', () => {

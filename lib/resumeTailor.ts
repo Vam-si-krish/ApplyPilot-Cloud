@@ -7,8 +7,10 @@
  * tailoring is allowed to ENHANCE — add adjacent / quick-to-learn skills the job
  * wants, expand real experience in depth, and invent plausible supporting points.
  * The line we DO hold (verifiable identity facts that a background check would
- * catch): employer names, job titles, employment dates, and education are anchored
- * to the base résumé — `mergeTailored` restores them even if the model changed them.
+ * catch): employer names, employment dates, and education are anchored to the base
+ * résumé — `mergeTailored` restores them even if the model changed them. Job TITLES
+ * may be honestly reframed toward the target role (ADR 0055); every change is
+ * detected deterministically and disclosed for review.
  *
  * Everything the AI adds beyond the base (new skills + its self-reported invented
  * points) is returned as `changes` so the UI can show it for confirmation before
@@ -54,6 +56,8 @@ You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
 
 TITLE ALIGNMENT — recruiters shortlist on job-title match, so set "basics.label" to an HONEST variant of the TARGET job title whenever the candidate's real background supports doing that job (targeting "Senior Frontend Engineer", a capable full-stack dev's label becomes "Frontend Engineer · React & TypeScript"). Keep the seniority the dates support: never adopt Senior/Staff/Principal/Lead from the posting unless the base résumé already claims that level. If the role is outside what the candidate could credibly claim, keep the base label.
 
+JOB TITLES — you MAY also adjust each role's title ("position") to an honest, defensible variant that aligns with the target role, when the actual work supports it ("Software Engineer" whose work was frontend → "Frontend Engineer"). Reframe the DISCIPLINE, never the LEVEL: no invented promotions, no Senior/Staff/Lead/Principal unless that role's base title already says it. Employer names and dates stay untouched, and a changed title must survive a reference check ("yes, that's a fair description of what they did there"). Omit "position" for roles you leave unchanged; every title change is auto-detected and shown to the candidate for review.
+
 MIRROR THE POSTING'S EXACT WORDING — many ATS scans match literally. For every skill you keep or add, write it EXACTLY as the posting writes it ("CI/CD" if they write CI/CD, "PostgreSQL" not "Postgres", "Next.js" not "NextJS"), in both the skills section and the bullets. Work the posting's key multi-word requirement phrases in verbatim once each where truthful ("distributed systems", "REST APIs"). The user message lists exact posting terms the résumé currently lacks — cover every one you truthfully can.
 
 SUMMARY — recruiters spend ~80% of a 7-second first scan on the TOP THIRD of the page, so the summary is the highest-value real estate:
@@ -66,7 +70,7 @@ LENGTH — the résumé must fit ONE page AND fill it; a sparse, half-empty page
 - ORDER each role's bullets by relevance to THIS job and VARY their length: open with the strongest, most role-relevant bullet at a full two lines (roughly 180-210 characters); the rest may run one to two lines (roughly 110-210 characters). Every bullet still needs real substance: the scope or context, the action and concrete technologies, and a quantified result. Do NOT pad with filler; thin fragments and uniform same-length bullets both look templated.
 - Stay within the SKILLS budget; drop weaker, generic skills to make room for the ones this job wants.
 
-HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, job titles, employment dates, locations, contact details, and ALL of education. OMIT them entirely.
+HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, employment dates, locations, contact details, and ALL of education. OMIT them entirely. (Job titles are the one exception — see JOB TITLES above.)
 
 STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority; it must hold up in an interview.
 
@@ -84,12 +88,12 @@ DISCLOSURE — include a top-level "_changes" array. Keep it SHORT (token budget
 Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work" and "projects" in the SAME ORDER and SAME COUNT as the base (one entry per role/project), with "name" copied from the base purely so the bullets stay aligned to the right role:
 {
   "basics": { "summary": "", "label": "" },
-  "work": [ { "name": "<company, copied from base>", "highlights": ["", ""] } ],
+  "work": [ { "name": "<company, copied from base>", "position": "<job title — ONLY when honestly adjusted, else omit>", "highlights": ["", ""] } ],
   "skills": [ { "name": "", "keywords": ["", ""] } ],
   "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
   "_changes": ["Reframed your summary and bullets around the role's cloud/CI focus and added Kubernetes — a strong fit given your Docker experience.", "Embellished: described leading a 5-engineer migration (you contributed but did not lead it)"]
 }
-Do NOT output name, contact, profiles, job titles, dates, locations, or education — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
+Do NOT output name, contact, profiles, dates, locations, or education — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
 
 /** Per-section length budget derived from the base résumé (which already fits one page).
  *  Injected into the prompt so the model aims for the right size, and mirrored by the
@@ -269,9 +273,9 @@ function cleanText(s: string): string {
 
 /**
  * Merge the model's draft onto the base, anchoring verifiable facts while keeping
- * the AI's enhancements (ADR 0026). Employers, titles, dates, and education come
- * from the BASE (the model can't change where you worked or your degree). Summary,
- * bullets, and the SKILL SET may be enhanced. Pure — never throws.
+ * the AI's enhancements (ADR 0026). Employers, dates, and education come from the
+ * BASE (the model can't change where you worked or your degree). Summary, bullets,
+ * job titles (ADR 0055), and the SKILL SET may be enhanced. Pure — never throws.
  */
 export function mergeTailored(base: ResumeDoc, tailored: ResumeDoc): ResumeDoc {
   // Years of experience is a verifiable fact derived from the dates (ADR 0041): clamp any
@@ -290,12 +294,18 @@ export function mergeTailored(base: ResumeDoc, tailored: ResumeDoc): ResumeDoc {
     label: rawLabel ? clampYoeClaims(rawLabel, maxYears) : rawLabel,
   };
 
-  // work: anchor company/title/dates/location to base; take the (possibly enhanced)
+  // work: anchor company/dates/location to base; take the (possibly enhanced)
   // bullets but CAP their count to the base (length-neutral, ADR 0029) so tailoring
   // can't push the résumé onto a second page. The model is told to keep ≤ base count
   // ordered by importance, so trimming overflow only drops its least-important bullet.
   // cleanText strips any em-dash AI tell from the generated bullets (ADR 0033).
-  const work: ResumeWork[] = base.work.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(finish) }));
+  // The TITLE may be adjusted (ADR 0055): an honest discipline reframe aligned with the
+  // target role — detected + disclosed via titleChanges(); empty/omitted keeps the base.
+  const work: ResumeWork[] = base.work.map((b, i) => ({
+    ...b,
+    position: tailored.work[i]?.position?.trim() ? finish(tailored.work[i].position.trim()) : b.position,
+    highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(finish),
+  }));
 
   // skills: keep the model's groups (additions allowed) but CAP the total keyword count
   // (ADR 0031) — a long skills list also overflows the page; fall back to base if empty.
@@ -323,6 +333,20 @@ export function addedSkills(base: ResumeDoc, merged: ResumeDoc): string[] {
       }
     }
   }
+  return out;
+}
+
+/** Human-readable "old → new" for every job title the tailorer adjusted (ADR 0055).
+ *  Deterministic — compares merged vs base, never trusting the model's own disclosure. */
+export function titleChanges(base: ResumeDoc, merged: ResumeDoc): string[] {
+  const out: string[] = [];
+  merged.work.forEach((w, i) => {
+    const b = base.work[i];
+    if (!b) return;
+    const from = (b.position || '').trim();
+    const to = (w.position || '').trim();
+    if (to && to !== from) out.push(`${b.name || `Role ${i + 1}`}: "${from || '—'}" → "${to}"`);
+  });
   return out;
 }
 
@@ -357,5 +381,5 @@ export async function tailorResume(
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json));
-  return { resume, changes: { addedSkills: addedSkills(base, resume), notes } };
+  return { resume, changes: { addedSkills: addedSkills(base, resume), titleChanges: titleChanges(base, resume), notes } };
 }

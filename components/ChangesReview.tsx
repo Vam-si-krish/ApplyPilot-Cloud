@@ -5,8 +5,9 @@ import type { TailorChanges } from '@/lib/types';
 
 /**
  * Shows what the AI added/embellished beyond the base résumé (ADR 0026) so the user
- * reviews before using it. Verifiable facts (employers/titles/dates/education) are
- * never changed — this lists added skills and invented/embellished points only.
+ * reviews before using it: added skills, adjusted job titles (ADR 0055 — detected
+ * deterministically against the base), and invented/embellished points. Employers,
+ * dates, and education are never changed.
  *
  * `notes[0]` is the model's one-sentence summary ("what changed / why it fits");
  * `notes[1..]` are genuine invented/embellished flags that need interview backup.
@@ -21,20 +22,22 @@ export function flaggedNotes(c?: TailorChanges | null): string[] {
 }
 
 export function hasChanges(c?: TailorChanges | null): boolean {
-  return !!c && ((c.addedSkills?.length ?? 0) > 0 || (c.notes?.length ?? 0) > 0);
+  return !!c && ((c.addedSkills?.length ?? 0) > 0 || (c.titleChanges?.length ?? 0) > 0 || (c.notes?.length ?? 0) > 0);
 }
 
 /** Confirm dialog before download/use; returns true when there's nothing to flag or the user accepts. */
 export function confirmTailorChanges(c?: TailorChanges | null): boolean {
   const flags = flaggedNotes(c);
-  // Only the genuine invented/embellished items warrant a warning — not the summary
-  // sentence, and not added skills (the user reviews those in the panel).
-  if (!c?.addedSkills?.length && flags.length === 0) return true;
+  const titles = c?.titleChanges ?? [];
+  // The genuine invented/embellished items and changed titles warrant a warning — not
+  // the summary sentence, and not added skills (the user reviews those in the panel).
+  if (!c?.addedSkills?.length && flags.length === 0 && titles.length === 0) return true;
   const lines: string[] = [];
   if (c!.addedSkills?.length) lines.push('Added skills: ' + c!.addedSkills.join(', '));
+  if (titles.length) lines.push('', 'Job titles adjusted:', ...titles.map((t) => '• ' + t));
   if (flags.length) lines.push('', 'Embellished / invented:', ...flags.map((n) => '• ' + n));
   return window.confirm(
-    'The AI added or embellished the following beyond your base résumé. Make sure you can speak to all of it in an interview.\n\n' +
+    'The AI added or changed the following beyond your base résumé. Make sure you can speak to all of it in an interview.\n\n' +
       lines.join('\n') +
       '\n\nDownload anyway?',
   );
@@ -53,9 +56,21 @@ export default function ChangesReview({ changes }: { changes?: TailorChanges | n
       </div>
       {summary && <p className="text-[12px] text-amber-100/90 mb-3">{summary}</p>}
       <p className="text-[11px] text-amber-200/70 mb-3">
-        Your employers, titles, dates, and education are unchanged. These additions go beyond your base résumé — only keep what
-        you can back up in an interview.
+        Your employers, dates, and education are unchanged. Job titles may be reframed toward the role (shown below and in the
+        before/after diff) — only keep what you can back up in an interview and a reference check.
       </p>
+      {(c.titleChanges?.length ?? 0) > 0 && (
+        <div className="mb-2">
+          <p className="text-[11px] text-amber-200/80 uppercase tracking-wider font-medium mb-1.5">Job titles adjusted</p>
+          <ul className="space-y-0.5">
+            {c.titleChanges!.map((t, i) => (
+              <li key={i} className="text-[12px] text-amber-100/90 font-mono">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {c.addedSkills.length > 0 && (
         <div className="mb-2">
           <p className="text-[11px] text-amber-200/80 uppercase tracking-wider font-medium mb-1.5">Added skills</p>

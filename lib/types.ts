@@ -352,6 +352,9 @@ export interface ResumeDoc {
 export interface TailorChanges {
   /** Skills in the tailored résumé that weren't in the base (added or quick-to-learn). */
   addedSkills: string[];
+  /** Job titles the tailorer adjusted (ADR 0055), as `Company: "old" → "new"` strings.
+   *  Detected deterministically against the base. Absent on pre-0055 rows. */
+  titleChanges?: string[];
   /** The model's own notes on notable invented/embellished points it introduced. */
   notes: string[];
 }
