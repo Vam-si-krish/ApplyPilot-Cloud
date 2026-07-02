@@ -9,6 +9,8 @@ import { NextResponse } from 'next/server';
 import { getBaseResume, getSettings } from '@/lib/db';
 import { buildTailoringClient } from '@/lib/scoreRunner';
 import { tailorResume } from '@/lib/resumeTailor';
+import { atsMatchScores } from '@/lib/prefilter';
+import { resumeToText } from '@/lib/resume';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -34,14 +36,20 @@ export async function POST(req: Request) {
     }
     const settings = await getSettings();
     const client = await buildTailoringClient(settings);
+    const title = typeof body.title === 'string' ? body.title : null;
+    // No job row in the manual flow, but the local ATS scan (ADR 0053) still works on the
+    // pasted JD: exact posting-form terms the base résumé lacks, mirrored verbatim by the prompt.
+    const ats = atsMatchScores({ text: resumeToText(base), skills: settings.skills ?? [] }, [
+      { id: 'manual', title: title ?? '', text: jd },
+    ]).get('manual');
     const { resume, changes } = await tailorResume(
       base,
       {
-        title: typeof body.title === 'string' ? body.title : null,
+        title,
         company: typeof body.company === 'string' ? body.company : null,
         full_description: jd,
       },
-      {}, // no scoring signals in the manual flow
+      { atsMissing: ats?.breakdown.missing ?? null }, // no scorer signals in the manual flow
       client,
     );
     return NextResponse.json({ ok: true, resume, changes });

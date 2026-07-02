@@ -43,6 +43,27 @@ This is the local scorer, not the dropped LLM re-score (ADR 0050 stays in force)
   edits); toast reports "base% → tailored% · still missing: …".
 - Tests 131 green, typecheck + build green.
 
+## ✅ Also shipped: tailoring prompt v3 (ADR 0054) — shortlist-signal upgrades
+Research pass over the three AI lanes (scoring / tailoring / company check) → user picked the
+tailoring improvements to implement now (kept the "~15-day learnable skills" policy deliberately):
+- **TITLE ALIGNMENT** — `basics.label` becomes an honest variant of the target job title (title
+  match ≈ 3.5× callbacks); seniority stays bounded by the dates.
+- **MIRROR EXACT WORDING** — skills/phrases written exactly as the posting writes them (literal ATS).
+- **SUMMARY top-third rules** — first line answers the posting; lead with 2-3 role-matching
+  quantified facts.
+- **Varied bullet lengths** — strongest bullet first at ~2 lines, rest 1-2 lines; kills the
+  templated uniform look.
+- **ATS feed-forward** — `signals.atsMissing` (exact terms from `prefilter_breakdown.missing`) into
+  the tailor prompt; manual paste-a-JD route computes it on the fly. With the post-generate ATS
+  check, the loop is closed (missing terms in → gauge verifies after).
+- Both prompt copies updated in sync (`lib/resumeTailor.ts` + `resume-worker/tailor.js`); worker
+  `tailorSignals()` now shared by `/tailor`. Tests 133 green; typecheck + build green.
+- ⚠ **Worker Mac must `git pull` + restart** to serve the new prompt (stale-deploy gotcha).
+
+Scoring/company-check improvements from the same research (reasoning-before-score reorder, mapping
+table, model upgrade, outcome calibration, repost signals) are documented in the Day-8 assessment
+but NOT implemented — scoring changes need eval expansion first (CLAUDE.md discipline).
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

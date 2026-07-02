@@ -322,12 +322,7 @@ app.post('/tailor', async (req, res) => {
     }
 
     const job = appRow.job;
-    const signals = {
-      missing: (appRow.job.score_breakdown && appRow.job.score_breakdown.missing) || null,
-      matched: job.matched_skills || null,
-      unmatched: job.unmatched_skills || null,
-      keywords: job.score_keywords || null,
-    };
+    const signals = tailorSignals(job);
 
     // All preconditions met — mark generating, ack, then do the slow LLM call async.
     await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
@@ -361,13 +356,15 @@ app.post('/tailor', async (req, res) => {
 });
 
 // Build the signals block the tailorer expects from a job row (shared by /tailor and the
-// queue drainer). Mirrors the inline shape in /tailor above.
+// queue drainer). atsMissing = exact posting-form terms the base résumé lacks, from the
+// local ATS match scan (ADR 0053) — the prompt tells the model to mirror them verbatim.
 function tailorSignals(job) {
   return {
     missing: (job.score_breakdown && job.score_breakdown.missing) || null,
     matched: job.matched_skills || null,
     unmatched: job.unmatched_skills || null,
     keywords: job.score_keywords || null,
+    atsMissing: (job.prefilter_breakdown && job.prefilter_breakdown.missing) || null,
   };
 }
 

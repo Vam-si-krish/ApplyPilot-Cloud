@@ -347,10 +347,18 @@ You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
 - ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
 
+TITLE ALIGNMENT — recruiters shortlist on job-title match, so set "basics.label" to an HONEST variant of the TARGET job title whenever the candidate's real background supports doing that job (targeting "Senior Frontend Engineer", a capable full-stack dev's label becomes "Frontend Engineer · React & TypeScript"). Keep the seniority the dates support: never adopt Senior/Staff/Principal/Lead from the posting unless the base résumé already claims that level. If the role is outside what the candidate could credibly claim, keep the base label.
+
+MIRROR THE POSTING'S EXACT WORDING — many ATS scans match literally. For every skill you keep or add, write it EXACTLY as the posting writes it ("CI/CD" if they write CI/CD, "PostgreSQL" not "Postgres", "Next.js" not "NextJS"), in both the skills section and the bullets. Work the posting's key multi-word requirement phrases in verbatim once each where truthful ("distributed systems", "REST APIs"). The user message lists exact posting terms the résumé currently lacks — cover every one you truthfully can.
+
+SUMMARY — recruiters spend ~80% of a 7-second first scan on the TOP THIRD of the page, so the summary is the highest-value real estate:
+- The FIRST line must read as a direct answer to the posting: the aligned role wording plus the candidate's single strongest role-matching qualification.
+- Then the 2-3 strongest ROLE-MATCHING and QUANTIFIED facts from the résumé, phrased in the posting's own key terms. No generic self-description; every sentence must be a reason to shortlist THIS candidate for THIS role.
+- Keep to the character budget (2-3 lines).
+
 LENGTH — the résumé must fit ONE page AND fill it; a sparse, half-empty page with thin one-line bullets looks weak. The user message carries a LENGTH BUDGET computed from the base résumé:
 - Keep the SAME number of bullets per role/project as the budget lists, or fewer, NEVER more. To surface a new point, REWRITE or MERGE an existing bullet; never append one.
-- Make each bullet SUBSTANTIAL: a full two lines, roughly 180-210 characters. State the scope or context, the action you took and the concrete technologies, and a quantified result. Do NOT pad with filler to reach a length; add real substance (the system, the constraint, the scale, the measurable outcome). One-line bullets read as thin, so expand them with genuine detail.
-- Keep the summary to its character budget (2-3 lines).
+- ORDER each role's bullets by relevance to THIS job and VARY their length: open with the strongest, most role-relevant bullet at a full two lines (roughly 180-210 characters); the rest may run one to two lines (roughly 110-210 characters). Every bullet still needs real substance: the scope or context, the action and concrete technologies, and a quantified result. Do NOT pad with filler; thin fragments and uniform same-length bullets both look templated.
 - Stay within the SKILLS budget; drop weaker, generic skills to make room for the ones this job wants.
 
 HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, job titles, employment dates, locations, contact details, and ALL of education. OMIT them entirely.
@@ -401,6 +409,7 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
   const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
+  const atsMissing = (signals.atsMissing ?? []).filter(Boolean);
   // STABLE prefix (system prompt + this block) — cached across every job in a session.
   const years = totalExperienceYears(base);
   const experienceLine =
@@ -419,7 +428,8 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
     `- Job keywords: ${signals.keywords || 'N/A'}\n` +
     `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(', ') : 'N/A'}\n` +
     `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(', ') : 'N/A'}\n` +
-    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}`;
+    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}\n` +
+    `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(', ') : 'N/A'}`;
   // Optional user/recruiter instructions — high priority for EMPHASIS, ORDERING, and which
   // experience to foreground, but still bound by every rule above (never fabricate to satisfy them).
   const instr = String(instructions || '').trim();

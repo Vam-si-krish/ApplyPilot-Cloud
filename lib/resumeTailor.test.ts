@@ -156,6 +156,23 @@ describe('buildTailorMessages', () => {
     expect(parts[1].text).toContain('React');
     expect(parts[1].text).toContain('Kubernetes');
   });
+
+  it('lists the ATS-missing exact terms in the tail (ADR 0053 → tailoring feed-forward)', () => {
+    const msgs = buildTailorMessages(
+      base(),
+      { title: 'FE Eng', company: 'Acme', full_description: 'Need React.' },
+      { atsMissing: ['CI/CD', 'GraphQL'] },
+    );
+    const parts = msgs[1].content as ContentPart[];
+    expect(parts[1].text).toContain('mirror the truthful ones verbatim');
+    expect(parts[1].text).toContain('CI/CD, GraphQL');
+  });
+
+  it('prompt carries the title-alignment, exact-wording, and top-third summary rules', () => {
+    expect(TAILOR_PROMPT).toContain('TITLE ALIGNMENT');
+    expect(TAILOR_PROMPT).toContain("MIRROR THE POSTING'S EXACT WORDING");
+    expect(TAILOR_PROMPT).toContain('TOP THIRD');
+  });
 });
 
 describe('totalExperienceYears — true career span from dates (ADR 0041)', () => {
