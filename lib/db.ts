@@ -2,6 +2,7 @@
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
 import { resumeToText } from './resume';
+import { pickCanonical } from './dedupe';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
 
 // ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
@@ -322,14 +323,14 @@ export async function linkDuplicateJobs(keys: (string | null)[]): Promise<number
   const uniq = [...new Set(keys.filter((k): k is string => !!k))];
   if (uniq.length === 0) return 0;
 
-  type Row = Pick<Job, 'id' | 'content_key' | 'duplicate_of' | 'fit_score' | 'score_note' | 'score_keywords' | 'score_reasoning' | 'score_breakdown' | 'employment_type' | 'status'>;
+  type Row = Pick<Job, 'id' | 'content_key' | 'duplicate_of' | 'fit_score' | 'score_note' | 'score_keywords' | 'score_reasoning' | 'score_breakdown' | 'employment_type' | 'status' | 'location' | 'discovered_at'>;
   // PostgREST `in` filters travel in the URL — chunk the key list so a big batch
   // (or the backfill) can't overflow the request line.
   const rows: Row[] = [];
   for (let i = 0; i < uniq.length; i += 100) {
     const { data, error } = await supabaseAdmin()
       .from('jobs')
-      .select('id, content_key, duplicate_of, fit_score, score_note, score_keywords, score_reasoning, score_breakdown, employment_type, status')
+      .select('id, content_key, duplicate_of, fit_score, score_note, score_keywords, score_reasoning, score_breakdown, employment_type, status, location, discovered_at')
       .in('content_key', uniq.slice(i, i + 100))
       .order('discovered_at', { ascending: true });
     if (error) throw new Error(`Failed to load duplicate groups: ${error.message}`);
@@ -343,10 +344,16 @@ export async function linkDuplicateJobs(keys: (string | null)[]): Promise<number
     groups.set(r.content_key!, g);
   }
 
+  // Canonical preference (ADR 0057 addendum): Remote > a Settings location > scored > earliest.
+  const preferredLocations = await getSettings().then((s) => s.locations ?? []).catch(() => [] as string[]);
+
   let linked = 0;
   for (const group of groups.values()) {
-    // Earliest unlinked row is the canonical (an already-linked group keeps its canonical).
-    const canonical = group.find((r) => r.duplicate_of == null);
+    // A group that already has a canonical keeps it (rows point at it — never re-parent,
+    // that would create chains). Otherwise pick the best representative to stay visible.
+    const linkedTargets = new Set(group.map((r) => r.duplicate_of).filter(Boolean));
+    const unlinked = group.filter((r) => r.duplicate_of == null);
+    const canonical = group.find((r) => linkedTargets.has(r.id)) ?? (unlinked.length ? pickCanonical(unlinked, preferredLocations) : null);
     if (!canonical) continue;
     const dupes = group.filter((r) => r.id !== canonical.id && r.duplicate_of == null);
     if (dupes.length === 0) continue;

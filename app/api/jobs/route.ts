@@ -129,7 +129,15 @@ export async function GET(req: Request) {
       }
       for (const j of jobs) {
         const list = byCanonical.get(j.id);
-        if (list) j.siblings = list;
+        if (list) {
+          // Remote first, then alphabetical — the order the user would pick from.
+          list.sort((a, b) => {
+            const ra = /remote/i.test(a.location || '') ? 0 : 1;
+            const rb = /remote/i.test(b.location || '') ? 0 : 1;
+            return ra - rb || (a.location || '').localeCompare(b.location || '');
+          });
+          j.siblings = list;
+        }
       }
     }
   }

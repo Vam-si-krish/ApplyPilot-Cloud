@@ -128,6 +128,16 @@ copies; 561 LLM calls wasted; reposts re-arrive daily under fresh URLs so it com
   the screenshot is now 1 row + 11 variants. Tests 140 green; typecheck + build green.
 - No worker deploy needed for this one (all app-side).
 
+## ✅ Also shipped: dedup v2 — aggressive keys + ranked canonicals (ADR 0057 addendum)
+User: strict body-hash missed real blasts (bodies vary per city) and the "+N" chip wasn't
+clickable. Changes:
+- Key = company+title (normalized; body only as fallback) — user-directed aggressive mode.
+- `pickCanonical`: Remote > Settings location > scored > earliest; existing groups never
+  re-parent (zero chains verified). Deloitte canonical is now Boston, MA.
+- Chip is a button (expands the row → location links, Remote-first sort), turns green ✓ when ANY
+  variant was applied — the don't-apply-twice guard.
+- Re-backfill: 763 linked / 1,604 canonicals. Tests 145 green; typecheck + build green.
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.

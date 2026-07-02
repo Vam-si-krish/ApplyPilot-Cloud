@@ -34,6 +34,22 @@ DataAnnotation (200+ rows across "AI Trainer" titles) are the harvester version 
 - **Backfill** (script, run 2026-07-02): keyed all 2,367 rows, linked 668 duplicates, 646 of which
   now carry scores; the remaining 18 copy automatically once their canonicals are scored.
 
+## Addendum (same day) — aggressive mode + ranked canonicals
+The body-inclusive hash missed most real-world blasts (bodies vary per city: embedded city names,
+state salary ranges), and "earliest wins" made the visible row whichever metro was scraped first.
+User decision: combine aggressively — applying once per requisition is the point.
+- **Key is now company + title** (normalized; the body is used only as a fallback when company or
+  title is missing). Known trade-off, accepted by the user: a company posting genuinely different
+  jobs under one identical title merges too; every variant stays reachable via the sibling links.
+- **`pickCanonical`** replaces earliest-wins for NEW groups: Remote variant > a Settings-location
+  variant > an already-scored variant > earliest. Existing groups never re-parent (no chains —
+  verified zero after backfill). The visible row is the variant the user would actually apply to
+  (Deloitte's canonical is now Boston, not Cleveland).
+- **UI:** the "+N locations" chip is a button that expands the row (the expanded panel lists each
+  location as an openable link, Remote first); the chip turns green with a ✓ when ANY variant has
+  been applied to — the apply-once-per-requisition guard.
+- Re-backfilled 2026-07-02: 763 duplicates linked (was 668 under the strict key), 1,604 canonicals.
+
 ## Consequences
 - The working list shrank ~28% with zero information loss; future runs skip an LLM call for every
   duplicate (~30% of a typical fetch) — which also protects the Claude-subscription window.

@@ -1349,15 +1349,32 @@ export default function JobsPage() {
 
 
                     {/* Multi-location duplicate group (ADR 0057): this row is the canonical;
-                        the same posting exists in N other locations (see expanded panel). */}
-                    {(job.siblings?.length ?? 0) > 0 && (
-                      <span
-                        title={`Same posting in ${job.siblings!.length} other location${job.siblings!.length === 1 ? '' : 's'}: ${job.siblings!.map((s) => s.location || '—').slice(0, 6).join(' · ')}${job.siblings!.length > 6 ? ' · …' : ''} (scored once — expand the row to open a specific location)`}
-                        className="shrink-0 hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded"
-                      >
-                        <MapPin size={10} /> +{job.siblings!.length}
-                      </span>
-                    )}
+                        the same requisition exists in N other locations. Clicking expands the
+                        row, where each location is an openable link. Turns green when ANY
+                        variant was applied to — the apply-once-per-requisition guard. */}
+                    {(job.siblings?.length ?? 0) > 0 && (() => {
+                      const appliedAnywhere = !!job.applied_at || job.siblings!.some((s) => s.applied_at);
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpanded(expanded === job.id ? null : job.id);
+                          }}
+                          title={
+                            (appliedAnywhere ? 'ALREADY APPLIED to one of these — ' : '') +
+                            `same posting in ${job.siblings!.length} other location${job.siblings!.length === 1 ? '' : 's'}: ${job.siblings!.map((s) => s.location || '—').slice(0, 6).join(' · ')}${job.siblings!.length > 6 ? ' · …' : ''} — click to list them`
+                          }
+                          className={`shrink-0 hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors cursor-pointer ${
+                            appliedAnywhere
+                              ? 'bg-emerald/10 border-emerald/25 text-emerald hover:bg-emerald/20'
+                              : 'bg-sky/10 border-sky/25 text-sky hover:bg-sky/20'
+                          }`}
+                        >
+                          <MapPin size={10} /> +{job.siblings!.length} location{job.siblings!.length === 1 ? '' : 's'}
+                          {appliedAnywhere ? ' ✓' : ''}
+                        </button>
+                      );
+                    })()}
 
                     {/* Local ATS match badge (ADR 0053) — the first-filter signal */}
                     {job.prefilter_score != null && (
