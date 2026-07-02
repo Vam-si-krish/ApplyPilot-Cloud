@@ -100,6 +100,20 @@ Audited every LLM call path for caching correctness and token waste:
   flatten parity); 136 tests + typecheck + build green. CLAUDE.md scoring line updated.
 - ⚠ Worker Mac `git pull` + restart to pick up the scoring-port change.
 
+## 🔎 Diagnosed: "titles not changing" after the ADR 0055 deploy
+User generated a résumé post-deploy; role titles unchanged. Root cause: **stale Worker Mac** —
+`GET <worker>/version` returned commit `f2c5d58` (ADR 0054, headline alignment — which is why the
+headline diff worked) but tailorable titles are `a9b2a25`, one commit later. The worker's old
+prompt still hard-blocks titles and its old merge restores base positions. **Fix: Worker Mac
+`git pull` + restart** (ADR 0032's self-update covers the tunnel URL only, not code).
+- Render path verified end-to-end: worker `/render` → `appRow.tailored_resume` → `renderHtml` →
+  `workEntry` prints `w.position` per role. The PDF header deliberately shows name + contact only
+  (NO headline) — user explicitly wants the template unchanged; `basics.label` tailoring stays
+  (feeds the ATS title component + diff view) but is not printed.
+- **Prompt sharpened (both copies)**: JOB TITLES is now "ALIGN with the target title whenever the
+  work honestly supports it (most recent role matters most)" instead of "you MAY adjust" — leaving
+  a title unchanged is the exception, level inflation still forbidden.
+
 ## Open questions / follow-ups
 - **Not deployed yet** — Netlify deploy + the daily fetch will use the new scorer automatically.
   The existing rows are already re-scored directly in the DB.
