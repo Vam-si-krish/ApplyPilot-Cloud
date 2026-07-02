@@ -13,6 +13,8 @@ export async function GET(req: Request) {
   const maxScore = url.searchParams.get('maxScore');
   const minSkill = url.searchParams.get('minSkill');
   const maxSkill = url.searchParams.get('maxSkill'); // e.g. 0 → "no skill match"
+  const minMatch = url.searchParams.get('minMatch'); // ATS match % lower bound (ADR 0053)
+  const maxMatch = url.searchParams.get('maxMatch'); // upper bound — isolates low-match jobs to delete
   const shortlisted = url.searchParams.get('shortlisted');
   const easyApply = url.searchParams.get('easyApply');
   const applied = url.searchParams.get('applied');
@@ -44,6 +46,8 @@ export async function GET(req: Request) {
   if (minSkill !== null && minSkill !== '') q = q.gte('skill_match_score', Number(minSkill));
   // maxSkill (incl. 0) filters by upper bound; lte excludes NULLs, so maxSkill=0 = "matched none of my skills".
   if (maxSkill !== null && maxSkill !== '') q = q.lte('skill_match_score', Number(maxSkill));
+  if (minMatch !== null && minMatch !== '') q = q.gte('prefilter_score', Number(minMatch));
+  if (maxMatch !== null && maxMatch !== '') q = q.lte('prefilter_score', Number(maxMatch));
   if (shortlisted === 'true') q = q.eq('is_shortlisted', true);
   if (easyApply === 'true') q = q.eq('easy_apply', true);
   if (easyApply === 'false') q = q.eq('easy_apply', false);
@@ -87,9 +91,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ ids: (data ?? []).map((r) => (r as { id: string }).id) });
   }
 
-  // Past view groups by date → order newest-first; default view sorts by fit.
+  // Past view groups by date → order newest-first; 'match' sorts by the ATS match %
+  // (the first-filter pass, before any fit_score exists); default sorts by fit.
   if (order === 'date') {
     q = q.order('discovered_at', { ascending: false }).order('fit_score', { ascending: false, nullsFirst: false });
+  } else if (order === 'match') {
+    q = q.order('prefilter_score', { ascending: false, nullsFirst: false }).order('discovered_at', { ascending: false });
   } else {
     q = q.order('fit_score', { ascending: false, nullsFirst: false }).order('discovered_at', { ascending: false });
   }

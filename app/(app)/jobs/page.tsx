@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 import SkillMatchBadge from '@/components/SkillMatchBadge';
+import MatchBadge from '@/components/MatchBadge';
 import JobsLegend from '@/components/JobsLegend';
 import ScoringPanel from '@/components/ScoringPanel';
 import { useProgress } from '@/components/ProgressContext';
@@ -76,6 +77,9 @@ export default function JobsPage() {
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
   const [companyTier, setCompanyTier] = useState('good,medium');
   const [minSkill, setMinSkill] = useState(''); // skill-match % gate for the view
+  const [minMatch, setMinMatch] = useState(''); // ATS match % gate (ADR 0053); '0-39' style ranges too
+  const [sortBy, setSortBy] = useState<'fit' | 'match'>('fit'); // 'match' = first-filter pass over fresh jobs
+  const [recomputing, setRecomputing] = useState(false); // "Recompute ATS match" in flight
   const [employmentType, setEmploymentType] = useState(''); // full_time | contract | internship
   const [limit, setLimit] = useState(300); // page size; "Load more" raises it
   const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
@@ -155,6 +159,7 @@ export default function JobsPage() {
   const moreFilterCount =
     (easyApply !== null ? 1 : 0) +
     (minSkill ? 1 : 0) +
+    (minMatch ? 1 : 0) +
     (employmentType ? 1 : 0) +
     (hideApplied && status !== 'applied' ? 1 : 0) +
     (hideOpened && status !== 'opened' ? 1 : 0) +
@@ -195,6 +200,9 @@ export default function JobsPage() {
     if (maxScore && !scoreless) p.set('maxScore', maxScore);
     if (minSkill === '0') p.set('maxSkill', '0'); // "No skill match" = matched none of my skills
     else if (minSkill) p.set('minSkill', minSkill);
+    if (minMatch === 'lt40') p.set('maxMatch', '39'); // "weak ATS match" — the delete pass
+    else if (minMatch) p.set('minMatch', minMatch);
+    if (sortBy === 'match') p.set('order', 'match');
     if (status === 'applied') p.set('applied', 'true');
     else if (status === 'shortlisted') p.set('shortlisted', 'true');
     else if (status === 'opened') p.set('opened', 'true');
@@ -209,7 +217,7 @@ export default function JobsPage() {
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     return p;
-  }, [search, minScore, maxScore, minSkill, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds]);
+  }, [search, minScore, maxScore, minSkill, minMatch, sortBy, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds]);
 
   // `silent` refreshes the list in place WITHOUT flipping the full-card "Loading…" state.
   // That's what kills the flicker during live scoring/assessment and single-row actions:
@@ -293,6 +301,7 @@ export default function JobsPage() {
     setMinScore('6');
     setMaxScore('');
     setMinSkill('');
+    setMinMatch('');
     setEmploymentType('');
     setCompanyTier('good,medium');
     setEasyApply(null);
@@ -300,6 +309,26 @@ export default function JobsPage() {
     setHideOpened(false);
     setHideInApplications(true);
     setSelectedRunIds([]);
+  }
+
+  // Recompute the local ATS match % for every non-archived job (ADR 0053) — pure
+  // CPU, no AI call, never touches fit_score. Use after changing résumé/skills.
+  async function recomputeMatch() {
+    setRecomputing(true);
+    try {
+      const d = await fetch('/api/jobs/recompute-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).then((r) => r.json());
+      setBulkMsg(d.error ? `Recompute failed: ${d.error}` : `ATS match recomputed for ${d.updated} jobs.`);
+      await load(true);
+    } catch {
+      setBulkMsg('Recompute failed.');
+    } finally {
+      setRecomputing(false);
+      setTimeout(() => setBulkMsg(null), 5000);
+    }
   }
 
   async function patch(id: string, body: Record<string, unknown>) {
@@ -701,15 +730,35 @@ export default function JobsPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Jobs</h1>
           <p className="text-slate-muted text-[13px] mt-1">
-            {total} shown · last 24h · sorted by fit score ·{' '}
+            {total} shown · last 24h · sorted by {sortBy === 'match' ? 'ATS match' : 'fit score'} ·{' '}
             <Link href="/past" className="text-sky hover:underline inline-flex items-center gap-1">
               <History size={12} /> Past jobs
             </Link>
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* First-filter pass (ADR 0053): sort fresh jobs by the local ATS match. */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'fit' | 'match')}
+            title="Sort order — ATS match is the local pre-score, useful before AI scoring"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="fit">Sort: AI fit score</option>
+            <option value="match">Sort: ATS match %</option>
+          </select>
+          <button
+            onClick={recomputeMatch}
+            disabled={recomputing}
+            title="Recompute the local ATS match % for all current jobs (no AI, free) — run after editing your résumé or Settings → Skills"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 rounded-md transition-all"
+          >
+            <RefreshCw size={13} className={recomputing ? 'animate-spin' : ''} /> Recompute ATS match
+          </button>
         </div>
       </div>
 
@@ -947,6 +996,19 @@ export default function JobsPage() {
           </select>
 
           <select
+            value={minMatch}
+            onChange={(e) => setMinMatch(e.target.value)}
+            title="Filter by the local ATS match % (résumé↔job, no AI) — your first filter before AI scoring"
+            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any ATS match</option>
+            <option value="65">ATS match ≥ 65%</option>
+            <option value="50">ATS match ≥ 50%</option>
+            <option value="40">ATS match ≥ 40%</option>
+            <option value="lt40">Weak match (&lt; 40%)</option>
+          </select>
+
+          <select
             value={employmentType}
             onChange={(e) => setEmploymentType(e.target.value)}
             title="Filter by role type (contract / full-time)"
@@ -1019,6 +1081,12 @@ export default function JobsPage() {
               key: 'sk',
               label: minSkill === '0' ? 'Skill: no match' : minSkill === '100' ? 'Skill: 100%' : `Skill ≥ ${minSkill}%`,
               clear: () => setMinSkill(''),
+            });
+          if (minMatch)
+            chips.push({
+              key: 'am',
+              label: minMatch === 'lt40' ? 'ATS match < 40%' : `ATS match ≥ ${minMatch}%`,
+              clear: () => setMinMatch(''),
             });
           if (companyTier && !scoreless) chips.push({ key: 'co', label: `Company: ${COMPANY_LABEL[companyTier] ?? companyTier}`, clear: () => setCompanyTier('') });
           if (employmentType) chips.push({ key: 'em', label: EMPLOYMENT_LABEL[employmentType] ?? employmentType, clear: () => setEmploymentType('') });
@@ -1247,6 +1315,11 @@ export default function JobsPage() {
                     {/* AI company-tier badge */}
                     {job.company_tier && (
                       <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
+                    )}
+
+                    {/* Local ATS match badge (ADR 0053) — the first-filter signal */}
+                    {job.prefilter_score != null && (
+                      <MatchBadge score={job.prefilter_score} breakdown={job.prefilter_breakdown} className="shrink-0 hidden sm:inline-flex" />
                     )}
 
                     {/* Skill-match badge (resumeKeywords) */}

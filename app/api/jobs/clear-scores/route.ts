@@ -79,7 +79,7 @@ export async function POST(req: Request) {
         }
       : target === 'company'
         ? { company_tier: null, company_tier_note: null }
-        : { skill_match_score: null, prefilter_score: null, matched_skills: null, unmatched_skills: null }; // 'match'
+        : { skill_match_score: null, prefilter_score: null, prefilter_breakdown: null, matched_skills: null, unmatched_skills: null }; // 'match'
 
   const { data, error } = await db.from('jobs').update(patch).in('id', ids).select('id');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

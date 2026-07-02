@@ -10,13 +10,48 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
     <div className="px-14 pb-5 pt-1 space-y-3 bg-base/40">
       {job.status === 'filtered' && (
         <div className="text-[12px] text-amber-400">
-          Pre-filtered — {job.prefilter_score}% résumé match (below your threshold), so it skipped LLM scoring.
+          Pre-filtered — {job.prefilter_score}% ATS match (below your threshold), so it skipped LLM scoring.
         </div>
       )}
-      {job.status !== 'filtered' && job.prefilter_score != null && (
-        <p className="text-[11px] text-slate-muted">
-          Keyword pre-screen: {job.prefilter_score}% résumé overlap (a rough pre-filter, not the fit score).
-        </p>
+      {/* ATS-style match breakdown (ADR 0053) — the local first-filter, not the AI fit score. */}
+      {job.prefilter_score != null && (
+        <div>
+          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">
+            ATS match · {job.prefilter_score}% (local, no AI)
+          </p>
+          {job.prefilter_breakdown ? (
+            <div className="text-[12px] leading-relaxed space-y-0.5">
+              <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono text-slate-muted">
+                {job.prefilter_breakdown.skills != null && (
+                  <span>skills <span className="text-slate-text">{job.prefilter_breakdown.skills}</span>/100</span>
+                )}
+                {job.prefilter_breakdown.title != null && (
+                  <span>title <span className="text-slate-text">{job.prefilter_breakdown.title}</span>/100</span>
+                )}
+                <span>keywords <span className="text-slate-text">{job.prefilter_breakdown.keywords}</span>/100</span>
+              </p>
+              {(job.prefilter_breakdown.matched.length > 0 || job.prefilter_breakdown.missing.length > 0) && (
+                <p>
+                  {job.prefilter_breakdown.matched.length > 0 && (
+                    <span className="text-emerald">✓ {job.prefilter_breakdown.matched.join(', ')}</span>
+                  )}
+                  {job.prefilter_breakdown.missing.length > 0 && (
+                    <span className="text-slate-muted">
+                      {job.prefilter_breakdown.matched.length > 0 ? '  ·  ' : ''}✗ {job.prefilter_breakdown.missing.join(', ')}
+                    </span>
+                  )}
+                </p>
+              )}
+              {job.prefilter_breakdown.flags.length > 0 && (
+                <p className="text-amber-400 text-[11px]">⚠ {job.prefilter_breakdown.flags.join(' · ')}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-muted">
+              Scored by the old keyword overlap — hit “Recompute ATS match” on the Jobs tab for the full breakdown.
+            </p>
+          )}
+        </div>
       )}
       {job.company_tier && (
         <div>

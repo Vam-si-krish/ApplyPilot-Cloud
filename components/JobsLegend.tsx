@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Star, CheckCircle2, ExternalLink, Archive, Trash2, ChevronDown, ChevronRight, HelpCircle, Target } from 'lucide-react';
+import { Star, CheckCircle2, ExternalLink, Archive, Trash2, ChevronDown, ChevronRight, HelpCircle, Target, Gauge } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 
@@ -35,8 +35,12 @@ export default function JobsLegend() {
             <Text title="Fit score (1–10)">AI match to your résumé. Green ≥8 strong · amber 6–7 decent · red &lt;6 weak · “–” not scored yet.</Text>
           </Item>
           <Item>
-            <span className="text-[11px] text-slate-muted whitespace-nowrap">35% match</span>
-            <Text title="Pre-screen %">Quick résumé keyword overlap, used to skip clearly-irrelevant jobs before AI scoring.</Text>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">
+              <Gauge size={10} /> 72%
+            </span>
+            <Text title="ATS match">
+              Local ATS-style résumé↔job match (skills · title · keywords, no AI) — your first filter. Green ≥65 · amber 40–64 · grey &lt;40. Expand a row for why.
+            </Text>
           </Item>
           <Item>
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">

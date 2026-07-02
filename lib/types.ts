@@ -20,8 +20,12 @@ export interface Job {
   easy_apply: boolean | null;
   /** 0–10; null = unscored. 0 = invalid content / not a real job description. */
   fit_score: number | null;
-  /** 0–100 cheap résumé↔job match (ADR 0008); null = not computed. Gates LLM scoring when the filter is on. */
+  /** 0–100 local ATS-style résumé↔job match (ADR 0053, was plain IDF coverage under
+   *  ADR 0008); null = not computed. The user's first filter; also gates LLM scoring
+   *  when the pre-filter is on. NOT the AI fit score. */
   prefilter_score: number | null;
+  /** Why the ATS match % is what it is (ADR 0053); null = scored before v2. */
+  prefilter_breakdown: AtsMatchBreakdown | null;
   score_note: string | null;
   score_keywords: string | null;
   score_reasoning: string | null;
@@ -51,6 +55,21 @@ export interface Job {
   discovered_at: string;
   scored_at: string | null;
   source: string | null;
+}
+
+/**
+ * Component scores + evidence behind the ATS-style match % (ADR 0053).
+ * skills/title are null when the JD/title had nothing to extract (their weight
+ * is redistributed); flags carry penalty reasons ("asks 7+ yrs…", "clearance…").
+ */
+export interface AtsMatchBreakdown {
+  skills: number | null; // 0–100 weighted coverage of the JD's extracted skills
+  title: number | null; // 0–100 job-title ↔ résumé role alignment
+  keywords: number; // 0–100 IDF-weighted coverage of the remaining JD vocabulary
+  matched: string[]; // top JD skills the résumé has (by JD weight)
+  missing: string[]; // top JD skills the résumé lacks
+  flags: string[]; // penalty / hard-cap reasons, human-readable
+  v: 2;
 }
 
 /** Shape passed to the scorer. Mirrors the job fields scoring actually reads. */

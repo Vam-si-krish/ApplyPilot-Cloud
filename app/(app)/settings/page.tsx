@@ -371,10 +371,11 @@ export default function SettingsPage() {
       {/* Pre-scoring filter */}
       <Section title="Pre-scoring Filter">
         <p className="text-slate-muted text-[12px] mb-4">
-          Before spending an LLM call on each job, a cheap local check rates your résumé against the posting
-          (IDF-weighted keyword coverage — what share of the job&apos;s meaningful terms your résumé covers). Jobs below the
-          threshold are marked <span className="text-amber-400">Filtered</span> and skipped, saving tokens. Turn it off to score
-          every job.
+          Before spending an LLM call on each job, a local <span className="text-slate-text">ATS-style match</span> rates your
+          résumé against the posting the way an applicant tracking system would — skills the job asks for (must-haves and
+          title mentions weigh more), job-title alignment, and remaining keyword coverage, with penalties for
+          years-of-experience gaps and clearance-restricted roles. Jobs below the threshold are marked{' '}
+          <span className="text-amber-400">Filtered</span> and skipped, saving tokens. Turn it off to score every job.
         </p>
         <div className="flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3 mb-4">
           <button
@@ -409,8 +410,9 @@ export default function SettingsPage() {
           </div>
         </div>
         <p className="text-slate-muted text-[11px] mt-3">
-          The match % is computed when jobs are fetched and shown on each job, so you can tune the threshold against real numbers.
-          Filtered jobs stay visible under the <span className="text-amber-400">Filtered</span> tab on the Jobs page.
+          The match % is computed when jobs are fetched and shown on each job, so you can tune the threshold against real
+          numbers — “Recompute ATS match” on the Jobs tab refreshes it after résumé or skills edits. Filtered jobs stay
+          visible under the <span className="text-amber-400">Filtered</span> tab on the Jobs page.
         </p>
       </Section>
 

@@ -9,8 +9,8 @@ import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
-import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getScoringResumeText } from '@/lib/db';
-import { prefilterScores } from '@/lib/prefilter';
+import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getScoringResumeText, getSettings } from '@/lib/db';
+import { atsMatchScores } from '@/lib/prefilter';
 import { triggerScoreBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
@@ -62,20 +62,23 @@ export async function POST(req: Request) {
       .map((it) => mapDatasetItemToJob(it, source))
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
-    // Cheap, local résumé↔job match score (ADR 0008), computed once over this
-    // batch. Stored on every row (even when the filter is off) for transparency;
-    // /api/score-batch uses it to gate the LLM. Keyed by url since rows are new.
+    // Cheap, local ATS-style résumé↔job match score (ADR 0053), computed once over
+    // this batch. Stored on every row (even when the filter is off) — it's the
+    // user's first filter; /api/score-batch also uses it to gate the LLM. Keyed by
+    // url since rows are new.
     const resume = await getScoringResumeText().catch(() => '');
-    const scores = prefilterScores(
-      resume,
-      mapped.map((r) => ({ id: r.url, text: `${r.title ?? ''}\n${r.full_description ?? ''}` })),
+    const skills = await getSettings().then((s) => s.skills ?? []).catch(() => [] as string[]);
+    const scores = atsMatchScores(
+      { text: resume, skills },
+      mapped.map((r) => ({ id: r.url, title: r.title ?? '', text: r.full_description ?? '' })),
     );
 
     const rows = mapped.map((r) => ({
       ...r,
       status: 'unscored' as const,
       run_id: internalRunId,
-      prefilter_score: scores.get(r.url) ?? null,
+      prefilter_score: scores.get(r.url)?.score ?? null,
+      prefilter_breakdown: scores.get(r.url)?.breakdown ?? null,
     }));
 
     let inserted = 0;
