@@ -531,45 +531,68 @@ export default function ApplicationsPage() {
     setTimeout(() => setMsg(null), 7000);
   }
 
-  // Download the generated PDF with a proper filename (ADR 0030). The signed URL sets
-  // Content-Disposition: attachment; an <a download> click downloads it directly
-  // instead of opening a blank preview tab.
-  async function downloadPdf(id: string) {
+  // Trigger a browser download for a signed storage URL. The URL is CROSS-ORIGIN
+  // (Supabase Storage), for which browsers IGNORE the <a download> attribute and treat
+  // the click as a top-level navigation — so firing two at once (résumé + cover letter)
+  // makes the navigations race and cancel each other, landing only one file (ADR 0061
+  // bug). Fetching the bytes into a same-origin blob URL sidesteps this: blob downloads
+  // aren't navigations, so any number run concurrently and the filename is honoured.
+  async function triggerDownload(url: string, filename?: string): Promise<void> {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename || '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke after the browser has taken the blob (immediate revoke can abort it).
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 15000);
+    } catch {
+      // Fallback (e.g. blob fetch blocked): direct navigation still downloads via the
+      // server's Content-Disposition, just can't be parallelised.
+      const a = document.createElement('a');
+      a.href = url;
+      if (filename) a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  }
+
+  // Download the generated PDF with a proper filename (ADR 0030).
+  async function downloadPdf(id: string): Promise<boolean> {
     try {
       const d = await fetch(`/api/applications/${id}/pdf`).then((r) => r.json());
       if (!d.url) {
         setMsg(d.error || 'No PDF available.');
-        return;
+        return false;
       }
-      const a = document.createElement('a');
-      a.href = d.url;
-      if (d.filename) a.download = d.filename;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      await triggerDownload(d.url, d.filename);
+      return true;
     } catch {
       setMsg('Could not download the PDF.');
+      return false;
     }
   }
 
   // Download the cover-letter PDF via a signed URL with a proper filename (ADR 0035).
-  async function downloadCoverPdf(id: string) {
+  async function downloadCoverPdf(id: string): Promise<boolean> {
     try {
       const d = await fetch(`/api/applications/${id}/cover-letter/pdf`).then((r) => r.json());
       if (!d.url) {
         setMsg(d.error || 'No cover letter available.');
-        return;
+        return false;
       }
-      const a = document.createElement('a');
-      a.href = d.url;
-      if (d.filename) a.download = d.filename;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      await triggerDownload(d.url, d.filename);
+      return true;
     } catch {
       setMsg('Could not download the cover letter.');
+      return false;
     }
   }
 
@@ -1138,9 +1161,13 @@ export default function ApplicationsPage() {
                         pendingApply.current = a;
                         // Auto-download on open (ADR 0061): grab this job's PDFs while the
                         // posting opens — works for Ctrl/Cmd-click background tabs too.
+                        // Sequential (await) so the résumé finishes before the cover letter
+                        // starts — concurrent starts intermittently dropped one (ADR 0062).
                         if (autoDownload) {
-                          if (a.pdf_path) downloadPdf(a.id);
-                          if (a.cover_letter_pdf_path) downloadCoverPdf(a.id);
+                          void (async () => {
+                            if (a.pdf_path) await downloadPdf(a.id);
+                            if (a.cover_letter_pdf_path) await downloadCoverPdf(a.id);
+                          })();
                         }
                       }}
                       title={`Open posting (will ask if you applied)${autoDownload && a.pdf_path ? ' — auto-downloads the résumé PDF' : ''}`}

@@ -206,3 +206,14 @@ refresh the VALUES and layer a design system on top. Zero logic/handler changes.
 ### Follow-ups
 - /api/jobs 500'd twice at ~8-9s on this machine (Supabase slow query) — pre-existing, worth a
   look (indexes or query shape), unrelated to the redesign.
+
+## ✅ Fixed: auto-download dropped one PDF (résumé OR cover letter) — ADR 0062
+User: auto-download-on-open was inconsistent — sometimes only résumé, sometimes only cover
+letter, sometimes both. Cause: the PDF routes return Supabase Storage SIGNED URLs (cross-origin);
+browsers ignore `<a download>` on cross-origin hrefs and treat the click as a top-level
+navigation, so firing both downloads at once made them race and cancel each other. Fix:
+`triggerDownload()` fetches the bytes into a same-origin blob URL (blob downloads don't navigate,
+so N run concurrently and the filename is honoured; falls back to direct nav on error), and the
+open handler now awaits the résumé before the cover letter. Both download fns → Promise<boolean>;
+all call sites (incl. the bulk cover-letter flow) benefit. Typecheck + build + 158 tests green.
+Client-only — no API/worker/DB change.
