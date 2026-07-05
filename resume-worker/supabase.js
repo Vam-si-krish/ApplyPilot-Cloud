@@ -42,6 +42,8 @@ export async function getQueuedApplications() {
     .from('applications')
     .select('*, job:jobs(*)')
     .eq('status', 'queued')
+    // "Set Aside" rows (ADR 0061) are deliberately out of the way — the drain skips them.
+    .eq('parked', false)
     .is('tailored_resume', null)
     .not('job_id', 'is', null)
     .order('created_at', { ascending: true });

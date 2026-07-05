@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput } from 'lucide-react';
 import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
@@ -12,7 +12,7 @@ import CompanyTierBadge from '@/components/CompanyTierBadge';
 import { useProgress } from '@/components/ProgressContext';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 
-type View = 'list' | 'base' | 'manual';
+type View = 'list' | 'parked' | 'base' | 'manual';
 
 const STATUS_STYLE: Record<ApplicationStatus, string> = {
   queued: 'bg-raised border-ink text-slate-muted',
@@ -50,6 +50,20 @@ export default function ApplicationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ApplicationStatus>('all');
   const [hideApplied, setHideApplied] = useState(true);
+
+  // Auto-download on open (ADR 0061): when on, opening a posting from a row also
+  // downloads that job's tailored résumé PDF (+ cover letter) in the background.
+  // Persisted per-browser, like the Jobs tab's collapsed-filters preference.
+  const [autoDownload, setAutoDownload] = useState(false);
+  useEffect(() => {
+    setAutoDownload(localStorage.getItem('taAutoDownload') === '1');
+  }, []);
+  function toggleAutoDownload() {
+    setAutoDownload((v) => {
+      localStorage.setItem('taAutoDownload', v ? '0' : '1');
+      return !v;
+    });
+  }
 
   // Local editable draft of the expanded application's tailored résumé.
   const [draft, setDraft] = useState<ResumeDoc | null>(null);
@@ -143,10 +157,10 @@ export default function ApplicationsPage() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
-  // Clear the selection whenever the filters change (the visible rows change).
+  // Clear the selection whenever the filters or the tab change (the visible rows change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, statusFilter, hideApplied]);
+  }, [search, statusFilter, hideApplied, view]);
 
   function toggleExpand(a: ApplicationWithJob) {
     if (expanded === a.id) {
@@ -197,6 +211,34 @@ export default function ApplicationsPage() {
     } finally {
       setBulkBusy(false);
       setTimeout(() => setMsg(null), 4000);
+    }
+  }
+
+  // Park/unpark the selected rows (ADR 0061): parked rows live in the Set Aside tab —
+  // out of the working Queue and skipped by the overnight drain — with all state kept.
+  async function setParkedSelected(parked: boolean) {
+    const ids = [...selected];
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/applications/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parked }),
+          }),
+        ),
+      );
+      if (expanded && ids.includes(expanded)) setExpanded(null);
+      setSelected(new Set());
+      setMsg(parked ? `Set aside ${ids.length} — find them under the Set Aside tab.` : `Moved ${ids.length} back to the Queue.`);
+      load(true);
+    } catch {
+      setMsg('Could not move the selected applications.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setMsg(null), 5000);
     }
   }
 
@@ -311,8 +353,12 @@ export default function ApplicationsPage() {
   }
   // Visible (filtered) applications — the list, select-all, and bulk actions all
   // operate on this set, not the full one. Mirrors the Jobs tab's filtering.
+  // Queue shows unparked rows; Set Aside shows parked ones (ADR 0061).
+  const inParked = view === 'parked';
+  const parkedCount = apps.filter((a) => a.parked).length;
   const q = search.trim().toLowerCase();
   const filtered = apps.filter((a) => {
+    if (!!a.parked !== inParked) return false;
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     if (hideApplied && statusFilter !== 'applied' && a.status === 'applied') return false;
     if (q) {
@@ -331,8 +377,9 @@ export default function ApplicationsPage() {
     const a = apps.find((x) => x.id === id);
     return a?.job && !a.tailored_resume;
   }).length;
-  // Applications waiting to be tailored — what the overnight drain (and "Run queue now") acts on.
-  const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.tailored_resume).length;
+  // Applications waiting to be tailored — what the overnight drain (and "Run queue now")
+  // acts on. Set-aside rows are deliberately excluded (the drain skips them too).
+  const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.tailored_resume && !a.parked).length;
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(selectableIds));
   }
@@ -646,17 +693,22 @@ export default function ApplicationsPage() {
       <div className="flex gap-1 mb-5 border-b border-ink">
         {([
           { id: 'list' as View, label: 'Queue' },
+          { id: 'parked' as View, label: 'Set Aside' },
           { id: 'manual' as View, label: 'Quick Generate' },
           { id: 'base' as View, label: 'Base résumé' },
         ]).map((t) => (
           <button
             key={t.id}
             onClick={() => setView(t.id)}
+            title={t.id === 'parked' ? 'Applications you moved out of the way (e.g. Easy Apply, or ones you couldn’t finish) — everything is kept; move them back anytime' : undefined}
             className={`relative px-4 py-2 text-[13px] font-medium -mb-px transition-all ${
               view === t.id ? 'text-sky' : 'text-slate-muted hover:text-slate-text'
             }`}
           >
             {t.label}
+            {t.id === 'parked' && parkedCount > 0 && (
+              <span className="ml-1.5 rounded-md bg-sky/15 px-1.5 py-px font-mono text-[10px] text-sky">{parkedCount}</span>
+            )}
             {view === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-sky to-iris" />}
           </button>
         ))}
@@ -805,19 +857,55 @@ export default function ApplicationsPage() {
               />
               Hide applied
             </label>
+            {/* Auto-download on open (ADR 0061) */}
+            <label
+              title="When you open a posting from a row here, its tailored résumé PDF (and cover letter, if generated) download automatically. Tip: Ctrl/Cmd-click the open-link on several rows to open them all in background tabs — each job's PDFs download as you go."
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
+                autoDownload ? 'bg-emerald/10 text-emerald border-emerald/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={autoDownload}
+                onChange={toggleAutoDownload}
+                className="w-3.5 h-3.5 rounded accent-sky"
+              />
+              <Download size={12} /> Auto-download on open
+            </label>
           </div>
+          {autoDownload && (
+            <p className="text-[11px] text-slate-muted animate-fade-in">
+              Opening a posting now also downloads its résumé (+ cover letter) PDF.{' '}
+              <span className="text-slate-text">Tip:</span> Ctrl/Cmd-click the{' '}
+              <ExternalLink size={10} className="inline -mt-0.5" /> link on several rows to open them all in background
+              tabs — the PDFs download as you go. If the browser asks, allow “multiple downloads”.
+            </p>
+          )}
         </div>
 
         {filtered.length === 0 ? (
           <div className="card px-6 py-12 text-center">
-            <FileText size={20} className="mx-auto text-slate-dim mb-2" />
-            <p className="text-[13px] text-slate-text mb-1">No applications match these filters.</p>
-            <button
-              onClick={() => { setSearch(''); setStatusFilter('all'); setHideApplied(false); }}
-              className="text-[12px] text-sky hover:underline"
-            >
-              Clear filters
-            </button>
+            {inParked ? <FolderInput size={20} className="mx-auto text-slate-dim mb-2" /> : <FileText size={20} className="mx-auto text-slate-dim mb-2" />}
+            {inParked && parkedCount === 0 ? (
+              <>
+                <p className="text-[13px] text-slate-text mb-1">Nothing set aside yet.</p>
+                <p className="text-[12px] text-slate-muted max-w-md mx-auto">
+                  Use the <FolderInput size={11} className="inline -mt-0.5" /> button on a Queue row (or select several and
+                  hit <span className="text-slate-text">Set aside</span>) to park applications here — e.g. Easy Apply ones,
+                  or ones you couldn&apos;t finish — without losing their résumé or PDF.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-slate-text mb-1">No applications match these filters.</p>
+                <button
+                  onClick={() => { setSearch(''); setStatusFilter('all'); setHideApplied(false); }}
+                  className="text-[12px] text-sky hover:underline"
+                >
+                  Clear filters
+                </button>
+              </>
+            )}
           </div>
         ) : (
         <>
@@ -866,6 +954,20 @@ export default function ApplicationsPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
           >
             <Gauge size={13} /> ATS check selected
+          </button>
+          <button
+            onClick={() => setParkedSelected(!inParked)}
+            disabled={bulkBusy || selected.size === 0}
+            title={
+              inParked
+                ? 'Move the selected applications back to the working Queue'
+                : 'Move the selected applications to the Set Aside tab (e.g. Easy Apply, or ones you couldn’t finish) — everything is kept, they just stop taking up space here'
+            }
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+          >
+            {inParked ? <FolderOutput size={13} /> : <FolderInput size={13} />}
+            {inParked ? 'Move to Queue' : 'Set aside'}
+            {selected.size > 0 ? ` (${selected.size})` : ''}
           </button>
           <button
             onClick={deleteSelected}
@@ -1019,8 +1121,31 @@ export default function ApplicationsPage() {
                   >
                     <CheckCircle2 size={15} />
                   </button>
+                  {/* Set Aside / bring back (ADR 0061) — everything is kept, just out of the way. */}
+                  <button
+                    onClick={() => patch(a.id, { parked: !a.parked })}
+                    title={a.parked ? 'Move back to the Queue tab' : 'Set aside — move to the Set Aside tab (keeps the résumé/PDF/status; just out of the way)'}
+                    className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors shrink-0"
+                  >
+                    {a.parked ? <FolderOutput size={15} /> : <FolderInput size={15} />}
+                  </button>
                   {job && (
-                    <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" onClick={() => { pendingApply.current = a; }} title="Open posting (will ask if you applied)" className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors shrink-0">
+                    <a
+                      href={job.application_url || job.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        pendingApply.current = a;
+                        // Auto-download on open (ADR 0061): grab this job's PDFs while the
+                        // posting opens — works for Ctrl/Cmd-click background tabs too.
+                        if (autoDownload) {
+                          if (a.pdf_path) downloadPdf(a.id);
+                          if (a.cover_letter_pdf_path) downloadCoverPdf(a.id);
+                        }
+                      }}
+                      title={`Open posting (will ask if you applied)${autoDownload && a.pdf_path ? ' — auto-downloads the résumé PDF' : ''}`}
+                      className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors shrink-0"
+                    >
                       <ExternalLink size={15} />
                     </a>
                   )}

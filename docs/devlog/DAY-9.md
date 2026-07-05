@@ -32,3 +32,18 @@ copy is not production). App-side changes ship with the next Netlify deploy.
   them up — the drain now stops cleanly if the window is still dead).
 - /api/jobs threw two ~8-9s 500s during yesterday's visual pass (slow Supabase query) —
   pre-existing, worth an index/query look.
+
+## ✅ Set Aside tab + auto-download on open (ADR 0061)
+User request: a place inside Tailor & Apply to park rows (Easy Apply for later, unfinished
+applications) so the Queue stays a working set — plus one-click applying: opening a posting
+should hand you its PDFs without hunting for download buttons.
+- `applications.parked` (migration 0039, applied live). New **Set Aside** tab with a count
+  badge; per-row folder buttons + bulk "Set aside" / "Move to Queue". Parked rows keep all
+  state and are excluded from the overnight drain + "Run queue now" count (worker
+  `getQueuedApplications` filters `parked=false` — needs the Worker Mac redeploy, benign
+  until then).
+- **Auto-download on open** toggle (localStorage): clicking a row's open-link also downloads
+  that job's résumé PDF (+ cover letter). Hint line teaches the trick: Ctrl/Cmd-click several
+  rows' links → background tabs + PDFs download as you go (allow "multiple downloads" once).
+- Verified end-to-end with puppeteer: parked a row, saw it in the tab (badge=1, queue count
+  4→3), moved it back (DB parked=0). Tests 158 green; typecheck + build green.

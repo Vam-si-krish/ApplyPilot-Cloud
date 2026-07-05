@@ -420,6 +420,9 @@ export interface Application {
   cover_letter_pdf_path: string | null;
   cover_letter_error: string | null;
   error: string | null;
+  /** "Set Aside" tab (ADR 0061): true = parked out of the working Queue (keeps all
+   *  state; skipped by the overnight drain until moved back). */
+  parked: boolean;
   created_at: string;
   updated_at: string;
   applied_at: string | null;
