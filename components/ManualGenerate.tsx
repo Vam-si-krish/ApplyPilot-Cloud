@@ -111,7 +111,7 @@ export default function ManualGenerate() {
       )}
       {note && <div className="px-3 py-2 text-[12px] text-sky bg-sky/10 border border-sky/20 rounded-lg">{note}</div>}
 
-      <div className="bg-card border border-ink rounded-xl p-5 space-y-3">
+      <div className="card p-5 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Job title (optional)</p>
@@ -119,7 +119,7 @@ export default function ManualGenerate() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Senior Frontend Engineer"
-              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted/60"
+              className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted/60"
             />
           </div>
           <div>
@@ -128,7 +128,7 @@ export default function ManualGenerate() {
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="Acme Inc."
-              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted/60"
+              className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted/60"
             />
           </div>
         </div>
@@ -145,7 +145,7 @@ export default function ManualGenerate() {
             onChange={(e) => setJd(e.target.value)}
             rows={12}
             placeholder="Paste the full job description here…"
-            className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2.5 rounded-lg text-[12px] text-slate-text resize-y"
+            className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2.5 rounded-lg text-[12px] text-slate-text resize-y"
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -171,7 +171,7 @@ export default function ManualGenerate() {
             <select
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
-              className="px-2.5 py-2 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+              className="px-2.5 py-2 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/50"
             >
               <option value="classic">Classic</option>
               <option value="modern">Modern</option>

@@ -85,7 +85,7 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
       : `Done — scored ${st.done} job${st.done === 1 ? '' : 's'}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`;
 
   return (
-    <div className="bg-card border border-ink rounded-xl px-5 py-4 mb-5 animate-fade-in">
+    <div className="card mb-5 px-5 py-4 animate-fade-in">
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           {running ? (
@@ -96,19 +96,17 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
           <span className="text-[13px] text-slate-text font-medium truncate">{line}</span>
         </div>
         {running && (
-          <button
-            onClick={stop}
-            disabled={busy || stopping}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-lg transition-all shrink-0"
-          >
+          <button onClick={stop} disabled={busy || stopping} className="btn-danger shrink-0 px-3 py-1.5 text-[12px]">
             <Square size={12} /> {stopping ? 'Stopping…' : 'Stop'}
           </button>
         )}
       </div>
       {(running || flashDone) && (
-        <div className="h-1.5 w-full bg-raised rounded-full overflow-hidden">
+        <div className="h-1.5 w-full bg-ink-subtle rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-300 ${flashDone ? 'bg-emerald' : stopping ? 'bg-amber' : 'bg-sky'} ${pct === null ? 'animate-pulse w-1/3' : ''}`}
+            className={`h-full rounded-full transition-all duration-300 ${
+              flashDone ? 'bg-emerald' : stopping ? 'bg-amber' : 'bg-gradient-to-r from-sky to-iris'
+            } ${pct === null ? 'animate-pulse w-1/3' : ''}`}
             style={pct === null ? undefined : { width: `${flashDone ? 100 : pct}%` }}
           />
         </div>

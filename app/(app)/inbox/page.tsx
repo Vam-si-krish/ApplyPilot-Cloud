@@ -123,13 +123,16 @@ export default function InboxPage() {
   const src = data?.applySources ?? { easy_apply: 0, company_portal: 0, unknown: 0 };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight flex items-center gap-2">
-            <Mail size={20} className="text-sky" /> Inbox
+          <h1 className="page-title text-2xl flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky/25 bg-sky/10">
+              <Mail size={16} className="text-sky" />
+            </span>
+            Inbox
           </h1>
-          <p className="text-slate-muted text-[13px] mt-1">
+          <p className="page-sub">
             {data?.connected ? (
               <>AI-sorted job mail{data.email ? ` · ${data.email}` : ''}{data.last_synced_at ? ` · synced ${new Date(data.last_synced_at).toLocaleTimeString()}` : ''}{data.pending > 0 ? ` · ${data.pending} awaiting AI` : ''}</>
             ) : (
@@ -140,11 +143,7 @@ export default function InboxPage() {
         <div className="flex items-center gap-3">
           {msg && <span className="text-[12px] text-slate-muted animate-fade-in">{msg}</span>}
           {data?.connected && (
-            <button
-              onClick={syncNow}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
-            >
+            <button onClick={syncNow} disabled={syncing} className="btn-primary px-3.5 py-2 text-[13px]">
               <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Syncing…' : 'Sync now'}
             </button>
           )}
@@ -155,13 +154,13 @@ export default function InboxPage() {
       {progress && <SyncProgressPanel progress={progress} />}
 
       {data && !data.connected ? (
-        <div className="bg-card border border-ink rounded-xl px-6 py-12 text-center">
-          <div className="w-12 h-12 rounded-xl bg-sky/10 border border-sky/20 flex items-center justify-center mx-auto mb-4">
-            <Mail size={22} className="text-sky" />
+        <div className="card px-6 py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky/20 to-iris/15 border border-sky/25 flex items-center justify-center mx-auto mb-4 shadow-glow-sky">
+            <Mail size={24} className="text-sky" />
           </div>
-          <p className="text-slate-text text-[14px] font-medium mb-1">Connect your Gmail</p>
+          <p className="text-slate-text text-[15px] font-display font-semibold mb-1">Connect your Gmail</p>
           <p className="text-slate-muted text-[12px] mb-5">Auto-sort applications, interviews, assessments, and rejections — with a daily count.</p>
-          <Link href="/settings" className="inline-flex px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all">
+          <Link href="/settings" className="btn-primary">
             Go to Settings → Gmail
           </Link>
         </div>
@@ -177,7 +176,7 @@ export default function InboxPage() {
 
           {/* How you applied: LinkedIn Easy Apply vs company / ATS portal (ADR 0021) */}
           {(totals.applied ?? 0) > 0 && (
-            <div className="flex flex-wrap items-center gap-4 mb-6 bg-card border border-ink rounded-xl px-4 py-3">
+            <div className="flex flex-wrap items-center gap-4 mb-6 card px-4 py-3">
               <span className="text-[12px] text-slate-muted uppercase tracking-wider font-medium">Applied via</span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-sky" />
@@ -195,7 +194,7 @@ export default function InboxPage() {
 
           {/* Daily history */}
           {data && data.daily.length > 0 && (
-            <div className="bg-card border border-ink rounded-xl p-5 mb-6 overflow-x-auto">
+            <div className="card p-5 mb-6 overflow-x-auto">
               <h2 className="font-display text-[12px] font-semibold text-slate-muted uppercase tracking-wider mb-3">Daily history</h2>
               <table className="w-full text-[12px]">
                 <thead>
@@ -225,7 +224,7 @@ export default function InboxPage() {
           )}
 
           {/* Message list */}
-          <div className="bg-card border border-ink rounded-xl overflow-hidden">
+          <div className="card overflow-hidden">
             {!data ? (
               <div className="px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
             ) : data.messages.length === 0 ? (
@@ -237,12 +236,12 @@ export default function InboxPage() {
                 {data.messages.map((m) => {
                   const meta = m.category ? META[m.category] : PENDING_META;
                   return (
-                  <div key={m.id} className="flex items-start gap-3 px-5 py-3 hover:bg-raised transition-colors">
-                    <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${meta.cls}`}>{meta.label}</span>
+                  <div key={m.id} className="flex items-start gap-3 px-5 py-3 hover:bg-raised/60 transition-colors">
+                    <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-md border ${meta.cls}`}>{meta.label}</span>
                     {m.category === 'applied' && m.apply_source && (
                       <span
                         title={m.apply_source === 'easy_apply' ? 'Applied via LinkedIn Easy Apply' : 'Applied on the company / ATS portal'}
-                        className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-medium rounded border ${
+                        className={`shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-medium rounded-md border ${
                           m.apply_source === 'easy_apply' ? 'bg-sky/10 border-sky/25 text-sky' : 'bg-emerald/10 border-emerald/25 text-emerald'
                         }`}
                       >
@@ -290,14 +289,14 @@ function SyncProgressPanel({ progress }: { progress: SyncProgress }) {
       ? 'All caught up — no new mail.'
       : `Done — ${progress.total} email${progress.total === 1 ? '' : 's'} classified.`;
   return (
-    <div className="bg-card border border-ink rounded-xl px-5 py-4 mb-5 animate-fade-in">
+    <div className="card px-5 py-4 mb-5 animate-fade-in">
       <div className="flex items-center gap-2 mb-2">
         <RefreshCw size={13} className={progress.phase === 'done' ? 'text-emerald' : 'text-sky animate-spin'} />
         <span className="text-[13px] text-slate-text font-medium">{line}</span>
       </div>
-      <div className="h-1.5 w-full bg-raised rounded-full overflow-hidden">
+      <div className="h-1.5 w-full bg-ink-subtle rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-300 ${progress.phase === 'done' ? 'bg-emerald' : 'bg-sky'} ${pct === null ? 'animate-pulse w-1/3' : ''}`}
+          className={`h-full rounded-full transition-all duration-300 ${progress.phase === 'done' ? 'bg-emerald' : 'bg-gradient-to-r from-sky to-iris'} ${pct === null ? 'animate-pulse w-1/3' : ''}`}
           style={pct === null ? undefined : { width: `${pct}%` }}
         />
       </div>
@@ -309,7 +308,7 @@ function Chip({ active, onClick, label, count, cls }: { active: boolean; onClick
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border transition-all ${
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border transition-all ${
         active ? cls : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
       }`}
     >

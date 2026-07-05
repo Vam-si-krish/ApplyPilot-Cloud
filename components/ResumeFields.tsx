@@ -27,7 +27,7 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
   }
 
   return (
-    <div className="rounded-xl border border-ink bg-card text-[#e2e8f0] overflow-hidden">
+    <div className="card overflow-hidden text-[#e2e8f0]">
       {/* The "paper" (dark on-screen; the downloaded PDF stays light). Serif type + generous
           spacing evoke the printed résumé. */}
       <div className="mx-auto max-w-[820px] px-6 sm:px-10 py-8 font-serif">

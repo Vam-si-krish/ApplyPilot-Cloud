@@ -7,7 +7,7 @@ import type { Job } from '@/lib/types';
 /** Expanded detail panel for a job row — shared so Jobs and Past Jobs render identically. */
 export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: string, body: Record<string, unknown>) => void }) {
   return (
-    <div className="px-14 pb-5 pt-1 space-y-3 bg-base/40">
+    <div className="mx-4 sm:mx-6 mb-4 mt-1 space-y-3.5 rounded-xl border border-ink-subtle bg-base/60 px-5 py-4 animate-fade-in">
       {job.status === 'filtered' && (
         <div className="text-[12px] text-amber-400">
           Pre-filtered — {job.prefilter_score}% ATS match (below your threshold), so it skipped LLM scoring.
@@ -16,7 +16,7 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
       {/* ATS-style match breakdown (ADR 0053) — the local first-filter, not the AI fit score. */}
       {job.prefilter_score != null && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">
             ATS match · {job.prefilter_score}% (local, no AI)
           </p>
           {job.prefilter_breakdown ? (
@@ -59,7 +59,7 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           openable so the user applies to the location they actually want. */}
       {(job.siblings?.length ?? 0) > 0 && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">
             Also posted in {job.siblings!.length} other location{job.siblings!.length === 1 ? '' : 's'} · scored once
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -85,7 +85,7 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
       )}
       {job.company_tier && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Company rated by AI</p>
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Company rated by AI</p>
           <p className="text-slate-text text-[12px] leading-relaxed">
             <span className="mr-2 align-middle">
               <CompanyTierBadge tier={job.company_tier} />
@@ -106,7 +106,7 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
       )}
       {job.skill_match_score != null && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">
             Skill match · {job.skill_match_score}% of your skills
           </p>
           <p className="text-[12px] leading-relaxed">
@@ -126,7 +126,7 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           with the old maxes so historical rows stay accurate until re-scored. */}
       {job.score_breakdown && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1.5">
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1.5">
             Fit breakdown{job.employment_type === 'contract' ? ' · contract role' : ''}
             {job.score_breakdown.seniority ? ` · ${job.score_breakdown.seniority.replace(/_/g, ' ')}` : ''}
           </p>
@@ -154,19 +154,19 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
       )}
       {job.score_keywords && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Matched keywords (AI)</p>
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Matched keywords (AI)</p>
           <p className="text-sky text-[12px] font-mono">{job.score_keywords}</p>
         </div>
       )}
       {job.score_reasoning && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Reasoning</p>
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Reasoning</p>
           <p className="text-slate-text text-[12px] leading-relaxed">{job.score_reasoning}</p>
         </div>
       )}
       {job.full_description && (
         <div>
-          <p className="text-slate-muted text-[10px] uppercase tracking-wider mb-1">Description</p>
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Description</p>
           <div className="text-slate-muted text-[12px] leading-relaxed job-description-html" dangerouslySetInnerHTML={{ __html: job.full_description }} />
         </div>
       )}

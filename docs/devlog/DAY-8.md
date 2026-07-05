@@ -178,3 +178,31 @@ outside saved metros) so locations were left alone; "Remote, US" was an ungeocod
   caps × free-tier price × 1.3, floor $0.75 (user's 800-cap LinkedIn run ≈ $0.73 worst case).
   Settings → API Keys shows "⏸ low credit · resets <date>". Migration 0038 applied live.
 - Tests 158 green; typecheck + build green. App-side only.
+
+## ✅ UI redesign v2 — "aurora console" (all tabs)
+User asked for a tab-by-tab reimagining: "make the UI look beautiful… as stunning as possible
+in every page," without breaking features. Approach: keep every Tailwind token NAME from the
+Lite port (`void/card/raised/ink/sky/slate-*`) so all ~7.8k lines of pages kept compiling, but
+refresh the VALUES and layer a design system on top. Zero logic/handler changes.
+- Foundation: Space Grotesk / Inter / JetBrains Mono (was Syne/Outfit/Fira Code); richer
+  blue-violet surfaces + new `iris` (#8b93ff) secondary accent for sky→iris gradients; brighter
+  `slate-muted` (#8e97b8) for readability; fixed-position ambient "aurora" glows on `body::before`;
+  layered `shadow-card`/`shadow-pop`; reusable classes in globals.css (`.card .btn-primary
+  .btn-ghost .btn-danger .input .label .chip .page-title .page-sub .text-gradient`).
+- AppShell: nav grouped (Pipeline / Follow-up / Setup) with gradient active-indicator bars; the
+  raw stats list became a Pipeline mini-card with a scored/total progress bar.
+- Pages: login (centered hero + aurora), dashboard (accent stat cards — runtime `text-${color}`
+  replaced with a static ACCENTS map so Tailwind actually sees the classes; status-pill Last run;
+  gradient distribution bars), jobs + past (segmented status tabs, highlighted selection toolbar,
+  skeleton loading rows, icon-buttons with hover tints, JobDetails as an inset panel), T&A
+  (gradient tab underline, same row/panel treatment), inbox/tracker/assistant/profile/settings
+  (Section headers with gradient ticks + sticky Save bar on settings; chat bubbles with
+  asymmetric corners on assistant).
+- Verified: typecheck, 158 tests, production build all green; puppeteer (via resume-worker's
+  copy) screenshotted every tab live — all render correctly. Jobs showed its (styled) empty
+  state because /api/jobs hit a slow-query 500 + the default filter view genuinely matched 0
+  rows mid-fetch; row rendering proven on Past Jobs (1,471 rows, same components).
+
+### Follow-ups
+- /api/jobs 500'd twice at ~8-9s on this machine (Supabase slow query) — pre-existing, worth a
+  look (indexes or query shape), unrelated to the redesign.

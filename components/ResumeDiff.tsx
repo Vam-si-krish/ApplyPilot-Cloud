@@ -18,7 +18,7 @@ import type { ResumeDoc, ResumeWork, ResumeSkill, ResumeProject } from '@/lib/ty
 export default function ResumeDiff({ base, tailored }: { base: ResumeDoc | null; tailored: ResumeDoc }) {
   const b = base;
   return (
-    <div className="rounded-xl border border-ink bg-card text-[#e2e8f0] overflow-hidden">
+    <div className="card overflow-hidden text-[#e2e8f0]">
       <div className="mx-auto max-w-[820px] px-6 sm:px-10 py-8 font-serif">
         {/* Legend */}
         <div className="flex items-center justify-center gap-4 mb-4 text-[11px] font-sans">

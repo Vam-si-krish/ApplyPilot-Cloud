@@ -54,7 +54,7 @@ export default function BaseResumeEditor() {
   }
 
   if (!loaded) {
-    return <div className="h-40 bg-card border border-ink rounded-xl animate-pulse" />;
+    return <div className="h-40 card animate-pulse" />;
   }
 
   const isEmpty = !doc || (!d.basics.name && d.work.length === 0 && d.skills.length === 0);
@@ -76,7 +76,7 @@ export default function BaseResumeEditor() {
       )}
 
       {isEmpty && (
-        <div className="bg-card border border-ink rounded-xl px-6 py-10 text-center">
+        <div className="card px-6 py-10 text-center">
           <p className="text-[13px] text-slate-text mb-1">No base résumé yet</p>
           <p className="text-[12px] text-slate-muted max-w-md mx-auto">
             Fill in your details below and <span className="text-sky">Save</span> — this becomes the résumé used everywhere
@@ -91,7 +91,7 @@ export default function BaseResumeEditor() {
         <button
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
+          className="btn-primary px-5 py-2.5"
         >
           <Save size={14} /> {saving ? 'Saving…' : 'Save base résumé'}
         </button>

@@ -154,14 +154,14 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up max-w-3xl">
+    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Settings</h1>
-          <p className="text-slate-muted text-[13px] mt-0.5">Schedule, search criteria, and providers</p>
+          <h1 className="page-title text-2xl">Settings</h1>
+          <p className="page-sub">Schedule, search criteria, and providers</p>
         </div>
         {saved && (
-          <div className="flex items-center gap-1.5 text-[13px] text-emerald animate-fade-in">
+          <div className="flex items-center gap-1.5 rounded-lg border border-emerald/25 bg-emerald/10 px-3 py-1.5 text-[13px] text-emerald animate-fade-in">
             <CheckCircle size={14} /> Saved
           </div>
         )}
@@ -176,7 +176,7 @@ export default function SettingsPage() {
             <select
               value={s.timezone || 'America/New_York'}
               onChange={(e) => patch({ timezone: e.target.value })}
-              className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+              className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text"
             >
               {TIMEZONE_OPTIONS.map((tz) => (
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
@@ -194,7 +194,7 @@ export default function SettingsPage() {
             id="auto_scrape_enabled"
             checked={s.auto_scrape_enabled ?? true}
             onChange={(e) => patch({ auto_scrape_enabled: e.target.checked })}
-            className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+            className="w-4 h-4 rounded accent-sky"
           />
           <label htmlFor="auto_scrape_enabled" className="text-[13px] text-slate-text">Enable automated daily runs</label>
         </div>
@@ -210,7 +210,7 @@ export default function SettingsPage() {
               id="auto_tailor_enabled"
               checked={s.auto_tailor_enabled ?? false}
               onChange={(e) => patch({ auto_tailor_enabled: e.target.checked })}
-              className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+              className="w-4 h-4 rounded accent-sky"
             />
             <label htmlFor="auto_tailor_enabled" className="text-[13px] text-slate-text">
               Auto-tailor the Tailor &amp; Apply queue overnight
@@ -301,7 +301,7 @@ export default function SettingsPage() {
                 max={100}
                 value={s.min_skill_match ?? 0}
                 onChange={(e) => patch({ min_skill_match: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
-                className="w-20 bg-card border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text font-mono"
+                className="w-20 bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-1.5 rounded-lg text-[13px] text-slate-text font-mono"
               />
             </div>
             <div>
@@ -331,7 +331,7 @@ export default function SettingsPage() {
           <select
             value={s.fetch_mode ?? 'url'}
             onChange={(e) => patch({ fetch_mode: e.target.value as 'url' | 'keyword' })}
-            className="w-full sm:w-auto bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+            className="w-full sm:w-auto bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text"
           >
             <option value="url">Precise — search exactly your role × location combos</option>
             <option value="keyword">Broad — let the scraper expand your keywords × locations</option>
@@ -518,7 +518,7 @@ export default function SettingsPage() {
                       : portals.filter((p) => p !== key);
                     patch({ job_portals: next.length ? next : ['linkedin'] });
                   }}
-                  className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+                  className="w-4 h-4 rounded accent-sky"
                 />
                 <span className="text-[13px] text-slate-text font-medium w-24">{label}</span>
                 <span className="text-[11px] text-slate-muted font-mono">{actor}</span>
@@ -536,7 +536,7 @@ export default function SettingsPage() {
                 <select
                   value={ACTORS.find((a) => a.id === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
                   onChange={(e) => { if (e.target.value !== 'custom') patch({ apify_actor_id: e.target.value }); }}
-                  className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text"
+                  className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text"
                 >
                   {ACTORS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
                   <option value="custom">Custom...</option>
@@ -567,7 +567,7 @@ export default function SettingsPage() {
                           ? [...levels, value]
                           : levels.filter((l) => l !== value),
                       })}
-                      className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+                      className="w-4 h-4 rounded accent-sky"
                     />
                     <span className="text-[12px] text-slate-text">{label}</span>
                   </label>
@@ -640,7 +640,14 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <SaveBtn onClick={save} loading={saving} />
+      <div className="sticky bottom-0 -mx-2 flex items-center gap-3 bg-void/85 px-2 py-3 backdrop-blur">
+        <SaveBtn onClick={save} loading={saving} />
+        {saved && (
+          <span className="flex items-center gap-1.5 text-[13px] text-emerald animate-fade-in">
+            <CheckCircle size={14} /> Saved
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -773,7 +780,7 @@ function ProviderKeys({
         </p>
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[12px] text-sky border border-sky/30 bg-sky/10 hover:bg-sky/20 rounded-lg transition-all"
         >
           <Plus size={13} /> Add {meta.label} key
         </button>
@@ -881,7 +888,7 @@ function AddKeyModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-card border border-ink rounded-xl p-5 shadow-2xl animate-slide-up"
+        className="w-full max-w-lg card shadow-pop p-5 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -906,7 +913,7 @@ function AddKeyModal({
                 value={r.label}
                 onChange={(e) => update(i, 'label', e.target.value)}
                 placeholder="Label"
-                className="w-32 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
+                className="w-32 bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
               />
               <input
                 value={r.value}
@@ -916,7 +923,7 @@ function AddKeyModal({
                 type="password"
                 autoComplete="off"
                 autoFocus={i === 0}
-                className="flex-1 min-w-0 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
+                className="flex-1 min-w-0 bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
               />
               <button
                 onClick={() => removeRow(i)}
@@ -1070,7 +1077,7 @@ function GmailSection() {
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}
                 placeholder={status?.has_client_secret ? '•••• saved — paste to replace' : 'GOCSPX-…'}
-                className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
+                className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted font-mono"
               />
             </div>
           </div>
@@ -1078,7 +1085,7 @@ function GmailSection() {
             <button
               onClick={saveCreds}
               disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 disabled:opacity-40 rounded-lg transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/10 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
             >
               <Save size={13} /> Save credentials
             </button>
@@ -1135,9 +1142,9 @@ function SkillsEditor({ skills, onChange }: { skills: string[]; onChange: (v: st
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add(input)}
           placeholder="Add a skill (e.g. React)…"
-          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
+          className="flex-1 bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
         />
-        <button onClick={() => add(input)} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all">
+        <button onClick={() => add(input)} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/10 hover:bg-sky/20 rounded-lg transition-all">
           Add
         </button>
       </div>
@@ -1189,7 +1196,7 @@ function TaskModel({
       <select
         value={provider}
         onChange={(e) => onProvider(e.target.value)}
-        className="w-full bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text mb-3"
+        className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text mb-3"
       >
         {PROVIDERS.map((p) => (
           <option key={p.id} value={p.id}>
@@ -1205,7 +1212,7 @@ function TaskModel({
           // Picking "Custom…" clears the field so the text input opens ready to type.
           onModel(v === CUSTOM_MODEL ? '' : v);
         }}
-        className="w-full bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono"
+        className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono"
       >
         {known.map((m) => (
           <option key={m} value={m}>
@@ -1220,7 +1227,7 @@ function TaskModel({
           onChange={(e) => onModel(e.target.value)}
           placeholder="Enter a model id (e.g. gpt-4.1-nano)"
           autoFocus
-          className="w-full mt-2 bg-card border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono placeholder:text-slate-muted"
+          className="w-full mt-2 bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text font-mono placeholder:text-slate-muted"
         />
       )}
     </div>
@@ -1229,8 +1236,11 @@ function TaskModel({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-card border border-ink rounded-xl p-5 mb-5">
-      <p className="text-[12px] font-semibold text-slate-muted uppercase tracking-wider font-display mb-4">{title}</p>
+    <div className="card p-5 mb-5">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="h-3.5 w-1 rounded-full bg-gradient-to-b from-sky to-iris" />
+        <p className="font-display text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-muted">{title}</p>
+      </div>
       {children}
     </div>
   );
@@ -1257,7 +1267,7 @@ function Field({
         value={(value as string) ?? ''}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted transition-colors"
+        className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted transition-colors"
       />
     </div>
   );
@@ -1344,9 +1354,9 @@ function LibraryPicker({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder={placeholder ?? 'Add…'}
-          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
+          className="flex-1 bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-1.5 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted"
         />
-        <button onClick={add} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all">
+        <button onClick={add} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/10 hover:bg-sky/20 rounded-lg transition-all">
           Add
         </button>
       </div>
@@ -1396,11 +1406,7 @@ function LibraryPicker({
 
 function SaveBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className="flex items-center gap-2 px-5 py-2.5 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
-    >
+    <button onClick={onClick} disabled={loading} className="btn-primary px-5 py-2.5">
       <Save size={14} /> {loading ? 'Saving…' : 'Save Changes'}
     </button>
   );

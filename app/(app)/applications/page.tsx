@@ -611,10 +611,10 @@ export default function ApplicationsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Tailor &amp; Apply</h1>
-        <p className="text-slate-muted text-[13px] mt-0.5">
+        <h1 className="page-title text-2xl">Tailor &amp; Apply</h1>
+        <p className="page-sub">
           Tailor a résumé for each shortlisted job, generate the PDF, then apply. Add jobs from the{' '}
           <Link href="/jobs" className="text-sky hover:underline">Jobs</Link> tab.
         </p>
@@ -629,28 +629,30 @@ export default function ApplicationsPage() {
           <button
             key={t.id}
             onClick={() => setView(t.id)}
-            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-all ${
-              view === t.id ? 'border-sky text-sky' : 'border-transparent text-slate-muted hover:text-slate-text'
+            className={`relative px-4 py-2 text-[13px] font-medium -mb-px transition-all ${
+              view === t.id ? 'text-sky' : 'text-slate-muted hover:text-slate-text'
             }`}
           >
             {t.label}
+            {view === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-sky to-iris" />}
           </button>
         ))}
       </div>
 
-      {msg && <div className="mb-3 text-[12px] text-slate-muted animate-fade-in">{msg}</div>}
+      {msg && (
+        <div className="mb-3 rounded-lg border border-sky/20 bg-sky/5 px-3 py-2 text-[12px] text-slate-text animate-fade-in">
+          {msg}
+        </div>
+      )}
 
       {view === 'list' && (
         <div className="mb-4">
-          <button
-            onClick={() => setShowCustom((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text border border-ink rounded-lg hover:bg-raised transition-all"
-          >
+          <button onClick={() => setShowCustom((v) => !v)} className="btn-ghost px-3 py-1.5 text-[12px]">
             <Plus size={14} /> Add custom job
           </button>
 
           {showCustom && (
-            <div className="mt-3 bg-card border border-ink rounded-xl p-4 animate-fade-in">
+            <div className="mt-3 card p-4 animate-fade-in">
               <p className="text-[12px] text-slate-muted mb-3">
                 Add a job you found yourself (e.g. from an email). <span className="text-slate-text">Company</span> and{' '}
                 <span className="text-slate-text">link</span> are optional; the description is what the résumé is tailored to.
@@ -660,27 +662,27 @@ export default function ApplicationsPage() {
                   value={customForm.title}
                   onChange={(e) => setCustomForm({ ...customForm, title: e.target.value })}
                   placeholder="Job title *"
-                  className="px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none"
+                  className="px-3 py-2 text-[13px] bg-base/80 border border-ink rounded-lg text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors"
                 />
                 <input
                   value={customForm.company}
                   onChange={(e) => setCustomForm({ ...customForm, company: e.target.value })}
                   placeholder="Company (optional)"
-                  className="px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none"
+                  className="px-3 py-2 text-[13px] bg-base/80 border border-ink rounded-lg text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors"
                 />
               </div>
               <input
                 value={customForm.url}
                 onChange={(e) => setCustomForm({ ...customForm, url: e.target.value })}
                 placeholder="Job / apply link (optional)"
-                className="w-full px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none mb-3"
+                className="w-full px-3 py-2 text-[13px] bg-base/80 border border-ink rounded-lg text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors mb-3"
               />
               <textarea
                 value={customForm.description}
                 onChange={(e) => setCustomForm({ ...customForm, description: e.target.value })}
                 placeholder="Paste the full job description *"
                 rows={6}
-                className="w-full px-3 py-2 text-[13px] bg-void border border-ink rounded-lg text-slate-text placeholder:text-slate-muted focus:border-sky outline-none mb-3 resize-y"
+                className="w-full px-3 py-2 text-[13px] bg-base/80 border border-ink rounded-lg text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors mb-3 resize-y"
               />
               <div className="flex gap-2">
                 <button
@@ -707,20 +709,30 @@ export default function ApplicationsPage() {
       ) : view === 'base' ? (
         <BaseResumeEditor />
       ) : loading ? (
-        <div className="bg-card border border-ink rounded-xl px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
+        <div className="card divide-y divide-ink-subtle overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse" style={{ opacity: 1 - i * 0.18 }}>
+              <div className="h-4 w-4 rounded bg-raised" />
+              <div className="h-5 w-16 rounded-md bg-raised" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-1/3 rounded bg-raised" />
+                <div className="h-2.5 w-1/4 rounded bg-raised/70" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : apps.length === 0 ? (
-        <div className="bg-card border border-ink rounded-xl px-6 py-14 text-center">
-          <FileText size={22} className="mx-auto text-slate-muted mb-3" />
+        <div className="card px-6 py-16 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-ink bg-raised/60">
+            <FileText size={20} className="text-slate-dim" />
+          </div>
           <h3 className="text-[14px] font-medium text-slate-text mb-1">Nothing queued yet</h3>
           <p className="text-[13px] text-slate-muted max-w-md mx-auto mb-5">
             On the Jobs tab, select the roles you want to apply to and use <span className="text-sky">Send to Tailor &amp; Apply</span>
             {' '}— or use <span className="text-sky">Add custom job</span> above to enter one yourself (e.g. from an email).
             They&apos;ll appear here, ready for a tailored résumé.
           </p>
-          <Link
-            href="/jobs"
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all"
-          >
+          <Link href="/jobs" className="btn-primary">
             <Briefcase size={14} /> Go to Jobs
           </Link>
         </div>
@@ -729,26 +741,26 @@ export default function ApplicationsPage() {
         {/* Filters — search, status, hide applied (the Jobs-tab subset that maps here) */}
         <div className="space-y-3 mb-4">
           <div className="relative max-w-md">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-dim" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search title, company, location…"
-              className="pl-8 pr-3 py-1.5 w-full bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
+              className="pl-9 pr-3 py-1.5 w-full bg-card border border-ink rounded-lg text-[13px] text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1 flex-wrap">
+            <div className="inline-flex flex-wrap gap-0.5 rounded-xl border border-ink bg-card/70 p-1">
               {STATUS_FILTERS.map((st) => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
+                  className={`px-3 py-1.5 text-[12px] rounded-lg capitalize transition-all ${
                     statusFilter === st
                       ? st === 'applied'
-                        ? 'bg-emerald/10 text-emerald border-emerald/30'
-                        : 'bg-sky-glow text-sky border-sky/30'
-                      : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+                        ? 'bg-emerald/15 text-emerald shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]'
+                        : 'bg-sky/15 text-sky shadow-[inset_0_0_0_1px_rgba(56,189,248,0.3)]'
+                      : 'text-slate-muted hover:text-slate-text hover:bg-raised/80'
                   }`}
                 >
                   {st}
@@ -758,7 +770,7 @@ export default function ApplicationsPage() {
             <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
             <label
               title="Hide applications you've already applied to"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
                 hideApplied && statusFilter !== 'applied' ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
               } ${statusFilter === 'applied' ? 'opacity-40 pointer-events-none' : ''}`}
             >
@@ -766,7 +778,7 @@ export default function ApplicationsPage() {
                 type="checkbox"
                 checked={hideApplied && statusFilter !== 'applied'}
                 onChange={(e) => setHideApplied(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+                className="w-3.5 h-3.5 rounded accent-sky"
               />
               Hide applied
             </label>
@@ -774,8 +786,8 @@ export default function ApplicationsPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="bg-card border border-ink rounded-xl px-6 py-12 text-center">
-            <FileText size={20} className="mx-auto text-slate-muted mb-2" />
+          <div className="card px-6 py-12 text-center">
+            <FileText size={20} className="mx-auto text-slate-dim mb-2" />
             <p className="text-[13px] text-slate-text mb-1">No applications match these filters.</p>
             <button
               onClick={() => { setSearch(''); setStatusFilter('all'); setHideApplied(false); }}
@@ -794,7 +806,7 @@ export default function ApplicationsPage() {
               checked={allSelected}
               onChange={toggleSelectAll}
               disabled={bulkBusy}
-              className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+              className="w-4 h-4 rounded accent-sky"
             />
             {selected.size > 0 ? `${selected.size} selected` : `Select all (${selectableIds.length})`}
           </label>
@@ -841,26 +853,29 @@ export default function ApplicationsPage() {
             <Trash2 size={13} /> Delete selected{selected.size > 0 ? ` (${selected.size})` : ''}
           </button>
         </div>
-        <div className="bg-card border border-ink rounded-xl overflow-hidden divide-y divide-ink-subtle">
+        <div className="card overflow-hidden divide-y divide-ink-subtle">
           {filtered.map((a) => {
             const job = a.job;
             const open = expanded === a.id;
             const generating = genId === a.id || a.status === 'generating';
             return (
               <div key={a.id}>
-                <div className="flex items-center gap-3 px-5 py-3 hover:bg-raised transition-colors">
+                <div className="flex items-center gap-3 px-5 py-3 hover:bg-raised/60 transition-colors">
                   <input
                     type="checkbox"
                     checked={selected.has(a.id)}
                     onChange={() => toggleOne(a.id)}
                     disabled={bulkBusy}
                     title={a.job ? 'Select' : 'Select (job removed — can still delete)'}
-                    className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 disabled:opacity-30"
+                    className="w-4 h-4 rounded accent-sky shrink-0 disabled:opacity-30"
                   />
-                  <button onClick={() => toggleExpand(a)} className="text-slate-muted hover:text-sky shrink-0">
+                  <button
+                    onClick={() => toggleExpand(a)}
+                    className={`p-1 rounded-md shrink-0 transition-colors ${open ? 'text-sky bg-sky/10' : 'text-slate-muted hover:text-sky hover:bg-sky/10'}`}
+                  >
                     {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                   </button>
-                  <span className={`shrink-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded border ${STATUS_STYLE[a.status]}`}>
+                  <span className={`shrink-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-md border ${STATUS_STYLE[a.status]}`}>
                     {a.status}
                   </span>
                   <div className="flex-1 min-w-0">
@@ -881,7 +896,7 @@ export default function ApplicationsPage() {
                     onClick={() => generate(a)}
                     disabled={!!genId || bulkBusy || !job}
                     title="Generate a job-tailored résumé from your base résumé (truthful reframing)"
-                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all shrink-0"
+                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all shrink-0"
                   >
                     <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate' : 'Generate'}
                   </button>
@@ -905,7 +920,7 @@ export default function ApplicationsPage() {
                             ? `. ⚠ ${a.tailored_match_breakdown!.flags.join('; ')}`
                             : '')
                         }
-                        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium rounded-md border transition-all shrink-0 disabled:opacity-40 ${
+                        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium rounded-lg border transition-all shrink-0 disabled:opacity-40 ${
                           a.tailored_match_score == null
                             ? 'text-slate-muted bg-raised border-ink hover:text-slate-text'
                             : a.tailored_match_score >= 65
@@ -938,7 +953,7 @@ export default function ApplicationsPage() {
                     <button
                       onClick={() => downloadPdf(a.id)}
                       title="Download the tailored résumé PDF"
-                      className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium text-emerald bg-emerald/10 border border-emerald/30 hover:bg-emerald/20 rounded-md transition-all shrink-0"
+                      className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium text-emerald bg-emerald/10 border border-emerald/30 hover:bg-emerald/20 rounded-lg transition-all shrink-0"
                     >
                       <Download size={13} /> <span className="hidden sm:inline">PDF</span>
                     </button>
@@ -952,7 +967,7 @@ export default function ApplicationsPage() {
                     <button
                       onClick={() => downloadCoverPdf(a.id)}
                       title="Download the cover letter PDF"
-                      className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-md transition-all shrink-0"
+                      className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all shrink-0"
                     >
                       <FileText size={13} /> <span className="hidden sm:inline">Cover</span>
                     </button>
@@ -961,7 +976,7 @@ export default function ApplicationsPage() {
                       onClick={() => generateCoverLetter(a)}
                       disabled={!!genCoverId}
                       title="Generate a cover letter for this job"
-                      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-slate-muted border border-ink hover:text-sky hover:border-sky/30 disabled:opacity-40 rounded-md transition-all shrink-0"
+                      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-slate-muted border border-ink hover:text-sky hover:border-sky/30 disabled:opacity-40 rounded-lg transition-all shrink-0"
                     >
                       <FileText size={12} /> Cover letter
                     </button>
@@ -977,22 +992,22 @@ export default function ApplicationsPage() {
                         : patch(a.id, { status: 'applied' })
                     }
                     title={a.applied_at ? `Applied ${new Date(a.applied_at).toLocaleDateString()} — click to un-mark` : 'Mark as applied'}
-                    className={a.applied_at ? 'text-emerald shrink-0' : 'text-slate-muted hover:text-emerald shrink-0'}
+                    className={`p-1 rounded-md shrink-0 transition-colors ${a.applied_at ? 'text-emerald bg-emerald/10' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
                   >
                     <CheckCircle2 size={15} />
                   </button>
                   {job && (
-                    <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" onClick={() => { pendingApply.current = a; }} title="Open posting (will ask if you applied)" className="text-slate-muted hover:text-sky shrink-0">
+                    <a href={job.application_url || job.url || '#'} target="_blank" rel="noopener noreferrer" onClick={() => { pendingApply.current = a; }} title="Open posting (will ask if you applied)" className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors shrink-0">
                       <ExternalLink size={15} />
                     </a>
                   )}
-                  <button onClick={() => remove(a.id)} title="Remove application" className="text-slate-muted hover:text-rose shrink-0">
+                  <button onClick={() => remove(a.id)} title="Remove application" className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors shrink-0">
                     <Trash2 size={15} />
                   </button>
                 </div>
 
                 {open && (
-                  <div className="px-5 pb-5 pt-1 bg-base/40">
+                  <div className="mx-4 sm:mx-5 mb-4 mt-1 rounded-xl border border-ink-subtle bg-base/60 px-5 py-4 animate-fade-in">
                     {a.status === 'failed' && a.error && (
                       <div className="flex items-start gap-2 px-3 py-2 mb-3 text-[12px] text-rose bg-rose/10 border border-rose/30 rounded-lg">
                         <AlertCircle size={14} className="mt-0.5 shrink-0" /> {a.error}
@@ -1017,7 +1032,7 @@ export default function ApplicationsPage() {
                           onClick={() => generate(a)}
                           disabled={!!genId || bulkBusy || !job}
                           title="Generate the tailored résumé using the job description plus your instructions above"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all"
                         >
                           <Sparkles size={13} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate with instructions' : 'Generate with instructions'}
                         </button>
@@ -1042,7 +1057,7 @@ export default function ApplicationsPage() {
                           <div className="flex items-center gap-0.5 bg-raised border border-ink rounded-lg p-0.5 shrink-0">
                             <button
                               onClick={() => setReviewMode(false)}
-                              className={`px-2.5 py-1 text-[12px] rounded-md transition-colors ${!reviewMode ? 'bg-sky/15 text-sky' : 'text-slate-muted hover:text-slate-text'}`}
+                              className={`px-2.5 py-1 text-[12px] rounded-lg transition-colors ${!reviewMode ? 'bg-sky/15 text-sky' : 'text-slate-muted hover:text-slate-text'}`}
                             >
                               Edit
                             </button>
@@ -1050,7 +1065,7 @@ export default function ApplicationsPage() {
                               onClick={() => setReviewMode(true)}
                               title={baseResume ? 'Highlight what the AI added/removed vs your base résumé' : 'Set a base résumé first to see the diff'}
                               disabled={!baseResume}
-                              className={`px-2.5 py-1 text-[12px] rounded-md transition-colors disabled:opacity-40 ${reviewMode ? 'bg-emerald/15 text-emerald' : 'text-slate-muted hover:text-slate-text'}`}
+                              className={`px-2.5 py-1 text-[12px] rounded-lg transition-colors disabled:opacity-40 ${reviewMode ? 'bg-emerald/15 text-emerald' : 'text-slate-muted hover:text-slate-text'}`}
                             >
                               Review changes
                             </button>
@@ -1078,7 +1093,7 @@ export default function ApplicationsPage() {
                             value={a.template || 'classic'}
                             onChange={(e) => setTemplate(a.id, e.target.value)}
                             title="Résumé template"
-                            className="px-2.5 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+                            className="px-2.5 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
                           >
                             <option value="classic">Classic (serif)</option>
                             <option value="modern">Modern (sans)</option>
@@ -1087,14 +1102,14 @@ export default function ApplicationsPage() {
                             onClick={() => renderPdf(a)}
                             disabled={rendering === a.id}
                             title="Render the tailored résumé to a one-page PDF (saves the latest edits first is recommended)"
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all"
                           >
                             <FileDown size={13} /> {rendering === a.id ? 'Rendering…' : a.pdf_path ? 'Re-render PDF' : 'Create PDF'}
                           </button>
                           {a.pdf_path && (
                             <button
                               onClick={() => downloadPdf(a.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-md transition-all"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-lg transition-all"
                             >
                               <Download size={13} /> Download PDF
                             </button>
@@ -1119,7 +1134,7 @@ export default function ApplicationsPage() {
                           onClick={() => generateCoverLetter(a)}
                           disabled={genCoverId === a.id}
                           title="Write a cover letter for this job from your base résumé, then download the PDF"
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
                         >
                           {genCoverId === a.id ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
                           {genCoverId === a.id ? 'Writing…' : a.cover_letter_pdf_path ? 'Regenerate' : 'Generate cover letter'}
@@ -1127,7 +1142,7 @@ export default function ApplicationsPage() {
                         {a.cover_letter_pdf_path && (
                           <button
                             onClick={() => downloadCoverPdf(a.id)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-md transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 rounded-lg transition-all"
                           >
                             <Download size={13} /> Download cover letter
                           </button>
@@ -1161,7 +1176,7 @@ export default function ApplicationsPage() {
 
       {/* "Did you apply?" — shown after returning from the external posting link (parity with Jobs). */}
       {applyDialog && (
-        <div className="fixed bottom-5 right-5 z-50 bg-card border border-ink rounded-xl p-4 shadow-2xl w-80 animate-slide-up">
+        <div className="fixed bottom-5 right-5 z-50 card shadow-pop p-4 w-80 animate-slide-up">
           <p className="text-[13px] font-semibold text-slate-text mb-0.5">Did you apply?</p>
           <p className="text-[12px] text-slate-muted mb-4 truncate">
             {applyDialog.job?.title ?? 'This job'}
@@ -1199,7 +1214,7 @@ function scoreColor(v: number): string {
 /** Small labelled score chip (e.g. the original job fit). */
 function ScoreChip({ label, value, title }: { label: string; value: number; title?: string }) {
   return (
-    <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${scoreColor(value)}`}>
+    <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md border ${scoreColor(value)}`}>
       {label} {value}/10
     </span>
   );

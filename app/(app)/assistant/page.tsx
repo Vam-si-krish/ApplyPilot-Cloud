@@ -103,18 +103,18 @@ export default function AssistantPage() {
       {/* Header */}
       <div className="flex items-start justify-between px-7 pt-7 pb-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight flex items-center gap-2">
-            <Bot size={22} className="text-sky" /> Assistant
+          <h1 className="page-title text-2xl flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky/25 bg-gradient-to-br from-sky/15 to-iris/15">
+              <Bot size={16} className="text-sky" />
+            </span>
+            Assistant
           </h1>
-          <p className="text-slate-muted text-[13px] mt-1">
+          <p className="page-sub">
             Paste an application question or recruiter email — get a ready-to-send answer in your voice, then refine it.
           </p>
         </div>
         {messages.length > 0 && (
-          <button
-            onClick={newChat}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted hover:text-sky border border-ink hover:border-sky/40 rounded-md transition-all"
-          >
+          <button onClick={newChat} className="btn-ghost px-3 py-1.5 text-[12px]">
             <RotateCcw size={12} /> New chat
           </button>
         )}
@@ -123,18 +123,18 @@ export default function AssistantPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-7">
         {messages.length === 0 ? (
-          <div className="max-w-2xl mx-auto mt-8 text-center">
-            <div className="w-12 h-12 rounded-xl bg-sky/10 border border-sky/20 flex items-center justify-center mx-auto mb-4">
-              <Bot size={22} className="text-sky" />
+          <div className="max-w-2xl mx-auto mt-10 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky/20 to-iris/20 border border-sky/25 flex items-center justify-center mx-auto mb-4 shadow-glow-sky">
+              <Bot size={24} className="text-sky" />
             </div>
-            <p className="text-slate-text text-[14px] font-medium mb-1">What can I answer for you?</p>
-            <p className="text-slate-muted text-[12px] mb-5">Grounded in your Profile — it won’t invent facts. Try one of these:</p>
+            <p className="text-slate-text text-[16px] font-display font-semibold mb-1">What can I answer for you?</p>
+            <p className="text-slate-muted text-[12px] mb-6">Grounded in your Profile — it won’t invent facts. Try one of these:</p>
             <div className="flex flex-col gap-2 max-w-lg mx-auto">
               {EXAMPLES.map((ex) => (
                 <button
                   key={ex}
                   onClick={() => send(ex)}
-                  className="text-left px-4 py-2.5 bg-card border border-ink rounded-lg text-[13px] text-slate-text hover:border-sky/40 hover:bg-raised transition-all"
+                  className="text-left px-4 py-2.5 card card-hover rounded-xl text-[13px] text-slate-text hover:border-sky/40 transition-all"
                 >
                   {ex}
                 </button>
@@ -147,10 +147,10 @@ export default function AssistantPage() {
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`group relative max-w-[85%] ${m.role === 'user' ? 'order-2' : ''}`}>
                   <div
-                    className={`px-4 py-2.5 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap ${
+                    className={`px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap ${
                       m.role === 'user'
-                        ? 'bg-sky/10 border border-sky/20 text-slate-text'
-                        : 'bg-card border border-ink text-slate-text'
+                        ? 'rounded-2xl rounded-br-md bg-gradient-to-br from-sky/15 to-iris/10 border border-sky/25 text-slate-text'
+                        : 'rounded-2xl rounded-bl-md bg-card border border-ink text-slate-text shadow-card'
                     }`}
                   >
                     {m.content}
@@ -204,7 +204,7 @@ export default function AssistantPage() {
               ))}
             </div>
           )}
-          <div className="flex items-end gap-2 bg-card border border-ink rounded-xl px-3 py-2 focus-within:border-sky/40 transition-colors">
+          <div className="flex items-end gap-2 bg-card border border-ink rounded-2xl px-3 py-2 shadow-card focus-within:border-sky/50 focus-within:ring-1 focus-within:ring-sky/25 transition-all">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -221,7 +221,7 @@ export default function AssistantPage() {
             <button
               onClick={() => send(input)}
               disabled={!input.trim() || loading}
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-30 transition-all shrink-0"
+              className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-sky/20 to-iris/20 text-sky border border-sky/30 hover:from-sky/30 hover:to-iris/30 hover:shadow-glow-sky disabled:opacity-30 transition-all shrink-0"
               title="Send"
             >
               <Send size={15} />

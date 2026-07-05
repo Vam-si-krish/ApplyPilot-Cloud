@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Lock } from 'lucide-react';
+import { Zap, Lock, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,37 +35,63 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-void">
-      <form onSubmit={submit} className="w-80 bg-card border border-ink rounded-2xl p-7 animate-slide-up">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-8 h-8 rounded-md bg-sky-glow border border-sky/30 flex items-center justify-center">
-            <Zap size={16} className="text-sky" />
+    <div className="relative flex min-h-screen items-center justify-center bg-void px-4 overflow-hidden">
+      {/* Hero aurora, stronger than the app-wide ambient glow */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-[-20%] h-[480px] w-[720px] -translate-x-1/2 rounded-full bg-sky/10 blur-[140px]" />
+        <div className="absolute right-[10%] bottom-[-15%] h-[360px] w-[520px] rounded-full bg-iris/10 blur-[140px]" />
+      </div>
+
+      <div className="relative w-full max-w-sm animate-slide-up">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-sky/30 bg-gradient-to-br from-sky/25 via-sky/10 to-iris/25 shadow-glow-sky">
+            <Zap size={26} className="text-sky" fill="currentColor" fillOpacity={0.35} />
           </div>
-          <span className="font-display font-bold text-slate-text text-lg tracking-tight">ApplyPilot</span>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-text">
+            Apply<span className="text-gradient">Pilot</span>
+          </h1>
+          <p className="mt-1.5 text-[13px] text-slate-muted">
+            Your job pipeline ran overnight. Sign in to review it.
+          </p>
         </div>
 
-        <label className="text-[11px] text-slate-muted uppercase tracking-wider font-medium">Password</label>
-        <div className="relative mt-1.5 mb-1">
-          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-muted" />
-          <input
-            type="password"
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 bg-raised border border-ink focus:border-sky/40 outline-none rounded-lg text-[14px] text-slate-text"
-          />
-        </div>
+        <form onSubmit={submit} className="card p-6">
+          <label className="label" htmlFor="password">
+            Password
+          </label>
+          <div className="relative">
+            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-dim" />
+            <input
+              id="password"
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="input py-2.5 pl-10 text-[14px]"
+            />
+          </div>
 
-        {error && <p className="text-rose text-[12px] mt-2">{error}</p>}
+          {error && (
+            <p className="mt-3 rounded-lg border border-rose/25 bg-rose/10 px-3 py-2 text-[12px] text-rose animate-fade-in">
+              {error}
+            </p>
+          )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 w-full py-2.5 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
-        >
-          {loading ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary group mt-5 w-full py-2.5 text-[14px]"
+          >
+            {loading ? 'Signing in…' : 'Sign in'}
+            {!loading && <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center font-mono text-[10px] tracking-wide text-slate-dim">
+          fetch → score → shortlist · every morning
+        </p>
+      </div>
     </div>
   );
 }

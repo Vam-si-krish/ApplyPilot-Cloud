@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Ported from ApplyPilot-Lite/ui/src/index.css — keep the look identical. */
+/* Design system v2 — "aurora console". Evolved from the Lite port; the page
+   background carries two faint accent glows + fine grain so large dark areas
+   never read as flat black. */
 
 :root {
   color-scheme: dark;
@@ -15,37 +17,118 @@
 }
 
 body {
-  background: #070711;
-  color: #e2e8f0;
-  font-family: 'Outfit', sans-serif;
+  background: #06070f;
+  color: #e8ecf8;
+  font-family: Inter, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ambient aurora: fixed, non-interactive, sits under everything. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 700px at 85% -10%, rgba(56, 189, 248, 0.07), transparent 60%),
+    radial-gradient(900px 600px at -15% 110%, rgba(139, 147, 255, 0.06), transparent 60%);
+}
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: rgba(56, 189, 248, 0.28);
+  color: #f2f6ff;
 }
 
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0c0c1c;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e1e38;
-  border-radius: 2px;
+  background: #232946;
+  border-radius: 8px;
+  border: 2px solid #06070f;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a2a50;
+  background: #333c66;
 }
 
 .font-mono {
-  font-family: 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
 }
 .font-display {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: -0.01em;
 }
 
-/* Glow effects */
+:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer components {
+  /* Core surface: use for every panel/card so elevation reads consistently. */
+  .card {
+    @apply rounded-2xl border border-ink bg-card shadow-card;
+  }
+  .card-hover {
+    @apply transition-colors hover:border-ink hover:bg-raised/60;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn border border-sky/40 bg-sky/15 text-sky hover:bg-sky/25 hover:shadow-glow-sky;
+  }
+  .btn-ghost {
+    @apply btn border border-ink bg-raised/50 text-slate-muted hover:border-slate-dim hover:text-slate-text;
+  }
+  .btn-danger {
+    @apply btn border border-rose/30 bg-rose/10 text-rose hover:bg-rose/20;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-ink bg-base/80 px-3 py-2 text-[13px] text-slate-text placeholder:text-slate-dim transition-colors focus:border-sky/50 focus:outline-none focus:ring-1 focus:ring-sky/30;
+  }
+  .label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-muted;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium;
+  }
+
+  /* Page header helpers */
+  .page-title {
+    @apply font-display text-xl font-bold tracking-tight text-slate-text;
+  }
+  .page-sub {
+    @apply mt-0.5 text-[13px] text-slate-muted;
+  }
+}
+
+/* Gradient text for hero numbers / brand moments. */
+.text-gradient {
+  background: linear-gradient(120deg, #7dd3fc 0%, #38bdf8 45%, #8b93ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glow effects (legacy names kept — used by pages) */
 .glow-sky {
   box-shadow: 0 0 24px rgba(56, 189, 248, 0.18);
 }

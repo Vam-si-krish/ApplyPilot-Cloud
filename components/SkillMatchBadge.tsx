@@ -26,7 +26,7 @@ export default function SkillMatchBadge({
   return (
     <span
       title={`Skill match — ${score}% of your skills appear in this job${list ? ` (matched: ${list})` : ''}`}
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${tone(score)} ${className}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium font-mono rounded-md border ${tone(score)} ${className}`}
     >
       <Target size={10} /> {score}%
     </span>

@@ -125,33 +125,37 @@ export default function PastJobsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="mb-6">
         <Link href="/jobs" className="inline-flex items-center gap-1.5 text-[12px] text-slate-muted hover:text-sky mb-2 transition-colors">
           <ArrowLeft size={13} /> Back to recent jobs
         </Link>
-        <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Past Jobs</h1>
-        <p className="text-slate-muted text-[13px] mt-1">{total} jobs older than 24h · grouped by day</p>
+        <h1 className="page-title text-2xl">Past Jobs</h1>
+        <p className="page-sub">
+          <span className="font-mono text-sky">{total}</span> jobs older than 24h · grouped by day
+        </p>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-dim" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search title, company, location…"
-            className="pl-8 pr-3 py-1.5 w-72 bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
+            className="pl-9 pr-3 py-1.5 w-72 bg-card border border-ink rounded-lg text-[13px] text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors"
           />
         </div>
-        <div className="flex gap-1 flex-wrap">
+        <div className="inline-flex flex-wrap gap-0.5 rounded-xl border border-ink bg-card/70 p-1">
           {STATUSES.map((st) => (
             <button
               key={st}
               onClick={() => setStatus(st)}
-              className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
-                status === st ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+              className={`px-3 py-1.5 text-[12px] rounded-lg capitalize transition-all ${
+                status === st
+                  ? 'bg-sky/15 text-sky shadow-[inset_0_0_0_1px_rgba(56,189,248,0.3)]'
+                  : 'text-slate-muted hover:text-slate-text hover:bg-raised/80'
               }`}
             >
               {st}
@@ -163,9 +167,19 @@ export default function PastJobsPage() {
       <JobsLegend />
 
       {loading ? (
-        <div className="bg-card border border-ink rounded-xl px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
+        <div className="card divide-y divide-ink-subtle overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-5 py-3.5 animate-pulse" style={{ opacity: 1 - i * 0.15 }}>
+              <div className="h-8 w-8 rounded-[10px] bg-raised" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-1/3 rounded bg-raised" />
+                <div className="h-2.5 w-1/4 rounded bg-raised/70" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : groups.length === 0 ? (
-        <div className="bg-card border border-ink rounded-xl px-5 py-10 text-center text-slate-muted text-[13px]">No past jobs match these filters.</div>
+        <div className="card px-5 py-12 text-center text-slate-muted text-[13px]">No past jobs match these filters.</div>
       ) : (
         <div className="space-y-4">
           {groups.length > 1 && (
@@ -192,15 +206,18 @@ export default function PastJobsPage() {
                 <div className="flex-1 h-px bg-ink-subtle" />
               </button>
               {groupOpen && (
-              <div className="bg-card border border-ink rounded-xl overflow-hidden">
+              <div className="card overflow-hidden">
                 <div className="divide-y divide-ink-subtle">
                   {group.jobs.map((job) => {
                     const open = expanded === job.id;
                     const chip = statusChip(job);
                     return (
                       <div key={job.id}>
-                        <div className="flex items-center gap-4 px-5 py-3 hover:bg-raised transition-colors">
-                          <button onClick={() => setExpanded(open ? null : job.id)} className="text-slate-muted hover:text-sky">
+                        <div className="flex items-center gap-4 px-5 py-3 hover:bg-raised/60 transition-colors">
+                          <button
+                            onClick={() => setExpanded(open ? null : job.id)}
+                            className={`p-1 rounded-md transition-colors ${open ? 'text-sky bg-sky/10' : 'text-slate-muted hover:text-sky hover:bg-sky/10'}`}
+                          >
                             {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                           </button>
                           <ScoreBadge score={job.fit_score} />
@@ -213,7 +230,7 @@ export default function PastJobsPage() {
                             </p>
                           </div>
 
-                          <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded border ${chip.cls}`}>{chip.label}</span>
+                          <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded-md border ${chip.cls}`}>{chip.label}</span>
                           {job.company_tier && (
                             <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
                           )}
@@ -221,21 +238,21 @@ export default function PastJobsPage() {
                           <button
                             onClick={() => patch(job.id, { is_shortlisted: !job.is_shortlisted })}
                             title="Shortlist"
-                            className={job.is_shortlisted ? 'text-emerald' : 'text-slate-muted hover:text-emerald'}
+                            className={`p-1 rounded-md transition-colors ${job.is_shortlisted ? 'text-emerald' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
                           >
                             <Star size={15} fill={job.is_shortlisted ? 'currentColor' : 'none'} />
                           </button>
-                          <button onClick={() => openJobLink(job)} title="Open posting" className="text-slate-muted hover:text-sky">
+                          <button onClick={() => openJobLink(job)} title="Open posting" className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors">
                             <ExternalLink size={15} />
                           </button>
                           <button
                             onClick={() => patch(job.id, { status: job.status === 'archived' ? 'scored' : 'archived' })}
                             title={job.status === 'archived' ? 'Restore' : 'Archive'}
-                            className="text-slate-muted hover:text-rose"
+                            className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
                           >
                             <Archive size={15} />
                           </button>
-                          <button onClick={() => deleteJob(job.id)} title="Delete permanently" className="text-slate-muted hover:text-rose">
+                          <button onClick={() => deleteJob(job.id)} title="Delete permanently" className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors">
                             <Trash2 size={15} />
                           </button>
                         </div>

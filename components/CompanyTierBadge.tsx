@@ -28,7 +28,7 @@ export default function CompanyTierBadge({
   return (
     <span
       title={`Company rated by AI — ${m.label}: ${m.help}${note ? `. ${note}` : ''}`}
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${m.cls} ${className}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md border ${m.cls} ${className}`}
     >
       <Building2 size={10} /> {m.label}
     </span>

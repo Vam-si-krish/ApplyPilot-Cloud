@@ -62,17 +62,17 @@ export default function TrackerPage() {
 
   if (data && !data.connected) {
     return (
-      <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+      <div className="p-4 sm:p-6 lg:p-8 animate-slide-up">
         <Header />
-        <div className="bg-card border border-ink rounded-xl px-6 py-12 text-center">
-          <div className="w-12 h-12 rounded-xl bg-emerald/10 border border-emerald/20 flex items-center justify-center mx-auto mb-4">
-            <TrendingUp size={22} className="text-emerald" />
+        <div className="card px-6 py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald/20 to-sky/15 border border-emerald/25 flex items-center justify-center mx-auto mb-4 shadow-glow-emerald">
+            <TrendingUp size={24} className="text-emerald" />
           </div>
-          <p className="text-slate-text text-[14px] font-medium mb-1">Connect Gmail to track your applications</p>
+          <p className="text-slate-text text-[15px] font-display font-semibold mb-1">Connect Gmail to track your applications</p>
           <p className="text-slate-muted text-[12px] mb-5">
             The tracker counts the &ldquo;Applied&rdquo; confirmation emails the AI sorts in your Inbox.
           </p>
-          <Link href="/settings" className="inline-flex px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all">
+          <Link href="/settings" className="btn-primary">
             Go to Settings → Gmail
           </Link>
         </div>
@@ -81,7 +81,7 @@ export default function TrackerPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up">
       <Header email={data?.email ?? null} total={mo.all} />
 
       {/* Momentum cards */}
@@ -93,7 +93,7 @@ export default function TrackerPage() {
       </div>
 
       {/* Pipeline funnel */}
-      <div className="bg-card border border-ink rounded-xl p-5 mb-5">
+      <div className="card p-5 mb-5">
         <h2 className="font-display text-[12px] font-semibold text-slate-muted uppercase tracking-wider mb-3">Pipeline</h2>
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
           {FUNNEL.map((f) => (
@@ -124,7 +124,7 @@ export default function TrackerPage() {
       </div>
 
       {/* Volume chart with day/week/month toggle */}
-      <div className="bg-card border border-ink rounded-xl p-5 mb-5">
+      <div className="card p-5 mb-5">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display text-[12px] font-semibold text-slate-muted uppercase tracking-wider">Applications over time</h2>
           <div className="flex gap-1 bg-raised border border-ink rounded-lg p-0.5">
@@ -163,7 +163,7 @@ export default function TrackerPage() {
                   {/* Stacked Bar Container */}
                   <div 
                     title={`${b.label}: ${b.count} (Easy Apply: ${b.easy_apply}, Portal: ${b.company_portal}, Unknown: ${b.unknown})`}
-                    className={`w-full rounded-sm overflow-hidden flex flex-col justify-end transition-all ${b.count === 0 ? 'bg-raised' : ''}`}
+                    className={`w-full rounded-t-md overflow-hidden flex flex-col justify-end transition-all ${b.count === 0 ? 'bg-raised' : ''}`}
                     style={{ height: `${hTotal}px` }}
                   >
                     {b.count > 0 && (
@@ -187,7 +187,7 @@ export default function TrackerPage() {
       </div>
 
       {/* Day-by-day breakdown with per-day summary */}
-      <div className="bg-card border border-ink rounded-xl overflow-hidden">
+      <div className="card overflow-hidden">
         <div className="px-5 py-4 border-b border-ink-subtle">
           <h2 className="font-display text-[12px] font-semibold text-slate-muted uppercase tracking-wider">Day-by-day</h2>
         </div>
@@ -206,7 +206,7 @@ export default function TrackerPage() {
                 <div key={d.date}>
                   <button
                     onClick={() => setExpanded(open ? null : d.date)}
-                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-raised transition-colors text-left"
+                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-raised/60 transition-colors text-left"
                   >
                     {open ? <ChevronDown size={15} className="text-slate-muted shrink-0" /> : <ChevronRight size={15} className="text-slate-muted shrink-0" />}
                     <span className="shrink-0 w-28 text-slate-text text-[13px] font-medium">{d.label}</span>
@@ -252,10 +252,13 @@ export default function TrackerPage() {
 function Header({ email, total }: { email?: string | null; total?: number }) {
   return (
     <div className="mb-6">
-      <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight flex items-center gap-2">
-        <TrendingUp size={20} className="text-emerald" /> Application Tracker
+      <h1 className="page-title text-2xl flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald/25 bg-emerald/10">
+          <TrendingUp size={16} className="text-emerald" />
+        </span>
+        Application Tracker
       </h1>
-      <p className="text-slate-muted text-[13px] mt-1">
+      <p className="page-sub">
         How many jobs you’ve applied to over time, from your &ldquo;Applied&rdquo; confirmation emails
         {typeof total === 'number' ? ` · ${total} total` : ''}
         {email ? ` · ${email}` : ''}
@@ -278,13 +281,13 @@ function MomentumCard({
   icon: typeof Flame;
 }) {
   return (
-    <div className="bg-card border border-ink rounded-xl p-5">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-slate-muted text-[12px] font-medium uppercase tracking-wider">{label}</span>
-        <Icon size={14} className={`${accent} opacity-60`} />
+    <div className="card p-5 transition-colors hover:border-slate-dim/60">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-slate-muted text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</span>
+        <Icon size={14} className={`${accent} opacity-70`} />
       </div>
-      <span className={`font-display text-3xl font-bold ${accent}`}>{value}</span>
-      <p className="text-slate-muted text-[11px] mt-1">{sub}</p>
+      <span className={`font-display text-[32px] font-bold leading-none tracking-tight ${accent}`}>{value}</span>
+      <p className="text-slate-dim text-[11px] mt-2 font-mono">{sub}</p>
     </div>
   );
 }

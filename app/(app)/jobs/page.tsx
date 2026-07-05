@@ -760,12 +760,13 @@ export default function JobsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Jobs</h1>
-          <p className="text-slate-muted text-[13px] mt-1">
-            {total} shown · last 24h · sorted by {sortBy === 'match' ? 'ATS match' : 'fit score'} ·{' '}
+          <h1 className="page-title text-2xl">Jobs</h1>
+          <p className="page-sub">
+            <span className="font-mono text-sky">{total}</span> shown · last 24h · sorted by{' '}
+            {sortBy === 'match' ? 'ATS match' : 'fit score'} ·{' '}
             <Link href="/past" className="text-sky hover:underline inline-flex items-center gap-1">
               <History size={12} /> Past jobs
             </Link>
@@ -777,7 +778,7 @@ export default function JobsPage() {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'fit' | 'match')}
             title="Sort order — ATS match is the local pre-score, useful before AI scoring"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/50 cursor-pointer transition-colors hover:border-slate-dim"
           >
             <option value="fit">Sort: AI fit score</option>
             <option value="match">Sort: ATS match %</option>
@@ -786,7 +787,7 @@ export default function JobsPage() {
             onClick={recomputeMatch}
             disabled={recomputing}
             title="Recompute the local ATS match % for all current jobs (no AI, free) — run after editing your résumé or Settings → Skills"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 rounded-md transition-all"
+            className="btn-ghost px-3 py-1.5 text-[12px]"
           >
             <RefreshCw size={13} className={recomputing ? 'animate-spin' : ''} /> Recompute ATS match
           </button>
@@ -798,7 +799,7 @@ export default function JobsPage() {
 
       {/* Delete-scores danger gate is ON (ADR 0048) — make it visible so it's deliberate. */}
       {allowDeleteScores && (
-        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-md bg-rose/10 border border-rose/30 text-[12px] text-rose">
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-rose/10 border border-rose/30 text-[12px] text-rose">
           <AlertTriangle size={14} className="shrink-0" />
           <span>
             Deleting scores is <strong>ON</strong> — selecting jobs shows actions that permanently clear their scores.
@@ -817,7 +818,7 @@ export default function JobsPage() {
           <button
             type="button"
             onClick={() => setShowRunsDropdown((v) => !v)}
-            className={`px-3 py-1.5 rounded-md text-[12px] flex items-center gap-2 transition-colors border ${
+            className={`px-3 py-1.5 rounded-lg text-[12px] flex items-center gap-2 transition-colors border ${
               showRunsDropdown || selectedRunIds.length > 0
                 ? 'bg-sky/10 border-sky/30 text-sky'
                 : 'bg-card border-ink text-slate-text hover:bg-raised'
@@ -827,7 +828,7 @@ export default function JobsPage() {
             <ChevronDown size={13} className={`transition-transform ${showRunsDropdown ? 'rotate-180' : ''}`} />
           </button>
           {showRunsDropdown && (
-            <div className="absolute left-0 mt-1.5 z-50 bg-card border border-ink rounded-xl shadow-2xl overflow-hidden w-72 animate-fade-in">
+            <div className="absolute left-0 mt-1.5 z-50 bg-card border border-ink rounded-xl shadow-pop overflow-hidden w-72 animate-fade-in">
               <div className="px-3 py-2 border-b border-ink-subtle flex justify-between items-center">
                 <span className="text-[10px] uppercase tracking-wider text-slate-muted font-medium">Filter by run</span>
                 {selectedRunIds.length > 0 && (
@@ -855,7 +856,7 @@ export default function JobsPage() {
                           onChange={() =>
                             setSelectedRunIds((prev) => (checked ? prev.filter((id) => id !== run.id) : [...prev, run.id]))
                           }
-                          className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0 cursor-pointer"
+                          className="w-3.5 h-3.5 rounded accent-sky shrink-0 cursor-pointer"
                         />
                         <span className="truncate">{formatRunLabel(run)}</span>
                       </label>
@@ -874,7 +875,7 @@ export default function JobsPage() {
               return (
                 <span
                   key={id}
-                  className="flex items-center gap-1.5 text-[11px] text-sky bg-sky/10 border border-sky/20 px-2.5 py-1 rounded-md"
+                  className="flex items-center gap-1.5 text-[11px] text-sky bg-sky/10 border border-sky/20 px-2.5 py-1 rounded-lg"
                 >
                   {formatRunLabel(run)}
                   <button
@@ -896,18 +897,18 @@ export default function JobsPage() {
       <div className="space-y-3 mb-5">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-muted" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-dim" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search title, company, location…"
-              className="pl-8 pr-3 py-1.5 w-full bg-card border border-ink rounded-md text-[13px] text-slate-text placeholder:text-slate-muted focus:border-sky/40 outline-none"
+              className="pl-9 pr-3 py-1.5 w-full bg-card border border-ink rounded-lg text-[13px] text-slate-text placeholder:text-slate-dim focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors"
             />
           </div>
 
           {/* Fit-score RANGE — set a min and/or max so you can isolate any band (e.g. ≤ 5
               to find low-fit jobs to delete, or 7–7 for exactly 7), not just "≥ N". */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-card border border-ink rounded-md" title="Filter by fit-score range">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-card border border-ink rounded-lg" title="Filter by fit-score range">
             <span className="text-[12px] text-slate-muted">Fit</span>
             <select
               value={minScore}
@@ -938,7 +939,7 @@ export default function JobsPage() {
             value={companyTier}
             onChange={(e) => setCompanyTier(e.target.value)}
             title="Filter by AI company assessment"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
             <option value="good,medium">Company: Good or Medium</option>
             <option value="">Any company</option>
@@ -955,13 +956,13 @@ export default function JobsPage() {
             type="button"
             onClick={toggleMoreFilters}
             title="Apply type, skill match, role type, and hide rules"
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border transition-all ${
               showMoreFilters || moreFilterCount > 0 ? 'bg-sky/10 border-sky/30 text-sky' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
             }`}
           >
             <SlidersHorizontal size={13} /> More filters
             {moreFilterCount > 0 && (
-              <span className="px-1.5 py-px text-[10px] font-mono rounded bg-sky/20 text-sky">{moreFilterCount}</span>
+              <span className="px-1.5 py-px text-[10px] font-mono rounded-md bg-sky/20 text-sky">{moreFilterCount}</span>
             )}
             <ChevronDown size={13} className={`transition-transform ${showMoreFilters ? 'rotate-180' : ''}`} />
           </button>
@@ -971,18 +972,18 @@ export default function JobsPage() {
           </button>
         </div>
 
-        <div className="flex gap-1 flex-wrap">
+        <div className="inline-flex flex-wrap gap-0.5 rounded-xl border border-ink bg-card/70 p-1">
           {STATUSES.map((st) => (
             <button
               key={st}
               onClick={() => setStatus(st)}
               title={STATUS_HELP[st]}
-              className={`px-3 py-1.5 text-[12px] rounded-md border capitalize transition-all ${
+              className={`px-3 py-1.5 text-[12px] rounded-lg capitalize transition-all ${
                 status === st
                   ? st === 'applied'
-                    ? 'bg-emerald/10 text-emerald border-emerald/30'
-                    : 'bg-sky-glow text-sky border-sky/30'
-                  : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+                    ? 'bg-emerald/15 text-emerald shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]'
+                    : 'bg-sky/15 text-sky shadow-[inset_0_0_0_1px_rgba(56,189,248,0.3)]'
+                  : 'text-slate-muted hover:text-slate-text hover:bg-raised/80'
               }`}
             >
               {st}
@@ -996,7 +997,7 @@ export default function JobsPage() {
             value={easyApply === null ? '' : easyApply ? 'easy' : 'external'}
             onChange={(e) => setEasyApply(e.target.value === '' ? null : e.target.value === 'easy')}
             title="Filter by how you apply"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
             <option value="">Any apply type</option>
             <option value="easy">Easy Apply</option>
@@ -1016,7 +1017,7 @@ export default function JobsPage() {
               }
             }}
             title="Filter by skill match (how many of your skills the job mentions)"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
             <option value="">Any skill match</option>
             <option value="0">No skill match (0%)</option>
@@ -1030,7 +1031,7 @@ export default function JobsPage() {
             value={minMatch}
             onChange={(e) => setMinMatch(e.target.value)}
             title="Filter by the local ATS match % (résumé↔job, no AI) — your first filter before AI scoring"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
             <option value="">Any ATS match</option>
             <option value="65">ATS match ≥ 65%</option>
@@ -1043,7 +1044,7 @@ export default function JobsPage() {
             value={employmentType}
             onChange={(e) => setEmploymentType(e.target.value)}
             title="Filter by role type (contract / full-time)"
-            className="px-3 py-1.5 bg-card border border-ink rounded-md text-[12px] text-slate-text outline-none focus:border-sky/40"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
             <option value="">Any type</option>
             <option value="full_time">Full-time</option>
@@ -1055,7 +1056,7 @@ export default function JobsPage() {
 
           <label
             title="Hide jobs you've already applied to (still under the Applied tab)"
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
               hideApplied && status !== 'applied' ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
             } ${status === 'applied' ? 'opacity-40 pointer-events-none' : ''}`}
           >
@@ -1063,14 +1064,14 @@ export default function JobsPage() {
               type="checkbox"
               checked={hideApplied && status !== 'applied'}
               onChange={(e) => setHideApplied(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+              className="w-3.5 h-3.5 rounded accent-sky"
             />
             Hide applied
           </label>
 
           <label
             title="Hide jobs you opened but didn't apply to (ones you've already looked at)"
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
               hideOpened && status !== 'opened' ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
             } ${status === 'opened' ? 'opacity-40 pointer-events-none' : ''}`}
           >
@@ -1078,14 +1079,14 @@ export default function JobsPage() {
               type="checkbox"
               checked={hideOpened && status !== 'opened'}
               onChange={(e) => setHideOpened(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+              className="w-3.5 h-3.5 rounded accent-sky"
             />
             Hide opened
           </label>
 
           <label
             title="Hide jobs you've already sent to Tailor & Apply"
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md border cursor-pointer select-none transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
               hideInApplications ? 'bg-sky-glow text-sky border-sky/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
             }`}
           >
@@ -1093,7 +1094,7 @@ export default function JobsPage() {
               type="checkbox"
               checked={hideInApplications}
               onChange={(e) => setHideInApplications(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-ink text-sky focus:ring-sky bg-raised"
+              className="w-3.5 h-3.5 rounded accent-sky"
             />
             Hide in Tailor &amp; Apply
           </label>
@@ -1131,7 +1132,7 @@ export default function JobsPage() {
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               <span className="text-[11px] text-slate-muted">Active:</span>
               {chips.map((c) => (
-                <span key={c.key} className="flex items-center gap-1 pl-2 pr-1 py-0.5 text-[11px] bg-sky/10 border border-sky/25 text-sky rounded">
+                <span key={c.key} className="flex items-center gap-1 pl-2 pr-1 py-0.5 text-[11px] bg-sky/10 border border-sky/25 text-sky rounded-md">
                   {c.label}
                   <button onClick={c.clear} title="Remove this filter" className="text-sky/60 hover:text-rose px-0.5 leading-none">
                     ×
@@ -1150,13 +1151,17 @@ export default function JobsPage() {
 
       {/* Selection toolbar — pick specific jobs and act on just those */}
       {!loading && jobs.length > 0 && (
-        <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <div
+          className={`flex items-center gap-3 mb-3 flex-wrap transition-all ${
+            selected.size > 0 ? 'rounded-xl border border-sky/25 bg-sky/[0.05] px-3 py-2.5 animate-fade-in' : ''
+          }`}
+        >
           <label className="flex items-center gap-2 text-[12px] text-slate-muted cursor-pointer select-none">
             <input
               type="checkbox"
               checked={allSelected}
               onChange={toggleSelectAll}
-              className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised"
+              className="w-4 h-4 rounded accent-sky"
             />
             {selected.size > 0 ? `${selected.size} selected` : `Select all (${jobs.length})`}
           </label>
@@ -1176,7 +1181,7 @@ export default function JobsPage() {
                 onClick={scoreSelected}
                 disabled={bulkBusy || bulkRunning}
                 title="AI-score just the selected jobs (already-scored ones are skipped; skips the auto pre-filter). To re-score, delete the fit score first."
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
               >
                 <Sparkles size={13} /> Score selected ({selected.size})
               </button>
@@ -1184,7 +1189,7 @@ export default function JobsPage() {
                 onClick={assessSelected}
                 disabled={bulkBusy || bulkRunning}
                 title="AI-assess the selected companies — re-runs even on jobs already rated, so use this to re-assess too"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
               >
                 <Building2 size={13} /> Assess / re-assess ({selected.size})
               </button>
@@ -1192,7 +1197,7 @@ export default function JobsPage() {
                 onClick={atsScoreSelected}
                 disabled={bulkBusy || bulkRunning}
                 title="Recompute the local ATS match % for just the selected jobs (no AI, free)"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 rounded-lg transition-all"
               >
                 <Gauge size={13} /> ATS score ({selected.size})
               </button>
@@ -1200,7 +1205,7 @@ export default function JobsPage() {
                 onClick={addToApplications}
                 disabled={bulkBusy}
                 title="Send the selected jobs to Tailor & Apply to prepare a tailored résumé"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all"
               >
                 <FileText size={13} /> Send to Tailor &amp; Apply ({selected.size})
               </button>
@@ -1208,7 +1213,7 @@ export default function JobsPage() {
                 onClick={markAppliedSelected}
                 disabled={bulkBusy}
                 title="Mark the selected jobs as applied"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-emerald border border-emerald/30 bg-emerald/10 hover:bg-emerald/20 disabled:opacity-40 rounded-lg transition-all"
               >
                 <CheckCircle2 size={13} /> Mark applied
               </button>
@@ -1216,7 +1221,7 @@ export default function JobsPage() {
                 onClick={archiveSelected}
                 disabled={bulkBusy}
                 title="Archive the selected jobs"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 rounded-lg transition-all"
               >
                 <Archive size={13} /> Archive selected
               </button>
@@ -1224,7 +1229,7 @@ export default function JobsPage() {
                 onClick={deleteSelected}
                 disabled={bulkBusy}
                 title="Delete the selected jobs permanently"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 rounded-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-muted border border-ink hover:text-rose hover:border-rose/30 disabled:opacity-40 rounded-lg transition-all"
               >
                 <Trash2 size={13} /> Delete selected
               </button>
@@ -1236,7 +1241,7 @@ export default function JobsPage() {
                     onClick={() => clearScores('fit')}
                     disabled={bulkBusy}
                     title="Delete the AI fit score for the selected jobs and reset them to unscored"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-lg transition-all"
                   >
                     <Trash2 size={13} /> Delete fit score
                   </button>
@@ -1244,7 +1249,7 @@ export default function JobsPage() {
                     onClick={() => clearScores('company')}
                     disabled={bulkBusy}
                     title="Delete the AI company assessment (tier + note) for the selected jobs"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-lg transition-all"
                   >
                     <Trash2 size={13} /> Delete company score
                   </button>
@@ -1252,7 +1257,7 @@ export default function JobsPage() {
                     onClick={() => clearScores('match')}
                     disabled={bulkBusy}
                     title="Delete the keyword/skill match score for the selected jobs"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-lg transition-all"
                   >
                     <Trash2 size={13} /> Delete match score
                   </button>
@@ -1260,7 +1265,7 @@ export default function JobsPage() {
                     onClick={() => clearScores('tailored')}
                     disabled={bulkBusy}
                     title="Delete the tailored résumé (and its score) for the selected jobs in Tailor & Apply"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-md transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-rose bg-rose/10 border border-rose/30 hover:bg-rose/20 disabled:opacity-40 rounded-lg transition-all"
                   >
                     <Trash2 size={13} /> Delete tailored résumé
                   </button>
@@ -1275,20 +1280,31 @@ export default function JobsPage() {
         </div>
       )}
 
-      <div className="bg-card border border-ink rounded-xl overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
-          <div className="px-5 py-10 text-center text-slate-muted text-[13px]">Loading…</div>
+          <div className="divide-y divide-ink-subtle">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-3.5 animate-pulse" style={{ opacity: 1 - i * 0.13 }}>
+                <div className="h-4 w-4 rounded bg-raised" />
+                <div className="h-8 w-8 rounded-[10px] bg-raised" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-1/3 rounded bg-raised" />
+                  <div className="h-2.5 w-1/4 rounded bg-raised/70" />
+                </div>
+                <div className="h-5 w-16 rounded-md bg-raised/60" />
+              </div>
+            ))}
+          </div>
         ) : jobs.length === 0 ? (
-          <div className="px-6 py-14 text-center">
+          <div className="px-6 py-16 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-ink bg-raised/60">
+              <Search size={20} className="text-slate-dim" />
+            </div>
             <h3 className="text-[14px] font-medium text-slate-text mb-2">No jobs found in the last 24 hours</h3>
             <p className="text-[13px] text-slate-muted mb-6 max-w-md mx-auto">
               This list strictly shows jobs discovered in the last 24 hours. If your filters aren't hiding them, it's time to run a fresh fetch.
             </p>
-            <button
-              onClick={() => runFetch()}
-              disabled={fetching}
-              className="inline-flex items-center justify-center px-4 py-2 text-[13px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 rounded-lg transition-all disabled:opacity-50"
-            >
+            <button onClick={() => runFetch()} disabled={fetching} className="btn-primary">
               {fetching ? 'Starting fetch...' : 'Run a fetch now'}
             </button>
           </div>
@@ -1312,9 +1328,12 @@ export default function JobsPage() {
                       checked={selected.has(job.id)}
                       onChange={() => toggleOne(job.id)}
                       title="Select"
-                      className="w-4 h-4 rounded border-ink text-sky focus:ring-sky bg-raised shrink-0"
+                      className="w-4 h-4 rounded accent-sky shrink-0"
                     />
-                    <button onClick={() => setExpanded(open ? null : job.id)} className="text-slate-muted hover:text-sky">
+                    <button
+                      onClick={() => setExpanded(open ? null : job.id)}
+                      className={`p-1 rounded-md transition-colors ${open ? 'text-sky bg-sky/10' : 'text-slate-muted hover:text-sky hover:bg-sky/10'}`}
+                    >
                       {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </button>
                     <ScoreBadge score={job.fit_score} />
@@ -1329,24 +1348,24 @@ export default function JobsPage() {
 
                     {/* Contract / role-type badge (ADR 0022) — flagged, not demoted */}
                     {job.employment_type === 'contract' && (
-                      <span title="Contract / staffing role — review separately" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded">
+                      <span title="Contract / staffing role — review separately" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">
                         Contract
                       </span>
                     )}
                     {job.employment_type === 'internship' && (
-                      <span title="Internship" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-raised border border-ink text-slate-muted rounded">
+                      <span title="Internship" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-raised border border-ink text-slate-muted rounded-md">
                         Intern
                       </span>
                     )}
 
                     {/* Apply type badge */}
                     {job.easy_apply === true && (
-                      <span title="One-click apply on LinkedIn" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded">
+                      <span title="One-click apply on LinkedIn" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded-md">
                         Easy Apply
                       </span>
                     )}
                     {job.easy_apply === false && (
-                      <span title="Apply on the company / external site" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded">
+                      <span title="Apply on the company / external site" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-md">
                         External
                       </span>
                     )}
@@ -1398,7 +1417,7 @@ export default function JobsPage() {
 
                     {/* Opened (clicked but not yet applied) badge */}
                     {job.clicked_at && !job.applied_at && (
-                      <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded">
+                      <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">
                         Opened
                       </span>
                     )}
@@ -1414,14 +1433,14 @@ export default function JobsPage() {
                           : markApplied(job)
                       }
                       title={job.applied_at ? `Applied ${new Date(job.applied_at).toLocaleDateString()} — click to un-mark` : 'Mark applied'}
-                      className={job.applied_at ? 'text-emerald' : 'text-slate-muted hover:text-emerald'}
+                      className={`p-1 rounded-md transition-colors ${job.applied_at ? 'text-emerald bg-emerald/10' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
                     >
                       <CheckCircle2 size={15} />
                     </button>
                     <button
                       onClick={() => patch(job.id, { is_shortlisted: !job.is_shortlisted })}
                       title="Shortlist"
-                      className={job.is_shortlisted ? 'text-emerald' : 'text-slate-muted hover:text-emerald'}
+                      className={`p-1 rounded-md transition-colors ${job.is_shortlisted ? 'text-emerald' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
                     >
                       <Star size={15} fill={job.is_shortlisted ? 'currentColor' : 'none'} />
                     </button>
@@ -1431,7 +1450,7 @@ export default function JobsPage() {
                       rel="noopener noreferrer"
                       onClick={() => markOpened(job)}
                       title="Open posting (will ask if you applied)"
-                      className="text-slate-muted hover:text-sky"
+                      className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors"
                     >
                       <ExternalLink size={15} />
                     </a>
@@ -1439,7 +1458,7 @@ export default function JobsPage() {
                       <button
                         onClick={() => patch(job.id, { status: 'archived' })}
                         title="Archive"
-                        className="text-slate-muted hover:text-rose"
+                        className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
                       >
                         <Archive size={15} />
                       </button>
@@ -1447,7 +1466,7 @@ export default function JobsPage() {
                     <button
                       onClick={() => deleteJob(job.id)}
                       title="Delete permanently"
-                      className="text-slate-muted hover:text-rose"
+                      className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -1468,7 +1487,7 @@ export default function JobsPage() {
           {jobs.length < total && (
             <button
               onClick={() => setLimit((n) => n + 300)}
-              className="px-3 py-1.5 text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-md transition-all"
+              className="px-3 py-1.5 text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all"
             >
               Load more
             </button>
@@ -1478,7 +1497,7 @@ export default function JobsPage() {
 
       {/* "Did you apply?" dialog — fixed bottom-right, shown after returning from an external link */}
       {applyDialog && (
-        <div className="fixed bottom-5 right-5 z-50 bg-card border border-ink rounded-xl p-4 shadow-2xl w-80 animate-slide-up">
+        <div className="fixed bottom-5 right-5 z-50 card shadow-pop p-4 w-80 animate-slide-up">
           <p className="text-[13px] font-semibold text-slate-text mb-0.5">Did you apply?</p>
           <p className="text-[12px] text-slate-muted mb-4 truncate">
             {applyDialog.title}
@@ -1491,10 +1510,7 @@ export default function JobsPage() {
             >
               Yes, I applied ✓
             </button>
-            <button
-              onClick={() => setApplyDialog(null)}
-              className="px-4 py-2 text-[12px] text-slate-muted border border-ink rounded-lg hover:bg-raised transition-all"
-            >
+            <button onClick={() => setApplyDialog(null)} className="btn-ghost px-4 py-2 text-[12px]">
               No
             </button>
           </div>

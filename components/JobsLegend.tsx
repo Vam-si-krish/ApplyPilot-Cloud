@@ -22,8 +22,8 @@ export default function JobsLegend() {
   }
 
   return (
-    <div className="bg-card border border-ink rounded-xl mb-4 overflow-hidden">
-      <button onClick={toggle} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-raised transition-colors">
+    <div className="card mb-4 overflow-hidden">
+      <button onClick={toggle} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-raised/60 transition-colors">
         <HelpCircle size={14} className="text-sky" />
         <span className="text-[12px] font-medium text-slate-text">What the icons &amp; colours mean</span>
         <span className="ml-auto text-slate-muted">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
@@ -35,7 +35,7 @@ export default function JobsLegend() {
             <Text title="Fit score (1–10)">AI match to your résumé. Green ≥8 strong · amber 6–7 decent · red &lt;6 weak · “–” not scored yet.</Text>
           </Item>
           <Item>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">
               <Gauge size={10} /> 72%
             </span>
             <Text title="ATS match">
@@ -43,7 +43,7 @@ export default function JobsLegend() {
             </Text>
           </Item>
           <Item>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">
               <Target size={10} /> 67%
             </span>
             <Text title="Skill match">How many of your listed skills the job mentions (Settings → Skills). Filter by it, incl. “No skill match”.</Text>
@@ -60,7 +60,7 @@ export default function JobsLegend() {
             <Text title="Applied">You marked this job as applied.</Text>
           </Item>
           <Item>
-            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded">Opened</span>
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">Opened</span>
             <Text title="Opened">You clicked the apply link (row tinted violet) but haven&apos;t marked it applied — your place-marker.</Text>
           </Item>
           <Item>
@@ -69,8 +69,8 @@ export default function JobsLegend() {
           </Item>
           <Item>
             <div className="flex gap-1">
-              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded">Easy Apply</span>
-              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded">External</span>
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded-md">Easy Apply</span>
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-md">External</span>
             </div>
             <Text title="Apply type">Easy Apply = one-click on LinkedIn · External = apply on the company / another site.</Text>
           </Item>

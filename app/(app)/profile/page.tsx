@@ -71,17 +71,17 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 animate-slide-up">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-text tracking-tight">Profile</h1>
-          <p className="text-slate-muted text-[13px] mt-0.5">
+          <h1 className="page-title text-2xl">Profile</h1>
+          <p className="page-sub">
             Extra application data for the Assistant. Your résumé lives in{' '}
             <a href="/applications" className="text-sky hover:underline">Tailor &amp; Apply → Base résumé</a> and drives scoring, tailoring, and cover letters.
           </p>
         </div>
         {saved && (
-          <div className="flex items-center gap-1.5 text-[13px] text-emerald animate-fade-in">
+          <div className="flex items-center gap-1.5 rounded-lg border border-emerald/25 bg-emerald/10 px-3 py-1.5 text-[13px] text-emerald animate-fade-in">
             <CheckCircle size={14} /> Saved
           </div>
         )}
@@ -92,11 +92,12 @@ export default function ProfilePage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-all ${
-              tab === t.id ? 'border-sky text-sky' : 'border-transparent text-slate-muted hover:text-slate-text'
+            className={`relative px-4 py-2 text-[13px] font-medium -mb-px transition-all ${
+              tab === t.id ? 'text-sky' : 'text-slate-muted hover:text-slate-text'
             }`}
           >
             {t.label}
+            {tab === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-sky to-iris" />}
           </button>
         ))}
       </div>
@@ -104,7 +105,7 @@ export default function ProfilePage() {
       <div className="animate-slide-up">
         {tab === 'personal' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Full Name" value={form.personal?.full_name} onChange={(v) => set('personal.full_name', v)} />
               <Field label="Email" value={form.personal?.email} onChange={(v) => set('personal.email', v)} />
               <Field label="Phone" value={form.personal?.phone} onChange={(v) => set('personal.phone', v)} />
@@ -112,12 +113,12 @@ export default function ProfilePage() {
               <Field label="LinkedIn URL" value={form.personal?.linkedin_url} onChange={(v) => set('personal.linkedin_url', v)} />
               <Field label="GitHub URL" value={form.personal?.github_url} onChange={(v) => set('personal.github_url', v)} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Years of Experience" value={form.experience?.years_of_experience_total} onChange={(v) => set('experience.years_of_experience_total', v)} />
               <Field label="Target Role" value={form.experience?.target_role} onChange={(v) => set('experience.target_role', v)} />
               <Field label="Education Level" value={form.experience?.education_level} onChange={(v) => set('experience.education_level', v)} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Min Salary ($)" value={form.compensation?.salary_range_min} onChange={(v) => set('compensation.salary_range_min', v)} />
               <Field label="Max Salary ($)" value={form.compensation?.salary_range_max} onChange={(v) => set('compensation.salary_range_max', v)} />
             </div>
@@ -127,7 +128,7 @@ export default function ProfilePage() {
 
         {tab === 'work' && (
           <div className="space-y-4">
-            <div className="bg-card border border-ink rounded-xl p-5 space-y-4">
+            <div className="card p-5 space-y-4">
               <Toggle
                 label="Legally authorized to work in US"
                 value={!!form.work_authorization?.legally_authorized_to_work}
@@ -165,12 +166,8 @@ export default function ProfilePage() {
 function Field({ label, value, onChange }: { label: string; value: unknown; onChange: (v: string) => void }) {
   return (
     <div>
-      <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">{label}</p>
-      <input
-        value={(value as string) ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-2 rounded-lg text-[13px] text-slate-text transition-colors"
-      />
+      <p className="label">{label}</p>
+      <input value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} className="input" />
     </div>
   );
 }
@@ -180,9 +177,13 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
     <label className="flex items-center gap-3 cursor-pointer">
       <div
         onClick={() => onChange(!value)}
-        className={`w-10 h-5 rounded-full border transition-all relative ${value ? 'bg-sky/20 border-sky/40' : 'bg-raised border-ink'}`}
+        className={`w-10 h-5 rounded-full border transition-all relative ${value ? 'bg-sky/25 border-sky/50' : 'bg-raised border-ink'}`}
       >
-        <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${value ? 'left-5 bg-sky' : 'left-0.5 bg-slate-muted'}`} />
+        <div
+          className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${
+            value ? 'left-5 bg-gradient-to-br from-sky to-iris shadow-glow-sky' : 'left-0.5 bg-slate-dim'
+          }`}
+        />
       </div>
       <span className="text-[13px] text-slate-text">{label}</span>
       <span className={`text-[11px] font-mono ${value ? 'text-emerald' : 'text-rose'}`}>{value ? 'YES' : 'NO'}</span>
@@ -200,17 +201,18 @@ function TagField({ label, tags, onChange }: { label: string; tags: string[]; on
     }
   }
   return (
-    <div className="bg-card border border-ink rounded-xl p-5">
-      <p className="text-[12px] font-semibold text-slate-muted uppercase tracking-wider font-display mb-3">{label}</p>
+    <div className="card p-5">
+      <p className="label mb-3">{label}</p>
       <div className="flex flex-wrap gap-2 mb-3">
         {tags.map((t) => (
-          <span key={t} className="flex items-center gap-1.5 px-2.5 py-1 bg-sky/10 border border-sky/20 text-sky text-[12px] rounded-md">
+          <span key={t} className="flex items-center gap-1.5 px-2.5 py-1 bg-sky/10 border border-sky/20 text-sky text-[12px] rounded-lg">
             {t}
             <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-sky/50 hover:text-rose transition-colors leading-none">
               ×
             </button>
           </span>
         ))}
+        {tags.length === 0 && <span className="text-[12px] text-slate-dim italic">No tags yet — add your first below.</span>}
       </div>
       <div className="flex gap-2">
         <input
@@ -218,9 +220,9 @@ function TagField({ label, tags, onChange }: { label: string; tags: string[]; on
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder="Add tag…"
-          className="flex-1 bg-raised border border-ink focus:border-sky/40 outline-none px-3 py-1.5 rounded-lg text-[13px] text-slate-text"
+          className="input flex-1 py-1.5"
         />
-        <button onClick={add} className="px-3 py-1.5 text-[12px] text-sky border border-sky/30 bg-sky/5 hover:bg-sky/15 rounded-lg transition-all">
+        <button onClick={add} className="btn-primary px-3 py-1.5 text-[12px]">
           Add
         </button>
       </div>
@@ -230,11 +232,7 @@ function TagField({ label, tags, onChange }: { label: string; tags: string[]; on
 
 function SaveBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className="flex items-center gap-2 px-5 py-2.5 bg-sky/10 text-sky border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg text-[13px] font-medium transition-all"
-    >
+    <button onClick={onClick} disabled={loading} className="btn-primary px-5 py-2.5">
       <Save size={14} /> {loading ? 'Saving…' : 'Save Changes'}
     </button>
   );

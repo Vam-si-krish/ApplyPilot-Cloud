@@ -24,9 +24,14 @@ export default function ProgressToast({
   tone?: ProgressTone;
 }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  const barColor = phase === 'done' ? 'bg-emerald' : tone === 'violet' ? 'bg-violet-400' : 'bg-sky';
+  const barColor =
+    phase === 'done'
+      ? 'bg-emerald'
+      : tone === 'violet'
+        ? 'bg-gradient-to-r from-violet-400 to-iris'
+        : 'bg-gradient-to-r from-sky to-iris';
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] bg-card border border-ink rounded-xl shadow-2xl px-4 py-3.5 animate-slide-up">
+    <div className="fixed bottom-5 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] card shadow-pop px-4 py-3.5 animate-slide-up">
       <div className="flex items-center gap-2 mb-2">
         {phase === 'done' ? (
           <CheckCircle2 size={15} className="text-emerald shrink-0" />
@@ -38,7 +43,7 @@ export default function ProgressToast({
           {done}/{total}
         </span>
       </div>
-      <div className="h-2 w-full bg-raised rounded-full overflow-hidden">
+      <div className="h-2 w-full bg-ink-subtle rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-300 ${barColor}`}
           style={{ width: `${phase === 'done' ? 100 : pct}%` }}
