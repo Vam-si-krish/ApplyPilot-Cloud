@@ -31,6 +31,11 @@ const STATUS_FILTERS: Array<'all' | ApplicationStatus> = ['all', 'queued', 'gene
 // isn't overwhelmed.
 const GEN_CONCURRENCY = 3;
 
+// Error text that means the Claude subscription window / provider quota is exhausted —
+// every further generation would fail identically, so the bulk loop stops early instead
+// of marching the rest of the batch into the same failure (ADR 0060).
+const LIMIT_RE = /hit your[\s\S]{0,40}limit|usage limit|rate.?limit|quota|credit balance|out of (credits?|tokens?)/i;
+
 export default function ApplicationsPage() {
   const [view, setView] = useState<View>('list');
   const [apps, setApps] = useState<ApplicationWithJob[]>([]);
@@ -317,10 +322,15 @@ export default function ApplicationsPage() {
     return true;
   });
   // Any visible row can be selected (so job-removed clutter is bulk-deletable);
-  // Generate only acts on the ones that still have a job.
+  // Generate only acts on the ones that still have a job AND no résumé yet — a bulk
+  // pass never re-tailors finished rows (each redo costs a call, and a failing redo
+  // used to clobber good rows; ADR 0060). Use a row's Regenerate button for a redo.
   const selectableIds = filtered.map((a) => a.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
-  const selectedGeneratable = [...selected].filter((id) => apps.find((a) => a.id === id)?.job).length;
+  const selectedGeneratable = [...selected].filter((id) => {
+    const a = apps.find((x) => x.id === id);
+    return a?.job && !a.tailored_resume;
+  }).length;
   // Applications waiting to be tailored — what the overnight drain (and "Run queue now") acts on.
   const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.tailored_resume).length;
   function toggleSelectAll() {
@@ -333,13 +343,21 @@ export default function ApplicationsPage() {
   // ready/failed → score the new résumé → auto-create the PDF.
   async function generateSelected() {
     if (bulkBusy || bulkRunning || genId) return;
-    const ids = [...selected].filter((id) => apps.find((a) => a.id === id)?.job);
+    const all = [...selected];
+    // Only rows without a résumé — bulk generate never silently re-tailors finished
+    // rows (ADR 0060); the per-row Regenerate button is the deliberate redo path.
+    const ids = all.filter((id) => {
+      const a = apps.find((x) => x.id === id);
+      return a?.job && !a.tailored_resume;
+    });
     if (ids.length === 0) return;
+    const skipped = all.filter((id) => apps.find((x) => x.id === id)?.tailored_resume).length;
     setBulkBusy(true);
-    setMsg(null);
+    setMsg(skipped > 0 ? `Skipped ${skipped} that already have a résumé — use a row's Regenerate to redo one.` : null);
     let done = 0;
     let ok = 0;
     let failed = 0;
+    let limitHit = false; // set when a row fails with an out-of-quota error — stops the pool
     setBulkProgress({ label: 'Generating résumés & PDFs', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
 
     // The full pipeline for one application. Self-contained so the pool can run several
@@ -367,6 +385,8 @@ export default function ApplicationsPage() {
             await doRender(id).catch(() => {});
           } else {
             failed++;
+            // Out of quota → every remaining row would fail the same way; trip the breaker.
+            if (row?.status === 'failed' && LIMIT_RE.test(row.error ?? '')) limitHit = true;
           }
         }
       } catch {
@@ -381,15 +401,18 @@ export default function ApplicationsPage() {
       // Bounded-concurrency pool: up to GEN_CONCURRENCY pipelines in flight at once.
       const queue = [...ids];
       const runWorker = async () => {
-        for (let id = queue.shift(); id; id = queue.shift()) {
+        for (let id = queue.shift(); id && !limitHit; id = queue.shift()) {
           await processApp(id);
         }
       };
       await Promise.all(Array.from({ length: Math.min(GEN_CONCURRENCY, ids.length) }, runWorker));
 
+      const untouched = ids.length - done;
       setBulkProgress({
-        label: `Done — ${ok} generated${failed ? `, ${failed} failed` : ''}`,
-        done: ids.length,
+        label: limitHit
+          ? `Stopped — Claude usage limit hit. ${ok} generated${untouched > 0 ? `; ${untouched} left queued for after the window resets` : ''}`
+          : `Done — ${ok} generated${failed ? `, ${failed} failed` : ''}`,
+        done,
         total: ids.length,
         phase: 'done',
         tone: 'violet',
@@ -830,7 +853,7 @@ export default function ApplicationsPage() {
           <button
             onClick={generateSelected}
             disabled={bulkBusy || bulkRunning || !!genId || selectedGeneratable === 0}
-            title="Generate a tailored résumé for every selected application"
+            title="Generate a tailored résumé for every selected application that doesn't have one yet (rows with a résumé are skipped — use a row's Regenerate to redo one)"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
           >
             {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}

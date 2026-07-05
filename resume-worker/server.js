@@ -283,7 +283,9 @@ app.post('/generate', async (req, res) => {
     res.json({ ok: true, pdf_path: path, pages, scale, tooLong, condensed, trimmed, bytes: pdf.length });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
+    // This endpoint requires an existing tailored_resume (checked above), so a render
+    // failure must not demote the row — the résumé is intact; only the PDF is missing.
+    await updateApplication(id, { status: 'ready', error: `PDF render failed — résumé kept. ${msg}` }).catch(() => {});
     res.status(500).json({ error: msg });
   }
 });
@@ -347,13 +349,37 @@ app.post('/tailor', async (req, res) => {
       .catch((e) => {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`[/tailor] FAIL id=${id} ${Date.now() - tStart}ms: ${msg}`);
-        return updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
+        return markTailorFailure(id, msg);
       });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!res.headersSent) res.status(500).json({ error: msg });
   }
 });
+
+/**
+ * True when an error reads like an exhausted subscription window / provider quota —
+ * every further LLM call will fail the same way until the window resets, so batch
+ * loops should stop instead of failing their whole remaining tail (ADR 0060).
+ */
+function isUsageLimitError(msg) {
+  return /hit your[\s\S]{0,40}limit|usage limit|rate.?limit|quota|credit balance|out of (credits?|tokens?)/i.test(String(msg || ''));
+}
+
+/**
+ * Record a tailoring failure WITHOUT clobbering a good row (ADR 0060): a failed
+ * REgeneration on a row that already holds a tailored résumé keeps status 'ready'
+ * (the previous résumé + PDF remain usable — that's what the user would apply with);
+ * only a row with nothing to show becomes 'failed'. The error text is stored either way.
+ */
+async function markTailorFailure(id, msg) {
+  const row = await getApplication(id).catch(() => null);
+  if (row && row.tailored_resume) {
+    await updateApplication(id, { status: 'ready', error: `Regenerate failed — kept the previous résumé. ${msg}` }).catch(() => {});
+  } else {
+    await updateApplication(id, { status: 'failed', error: msg }).catch(() => {});
+  }
+}
 
 // Build the signals block the tailorer expects from a job row (shared by /tailor and the
 // queue drainer). atsMissing = exact posting-form terms the base résumé lacks, from the
@@ -528,7 +554,14 @@ app.post('/tailor-queue', async (req, res) => {
         failed++;
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`[/tailor-queue] FAIL id=${appRow.id}: ${msg}`);
-        await updateApplication(appRow.id, { status: 'failed', error: msg }).catch(() => {});
+        await markTailorFailure(appRow.id, msg);
+        // Circuit breaker (ADR 0060): once the subscription window / quota is exhausted,
+        // every remaining row would fail identically — stop and leave them 'queued' so
+        // the next drain (after the window resets) picks them up untouched.
+        if (isUsageLimitError(msg)) {
+          console.error(`[/tailor-queue] usage limit hit — stopping; ${batch.length - ok - failed} rows stay queued`);
+          break;
+        }
       }
     }
     console.log(`[/tailor-queue] done — ${ok} generated, ${failed} failed in ${Math.round((Date.now() - t0) / 1000)}s`);
