@@ -31,16 +31,16 @@ import {
   consumeScoringRescan,
   requestScoringRescan,
 } from '@/lib/db';
-import { SCORE_BATCH_SIZE, triggerScoreBatch, triggerAssessBatch } from '@/lib/pipeline';
+import { SCORE_BATCH_SIZE, triggerScoreBatch } from '@/lib/pipeline';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-/** Close out a finished/stopped session: finalize the run + kick company assessment. */
-async function finishUp(settings: Awaited<ReturnType<typeof getSettings>>): Promise<void> {
+/** Close out a finished/stopped session: finalize the run. Company assessment now
+ *  rides the scoring call itself (ADR 0065), so there's no separate pass to kick. */
+async function finishUp(): Promise<void> {
   const running = await getLatestRunningRun();
   if (running) await finalizeRun(running.id, 'succeeded').catch(() => {});
-  if (settings.auto_assess_enabled) triggerAssessBatch();
 }
 
 export async function POST(req: Request) {
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     // START: nothing to do if the queue is empty; otherwise try to acquire the lock.
     const total = await countUnscored();
     if (total === 0) {
-      await finishUp(settings);
+      await finishUp();
       return NextResponse.json({ ok: true, scored: 0, done: true });
     }
     token = randomUUID();
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
       }
     }
     await releaseScoringLock(token);
-    await finishUp(settings);
+    await finishUp();
     return NextResponse.json({ ok: true, done: true });
   }
 
@@ -137,6 +137,6 @@ export async function POST(req: Request) {
   }
 
   await releaseScoringLock(token);
-  await finishUp(settings);
+  await finishUp();
   return NextResponse.json({ ok: true, scored, filtered, done, remaining: 0, done_all: true });
 }

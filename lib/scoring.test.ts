@@ -36,17 +36,43 @@ describe('parseScoreResponse', () => {
     expect(r.missing).toBe('Kubernetes, GraphQL');
   });
 
+  it('parses the merged company-assessment fields (ADR 0065)', () => {
+    const r = parseScoreResponse(
+      [
+        'SCORE: 8',
+        'NOTE: Strong fit.',
+        'COMPANY_TIER: low',
+        'COMPANY_NOTE: Listing exists mainly to harvest résumés for a lead-gen service.',
+        'TECH_STACK: React, TypeScript, React', // dupe should collapse
+      ].join('\n'),
+    );
+    // COMPANY_NOTE must NOT be mistaken for the fit NOTE, and vice-versa.
+    expect(r.note).toBe('Strong fit.');
+    expect(r.company_tier).toBe('low');
+    expect(r.company_tier_note).toBe('Listing exists mainly to harvest résumés for a lead-gen service.');
+    expect(r.tech_stack).toEqual(['React', 'TypeScript']);
+  });
+
+  it('defaults an unrecognized COMPANY_TIER to unknown and "none" tech to null', () => {
+    const r = parseScoreResponse('SCORE: 5\nCOMPANY_TIER: sketchy\nTECH_STACK: none');
+    expect(r.company_tier).toBe('unknown');
+    expect(r.tech_stack).toBeNull();
+  });
+
   it('treats MISSING: none as no gaps and clamps over-range sub-scores', () => {
     const r = parseScoreResponse('SCORE: 9\nBREAKDOWN: skills=99 domain=0 experience=0\nMISSING: none');
     expect(r.missing).toBe('');
     expect(r.breakdown?.skills).toBe(60); // clamped to the dimension max (0–60)
   });
 
-  it('leaves v2 fields null on an old-style response', () => {
+  it('leaves v2 + company fields null on an old-style response', () => {
     const r = parseScoreResponse('SCORE: 6\nKEYWORDS: x\nNOTE: y\nREASONING: z');
     expect(r.employment_type).toBeNull();
     expect(r.breakdown).toBeNull();
     expect(r.missing).toBeNull();
+    expect(r.company_tier).toBeNull();
+    expect(r.company_tier_note).toBeNull();
+    expect(r.tech_stack).toBeNull();
   });
 
   it('clamps scores above 10 down to 10', () => {
@@ -93,11 +119,12 @@ describe('buildScoreMessages', () => {
 
   it('embeds resume and job, truncating description to 15000 chars', () => {
     const longDesc = 'x'.repeat(16000);
-    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', location: 'NYC', full_description: longDesc });
+    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', company_size: '51-200 employees', location: 'NYC', full_description: longDesc });
     const user = flatten(msgs);
     expect(user.startsWith('RESUME:\nRES\n\n---\n\nJOB POSTING:\n')).toBe(true);
     expect(user).toContain('TITLE: T');
     expect(user).toContain('COMPANY: C');
+    expect(user).toContain('COMPANY SIZE: 51-200 employees');
     expect(user).toContain('LOCATION: NYC');
     expect(user).toContain('x'.repeat(15000));
     expect(user).not.toContain('x'.repeat(15001));

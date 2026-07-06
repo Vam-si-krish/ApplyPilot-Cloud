@@ -11,7 +11,7 @@
 
 import { getClient, ChatMessage, LLMClient } from "./llm";
 import { stripHtml } from "./prefilter";
-import type { ScorableJob, ScoreResult, ScoreBreakdown, EmploymentType } from "./types";
+import type { ScorableJob, ScoreResult, ScoreBreakdown, EmploymentType, CompanyTier } from "./types";
 
 // ── Scoring Prompt (v2 weighted rubric) ──────────────────────────────────────
 
@@ -57,6 +57,19 @@ From the posting wording, classify the role:
 - full_time: a permanent direct-hire role.
 - unknown: not stated.
 
+### COMPANY ASSESSMENT (independent annotation — MUST NOT change the SCORE above)
+Separately from the fit score, judge the EMPLOYER behind this posting and name the role's core tech.
+This section is purely informational: it NEVER raises or lowers the SCORE, sub-scores, or seniority.
+Use what you actually KNOW about the company (reputation, size, industry standing) PLUS the posting.
+- COMPANY_TIER — rate the employer into exactly one of:
+  • good: a well-known, reputable, or clearly established employer (or a reputable staffing firm placing for a real client) hiring genuinely.
+  • medium: a plausible real employer or staffing firm, but unremarkable or with limited information.
+  • low: a genuine TIME-WASTER you have real reason to distrust — a lead-generation / résumé-upsell / data-harvesting scheme, a vague shell company, a listing that exists mainly to harvest applicant data, or a duplicate/scraped repost of a role that isn't really being hired.
+  • unknown: you do not recognize the company and the details are insufficient to judge. DO NOT GUESS — prefer 'unknown' over inventing facts.
+  BE CONSERVATIVE — 'low' is only for employers you actually recognize or that show clear scheme signals. When in doubt, use 'medium' or 'unknown', never 'low'.
+  DO NOT rate 'low' merely because: the role is CONTRACT / C2C / temporary; a staffing/recruiting firm is hiring for a real client; OR the posting sends you to the employer's OWN external ATS / career-site to create an account and apply (Workday, Greenhouse, iCIMS, Lever, etc.). Requiring a career-site account is completely normal for legitimate employers and is NOT a red flag by itself. Reserve 'low' for schemes whose PURPOSE is to farm data / upsell / drive signups to a third-party service, not for ordinary external application flows.
+- TECH_STACK — the primary technologies / frameworks / languages the role centers on, drawn from the posting (e.g. "React, TypeScript, Node.js"). "none" if the posting names no clear stack.
+
 RESPOND IN EXACTLY THIS FORMAT, nothing else:
 SCORE: [0-10]
 EMPLOYMENT: [full_time|contract|internship|unknown]
@@ -65,11 +78,25 @@ BREAKDOWN: skills=<0-60> domain=<0-25> experience=<0-15>
 KEYWORDS: [comma-separated resume skills that are genuinely relevant to this job]
 MISSING: [comma-separated MUST-HAVE requirements the resume does NOT evidence; "none" if all are met]
 NOTE: [one concise sentence summarizing the match quality]
-REASONING: [3-5 sentences bridging concrete resume facts to the job's must-haves. State the candidate's EVIDENCED years of experience from the resume (or "not specified") and how it compares to any required years — NEVER claim the candidate meets a years/seniority bar the resume does not actually show. State the seniority fit, and remember overqualification is not a penalty for shortlisting.]`;
+REASONING: [3-5 sentences bridging concrete resume facts to the job's must-haves. State the candidate's EVIDENCED years of experience from the resume (or "not specified") and how it compares to any required years — NEVER claim the candidate meets a years/seniority bar the resume does not actually show. State the seniority fit, and remember overqualification is not a penalty for shortlisting.]
+COMPANY_TIER: [good|medium|low|unknown]
+COMPANY_NOTE: [one concise sentence on the employer's legitimacy; if 'low', name the specific harvesting/lead-gen/scheme signal]
+TECH_STACK: [comma-separated primary technologies the role centers on; "none" if unclear]`;
 
 // ── Parsing ──────────────────────────────────────────────────────────────────
 
 const EMPLOYMENT_TYPES: EmploymentType[] = ["full_time", "contract", "internship", "unknown"];
+const COMPANY_TIERS: CompanyTier[] = ["good", "medium", "low", "unknown"];
+
+/** Parse a comma-separated tech-stack line into a de-duped list; "none"/empty ⇒ null. */
+function parseTechStack(v: string): string[] | null {
+  const items = v
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s && s.toLowerCase() !== "none");
+  const deduped = Array.from(new Set(items));
+  return deduped.length ? deduped : null;
+}
 
 function parseBreakdown(line: string): ScoreBreakdown | null {
   const get = (k: string): number | null => {
@@ -103,24 +130,37 @@ export function parseScoreResponse(response: string): ScoreResult {
   let seniority: string | null = null;
   let missing: string | null = null;
   let breakdown: ScoreBreakdown | null = null;
+  let company_tier: CompanyTier | null = null;
+  let company_tier_note: string | null = null;
+  let tech_stack: string[] | null = null;
 
   for (const raw of response.split("\n")) {
     const line = raw.trim();
+    const upper = line.toUpperCase();
+    // Each branch keys on an exact line prefix, so COMPANY_TIER / COMPANY_NOTE never
+    // collide with SCORE: / NOTE: (a "COMPANY_NOTE:" line does not start with "NOTE:").
     if (line.startsWith("SCORE:")) {
       const m = line.match(/\d+/);
       score = m ? Math.max(0, Math.min(10, parseInt(m[0], 10))) : 0;
-    } else if (line.toUpperCase().startsWith("EMPLOYMENT:")) {
+    } else if (upper.startsWith("EMPLOYMENT:")) {
       const v = line.slice(11).trim().toLowerCase().replace(/[^a-z_]/g, "");
       if ((EMPLOYMENT_TYPES as string[]).includes(v)) employment_type = v as EmploymentType;
-    } else if (line.toUpperCase().startsWith("SENIORITY:")) {
+    } else if (upper.startsWith("SENIORITY:")) {
       seniority = line.slice(10).trim() || null;
-    } else if (line.toUpperCase().startsWith("BREAKDOWN:")) {
+    } else if (upper.startsWith("BREAKDOWN:")) {
       breakdown = parseBreakdown(line.slice(10));
     } else if (line.startsWith("KEYWORDS:")) {
       keywords = line.replace("KEYWORDS:", "").trim();
-    } else if (line.toUpperCase().startsWith("MISSING:")) {
+    } else if (upper.startsWith("MISSING:")) {
       const v = line.slice(8).trim();
       missing = v && v.toLowerCase() !== "none" ? v : "";
+    } else if (upper.startsWith("COMPANY_TIER:")) {
+      const v = line.slice(13).trim().toLowerCase().replace(/[^a-z]/g, "");
+      company_tier = (COMPANY_TIERS as string[]).includes(v) ? (v as CompanyTier) : "unknown";
+    } else if (upper.startsWith("COMPANY_NOTE:")) {
+      company_tier_note = line.slice(13).trim() || null;
+    } else if (upper.startsWith("TECH_STACK:")) {
+      tech_stack = parseTechStack(line.slice(11));
     } else if (line.startsWith("NOTE:")) {
       note = line.replace("NOTE:", "").trim();
     } else if (line.startsWith("REASONING:")) {
@@ -128,7 +168,10 @@ export function parseScoreResponse(response: string): ScoreResult {
     }
   }
 
-  return { score, keywords, note, reasoning, employment_type, seniority, missing, breakdown };
+  return {
+    score, keywords, note, reasoning, employment_type, seniority, missing, breakdown,
+    company_tier, company_tier_note, tech_stack,
+  };
 }
 
 /**
@@ -150,6 +193,7 @@ export function buildScoreMessages(
   const jobText =
     `TITLE: ${job.title ?? ""}\n` +
     `COMPANY: ${job.company ?? ""}\n` +
+    `COMPANY SIZE: ${job.company_size ?? "N/A"}\n` +
     `LOCATION: ${job.location ?? "N/A"}\n\n` +
     `DESCRIPTION:\n${description}`;
 
@@ -195,6 +239,9 @@ export async function scoreJob(
       seniority: null,
       missing: null,
       breakdown: null,
+      company_tier: null,
+      company_tier_note: null,
+      tech_stack: null,
     };
   }
 }

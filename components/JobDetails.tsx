@@ -95,6 +95,18 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           </p>
         </div>
       )}
+      {(job.tech_stack ?? []).length > 0 && (
+        <div>
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1.5">Tech stack</p>
+          <div className="flex flex-wrap gap-1.5">
+            {job.tech_stack!.map((t) => (
+              <span key={t} className="px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded-md">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {job.applied_at && (
         <div className="flex items-center gap-2 text-emerald text-[12px]">
           <CheckCircle2 size={13} />

@@ -139,7 +139,7 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
       if (job.duplicate_of) {
         const { data: canonical } = await supabaseAdmin()
           .from('jobs')
-          .select('fit_score, score_note, score_keywords, score_reasoning, score_breakdown, employment_type, status')
+          .select('fit_score, score_note, score_keywords, score_reasoning, score_breakdown, employment_type, company_tier, company_tier_note, tech_stack, status')
           .eq('id', job.duplicate_of)
           .maybeSingle();
         if (canonical?.fit_score != null) {
@@ -152,6 +152,10 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
               score_reasoning: canonical.score_reasoning,
               score_breakdown: canonical.score_breakdown,
               employment_type: canonical.employment_type,
+              // Same content ⇒ inherit the canonical's company assessment + tech stack (ADR 0065).
+              company_tier: canonical.company_tier,
+              company_tier_note: canonical.company_tier_note,
+              tech_stack: canonical.tech_stack,
               status: 'scored',
               scored_at: new Date().toISOString(),
             })
@@ -171,7 +175,7 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
 
       const result = await scoreJob(
         opts.resume,
-        { title: job.title, company: job.company, location: job.location, full_description: job.full_description },
+        { title: job.title, company: job.company, company_size: job.company_size, location: job.location, full_description: job.full_description },
         opts.client,
       );
       if (result.score === 0) errors++;
@@ -191,6 +195,11 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
           score_reasoning: result.reasoning,
           score_breakdown: breakdown,
           employment_type: result.employment_type ?? null,
+          // Company assessment now rides the scoring call (ADR 0065) — one write, no
+          // second LLM pass. tier defaults to null (unassessed) only when the model omitted it.
+          company_tier: result.company_tier ?? null,
+          company_tier_note: result.company_tier_note ?? null,
+          tech_stack: result.tech_stack ?? null,
           scored_at: new Date().toISOString(),
           status: 'scored',
         })

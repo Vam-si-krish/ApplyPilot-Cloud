@@ -97,10 +97,6 @@ export async function PUT(req: Request) {
   if (Number.isFinite(Number(body.career_sites_max_jobs))) {
     patch.career_sites_max_jobs = Math.max(10, Math.min(5000, Math.round(Number(body.career_sites_max_jobs))));
   }
-  if (typeof body.auto_assess_enabled === 'boolean') patch.auto_assess_enabled = body.auto_assess_enabled;
-  if (Number.isFinite(Number(body.auto_assess_min_score))) {
-    patch.auto_assess_min_score = Math.max(0, Math.min(10, Math.round(Number(body.auto_assess_min_score))));
-  }
   if (typeof body.allow_delete_scores === 'boolean') patch.allow_delete_scores = body.allow_delete_scores;
   if (typeof body.resume_worker_url === 'string') {
     patch.resume_worker_url = body.resume_worker_url.trim();

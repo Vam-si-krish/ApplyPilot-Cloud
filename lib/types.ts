@@ -43,10 +43,14 @@ export interface Job {
   clicked_at: string | null;
   /** Company headcount/size text from scrape (e.g. '51-200 employees'); null when not provided. */
   company_size: string | null;
-  /** On-demand AI assessment of the employer (ADR 0009); null = not assessed. */
+  /** AI assessment of the employer. Produced inline by the scorer (ADR 0065; was a
+   *  separate on-demand call under ADR 0009); null = not assessed. */
   company_tier: CompanyTier | null;
   /** One-line reason for the company_tier. */
   company_tier_note: string | null;
+  /** Primary technologies the role centers on, named by the scorer (ADR 0065) — e.g.
+   *  ['React','TypeScript']. null = not scored / no clear stack in the posting. */
+  tech_stack: string[] | null;
   /** 0–100 share of the user's skills the job mentions (ADR 0018); null = not computed. */
   skill_match_score: number | null;
   /** The user's skills this job mentions / doesn't (ADR 0018). */
@@ -95,6 +99,7 @@ export interface AtsMatchBreakdown {
 export interface ScorableJob {
   title?: string | null;
   company?: string | null;
+  company_size?: string | null;
   location?: string | null;
   full_description?: string | null;
   description?: string | null;
@@ -130,6 +135,10 @@ export interface ScoreResult {
   seniority?: string | null;
   missing?: string | null;
   breakdown?: ScoreBreakdown | null;
+  /** Company assessment folded into the scoring call (ADR 0065); null on old format / error. */
+  company_tier?: CompanyTier | null;
+  company_tier_note?: string | null;
+  tech_stack?: string[] | null;
 }
 
 export interface Profile {
@@ -207,10 +216,6 @@ export interface Settings {
    *  Baked into the search URL (f_E) so filtered jobs are never fetched or billed.
    *  Empty = no filter. */
   linkedin_experience_levels: string[];
-  /** When true, the pipeline auto-assesses companies for high-scoring jobs after scoring (ADR 0010). */
-  auto_assess_enabled: boolean;
-  /** Minimum fit_score (0–10) a job needs for its company to be auto-assessed. */
-  auto_assess_min_score: number;
   /** Danger gate (ADR 0048): when true, the Jobs tab surfaces bulk actions to DELETE a
    *  job's fit score / company score / match score / tailored résumé. Default false so a
    *  stray click can't wipe scores. Flip on, delete, flip off. (Renamed from allow_rescore.) */

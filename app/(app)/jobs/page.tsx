@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, Building2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw, Gauge, MapPin } from 'lucide-react';
+import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCircle2, Sparkles, Trash2, History, FileText, SlidersHorizontal, AlertTriangle, RefreshCw, Gauge, MapPin } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
@@ -577,96 +577,10 @@ export default function JobsPage() {
     }
   }
 
-  // AI-assess the companies behind the picked jobs (chunked, like scoreSelected).
-  // Re-runs even on already-assessed jobs (overwrites the tier) — this IS the reassess path.
-  //
-  // Same two backends as scoreSelected: API-key mode assesses SYNCHRONOUSLY (each chunk's
-  // response is real progress); subscription mode returns `delegated:true` INSTANTLY (the
-  // worker assesses in the background), so we then POLL /api/score-progress (mode=assess)
-  // for the selected ids until they all have a fresh tier.
-  async function assessSelected() {
-    const ids = selectedVisibleIds();
-    if (ids.length === 0 || bulkBusy || bulkRunning) return;
-    // One LLM call per job — guard against an accidental huge re-run.
-    if (ids.length > 20 && !confirm(`Assess / re-assess ${ids.length} companies? This runs one AI call per job and re-rates any that were already assessed.`)) return;
-    setBulkBusy(true);
-    let assessed = 0;
-    let errors = 0;
-    let done = 0;
-    let delegated = false;
-    setBulkProgress({ label: 'AI-assessing companies', done: 0, total: ids.length, phase: 'running', tone: 'violet' });
-    try {
-      for (let i = 0; i < ids.length; i += 5) {
-        const chunk = ids.slice(i, i + 5);
-        const d = await fetch('/api/company-check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: chunk }),
-        }).then((r) => r.json());
-        if (d.delegated) {
-          delegated = true;
-        } else {
-          assessed += d.assessed ?? 0;
-          errors += d.errors ?? 0;
-          done += chunk.length;
-          setBulkProgress({ label: 'AI-assessing companies', done, total: ids.length, phase: 'running', tone: 'violet' });
-          load(true); // tiers light up live as each chunk lands
-        }
-      }
-
-      if (delegated) {
-        // Poll real state (mode=assess): count how many selected ids have a tier again. The
-        // route nulled their tier before handing off, so this reflects the worker's fresh
-        // writes. Cap the wait so a stuck worker resolves the toast instead of spinning.
-        const started = Date.now();
-        const MAX_MS = 5 * 60 * 1000;
-        for (;;) {
-          await new Promise((r) => setTimeout(r, 2000));
-          let progressed = 0;
-          try {
-            const p = await fetch('/api/score-progress', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ids, mode: 'assess' }),
-            }).then((r) => r.json());
-            progressed = p.scored ?? 0;
-          } catch {
-            /* transient — keep polling until the ceiling */
-          }
-          setBulkProgress({ label: 'AI-assessing companies', done: progressed, total: ids.length, phase: 'running', tone: 'violet' });
-          load(true); // tiers light up live as the worker writes them
-          if (progressed >= ids.length) {
-            assessed = progressed;
-            break;
-          }
-          if (Date.now() - started > MAX_MS) {
-            setBulkProgress({
-              label: `Assessed ${progressed}/${ids.length} — still working in the background`,
-              done: progressed,
-              total: ids.length,
-              phase: 'done',
-              tone: 'violet',
-            });
-            setSelected(new Set());
-            load(true);
-            return;
-          }
-        }
-      }
-
-      // Show failures explicitly — a failing AI backend must not look like a silent "done".
-      const doneLabel = errors
-        ? `Assessed ${assessed}, ${errors} failed — check the AI provider/worker`
-        : `Done — assessed ${assessed} compan${assessed === 1 ? 'y' : 'ies'}`;
-      setBulkProgress({ label: doneLabel, done: ids.length, total: ids.length, phase: 'done', tone: 'violet' });
-      setSelected(new Set());
-      load(true);
-    } catch {
-      setBulkProgress({ label: 'Company assessment failed', done, total: ids.length, phase: 'done', tone: 'violet' });
-    } finally {
-      setBulkBusy(false);
-    }
-  }
+  // Company assessment now rides the fit-scoring call (ADR 0065): every scored job gets a
+  // company tier + tech stack in the same pass, so there's no separate "assess companies"
+  // bulk action here anymore. Re-score a job (delete its fit score, then Score selected) to
+  // refresh its company tier.
 
   // Queue the selected jobs into the Tailor & Apply section (idempotent server-side).
   async function addToApplications() {
@@ -1186,14 +1100,6 @@ export default function JobsPage() {
                 <Sparkles size={13} /> Score selected ({selected.size})
               </button>
               <button
-                onClick={assessSelected}
-                disabled={bulkBusy || bulkRunning}
-                title="AI-assess the selected companies — re-runs even on jobs already rated, so use this to re-assess too"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 rounded-lg transition-all"
-              >
-                <Building2 size={13} /> Assess / re-assess ({selected.size})
-              </button>
-              <button
                 onClick={atsScoreSelected}
                 disabled={bulkBusy || bulkRunning}
                 title="Recompute the local ATS match % for just the selected jobs (no AI, free)"
@@ -1375,7 +1281,17 @@ export default function JobsPage() {
                       <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
                     )}
 
-
+                    {/* Tech-stack chips (ADR 0065) — named by the scorer; show the first few so
+                        "a React company" is visible at a glance. Full list is in the details pane. */}
+                    {(job.tech_stack ?? []).slice(0, 3).map((t) => (
+                      <span
+                        key={t}
+                        title={job.tech_stack!.join(', ')}
+                        className="shrink-0 hidden md:inline px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded-md"
+                      >
+                        {t}
+                      </span>
+                    ))}
 
                     {/* Multi-location duplicate group (ADR 0057): this row is the canonical;
                         the same requisition exists in N other locations. Clicking expands the

@@ -39,8 +39,6 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     career_sites_max_jobs: 150,
     fetch_mode: 'url',
     linkedin_experience_levels: [],
-    auto_assess_enabled: true,
-    auto_assess_min_score: 6,
     allow_delete_scores: false,
     updated_at: '2026-06-18T00:00:00Z',
     ...over,

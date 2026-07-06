@@ -53,7 +53,11 @@ export default function JobsLegend() {
               <CompanyTierBadge tier="good" />
               <CompanyTierBadge tier="low" />
             </div>
-            <Text title="Company rating (AI)">Employer quality: Good · Medium · Low (likely time-waster) · Unknown. Hover a badge for why.</Text>
+            <Text title="Company rating (AI)">Employer quality, rated as each job is scored: Good · Medium · Low (likely résumé-harvester / lead-gen — flagged, never demoted) · Unknown. Hover a badge for why.</Text>
+          </Item>
+          <Item>
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded-md">React</span>
+            <Text title="Tech stack">The role&apos;s core technologies, named by the AI while scoring. Expand a row to see the full list.</Text>
           </Item>
           <Item>
             <CheckCircle2 size={15} className="text-emerald" />
