@@ -57,7 +57,7 @@ export default function JobsLegend() {
           </Item>
           <Item>
             <span className="px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded-md">React</span>
-            <Text title="Tech stack">The role&apos;s core technologies, named by the AI while scoring. Expand a row to see the full list.</Text>
+            <Text title="Tech stack">The role&apos;s core technologies, named by the AI while scoring — shown when you expand a row.</Text>
           </Item>
           <Item>
             <CheckCircle2 size={15} className="text-emerald" />

@@ -1281,17 +1281,8 @@ export default function JobsPage() {
                       <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
                     )}
 
-                    {/* Tech-stack chips (ADR 0065) — named by the scorer; show the first few so
-                        "a React company" is visible at a glance. Full list is in the details pane. */}
-                    {(job.tech_stack ?? []).slice(0, 3).map((t) => (
-                      <span
-                        key={t}
-                        title={job.tech_stack!.join(', ')}
-                        className="shrink-0 hidden md:inline px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded-md"
-                      >
-                        {t}
-                      </span>
-                    ))}
+                    {/* Tech stack (ADR 0065) lives in the expanded details pane, not the row —
+                        chips per row were too noisy alongside the tier / ATS / skill badges. */}
 
                     {/* Multi-location duplicate group (ADR 0057): this row is the canonical;
                         the same requisition exists in N other locations. Clicking expands the
