@@ -166,11 +166,22 @@ export class LLMClient {
 
   // -- Anthropic Messages API --------------------------------------------------
   private async chatAnthropic(messages: ChatMessage[], temperature: number, maxTokens: number): Promise<string> {
-    const systemText: string[] = [];
+    // System goes as BLOCKS so a `cache: true` system segment becomes a real
+    // cache_control breakpoint (ADR 0064) — a breakpoint on the last stable system
+    // block caches the whole prefix ahead of it (prompt + base résumé).
+    const systemBlocks: AnthropicTextBlock[] = [];
     const anthMessages: { role: 'user' | 'assistant'; content: string | AnthropicTextBlock[] }[] = [];
     for (const msg of messages) {
-      if (msg.role === 'system') systemText.push(flattenContent(msg.content));
-      else anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: toAnthropicContent(msg.content) });
+      if (msg.role === 'system') {
+        const parts = typeof msg.content === 'string' ? [{ text: msg.content }] : msg.content;
+        for (const p of parts) {
+          const block: AnthropicTextBlock = { type: 'text', text: p.text };
+          if ((p as { cache?: boolean }).cache) block.cache_control = { type: 'ephemeral' };
+          systemBlocks.push(block);
+        }
+      } else {
+        anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: toAnthropicContent(msg.content) });
+      }
     }
 
     const payload: Record<string, unknown> = {
@@ -179,7 +190,7 @@ export class LLMClient {
       temperature,
       messages: anthMessages,
     };
-    if (systemText.length) payload.system = systemText.join('\n\n');
+    if (systemBlocks.length) payload.system = systemBlocks;
 
     const resp = await this.fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',

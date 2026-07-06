@@ -226,3 +226,16 @@ from either tab is consistent). Rows where `clicked_at && !applied` get a left a
 faint tint + an amber "Opened" pill; clears automatically on Mark applied or Set Aside. Amber
 chosen for "pending/attention" (rose = the app's error colour). Client-only derivation over the
 existing jobs(*) join — no migration/API change. Typecheck + build + 158 tests green.
+
+## ✅ Subscription cache fix + per-résumé token usage (ADR 0064)
+Caching audit: the Agent-SDK path flattened the tailor call's user segments and DISCARDED the
+cache breakpoint; with haiku the remaining cacheable prefix (~2.2k system) sat under Haiku's
+4,096-token minimum → cross-job caching was effectively ZERO. Fix: base block now rides as a
+second SYSTEM message (both prompt copies) → SDK folds it into the auto-cached systemPrompt
+(~4.1k stable prefix); direct-API Anthropic sends system as BLOCKS with a real cache_control
+breakpoint. Usage: agentClient + LLMClient capture per-call tokens (in/out/cacheRead/cacheWrite,
+cost_usd); tailorResume returns it; persisted to applications.tailor_usage (migration 0039,
+applied); T&A expanded panel shows "Generation: X in (+Y cached) · Z out · $ · s · model".
+Tests 158 green; typecheck + build + worker syntax green.
+⚠ Worker Mac `git pull` + restart required. Verify after deploy: worker log `cacheRead=` ≈ 4k
+on the 2nd+ drain call (was always 0).

@@ -160,19 +160,25 @@ describe('mergeTailored — deterministic one-page caps (ADR 0031)', () => {
 });
 
 describe('buildTailorMessages', () => {
-  it('puts the base résumé + budget in a cached prefix and the job in the volatile tail', () => {
+  it('puts the base résumé + budget in a cached SYSTEM prefix and the job in the volatile tail (ADR 0064)', () => {
     const msgs = buildTailorMessages(base(), { title: 'FE Eng', company: 'Acme', full_description: 'Need React.' }, { matched: ['React'], missing: 'Kubernetes' });
     expect(msgs[0]).toEqual({ role: 'system', content: TAILOR_PROMPT });
 
-    const parts = msgs[1].content as ContentPart[];
-    expect(parts[0].cache).toBe(true); // base + length budget = the cached prefix
-    expect(parts[0].text).toContain('BASE RÉSUMÉ');
-    expect(parts[0].text).toContain('LENGTH BUDGET');
-    expect(parts[0].text).toContain('TOTAL PROFESSIONAL EXPERIENCE'); // the true-years ceiling (ADR 0041)
-    expect(parts[1].cache).toBeUndefined(); // per-job tail is not cached
-    expect(parts[1].text).toContain('Acme');
-    expect(parts[1].text).toContain('React');
-    expect(parts[1].text).toContain('Kubernetes');
+    // Base block = a second SYSTEM message so the Agent SDK folds it into its
+    // auto-cached systemPrompt; the cache flag drives the direct-API breakpoint.
+    expect(msgs[1].role).toBe('system');
+    const basePart = (msgs[1].content as ContentPart[])[0];
+    expect(basePart.cache).toBe(true);
+    expect(basePart.text).toContain('BASE RÉSUMÉ');
+    expect(basePart.text).toContain('LENGTH BUDGET');
+    expect(basePart.text).toContain('TOTAL PROFESSIONAL EXPERIENCE'); // the true-years ceiling (ADR 0041)
+
+    expect(msgs[2].role).toBe('user');
+    const jobPart = (msgs[2].content as ContentPart[])[0];
+    expect(jobPart.cache).toBeUndefined(); // per-job tail is not cached
+    expect(jobPart.text).toContain('Acme');
+    expect(jobPart.text).toContain('React');
+    expect(jobPart.text).toContain('Kubernetes');
   });
 
   it('lists the ATS-missing exact terms in the tail (ADR 0053 → tailoring feed-forward)', () => {
@@ -181,9 +187,9 @@ describe('buildTailorMessages', () => {
       { title: 'FE Eng', company: 'Acme', full_description: 'Need React.' },
       { atsMissing: ['CI/CD', 'GraphQL'] },
     );
-    const parts = msgs[1].content as ContentPart[];
-    expect(parts[1].text).toContain('mirror the truthful ones verbatim');
-    expect(parts[1].text).toContain('CI/CD, GraphQL');
+    const jobPart = (msgs[2].content as ContentPart[])[0];
+    expect(jobPart.text).toContain('mirror the truthful ones verbatim');
+    expect(jobPart.text).toContain('CI/CD, GraphQL');
   });
 
   it('prompt carries the title-alignment, exact-wording, and top-third summary rules', () => {

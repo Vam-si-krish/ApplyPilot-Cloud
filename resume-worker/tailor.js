@@ -75,14 +75,25 @@ class LLMClient {
   }
 
   async chatAnthropic(messages, temperature, maxTokens) {
-    const systemText = [];
+    // System goes as BLOCKS so a `cache: true` system segment becomes a real
+    // cache_control breakpoint (ADR 0064) — a breakpoint on the last stable system
+    // block caches the whole prefix ahead of it (prompt + base résumé).
+    const systemBlocks = [];
     const anthMessages = [];
     for (const msg of messages) {
-      if (msg.role === 'system') systemText.push(flattenContent(msg.content));
-      else anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: toAnthropicContent(msg.content) });
+      if (msg.role === 'system') {
+        const parts = typeof msg.content === 'string' ? [{ text: msg.content }] : msg.content;
+        for (const p of parts) {
+          const block = { type: 'text', text: p.text };
+          if (p.cache) block.cache_control = { type: 'ephemeral' };
+          systemBlocks.push(block);
+        }
+      } else {
+        anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: toAnthropicContent(msg.content) });
+      }
     }
     const payload = { model: this.model, max_tokens: maxTokens, temperature, messages: anthMessages };
-    if (systemText.length) payload.system = systemText.join('\n\n');
+    if (systemBlocks.length) payload.system = systemBlocks;
 
     const resp = await this.fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -91,6 +102,13 @@ class LLMClient {
     });
     if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
+    const u = data.usage || {};
+    this.lastUsage = {
+      input_tokens: u.input_tokens ?? null,
+      output_tokens: u.output_tokens ?? null,
+      cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+      cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+    };
     return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text || '').join('');
   }
 
@@ -114,6 +132,13 @@ class LLMClient {
     });
     if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
+    const um = data.usageMetadata || {};
+    this.lastUsage = {
+      input_tokens: um.promptTokenCount ?? null,
+      output_tokens: um.candidatesTokenCount ?? null,
+      cache_read_input_tokens: um.cachedContentTokenCount ?? 0,
+      cache_creation_input_tokens: 0,
+    };
     return data.candidates[0].content.parts[0].text;
   }
 
@@ -132,12 +157,20 @@ class LLMClient {
     }
     if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
+    const uc = data.usage || {};
+    this.lastUsage = {
+      input_tokens: uc.prompt_tokens ?? null,
+      output_tokens: uc.completion_tokens ?? null,
+      cache_read_input_tokens: (uc.prompt_tokens_details && uc.prompt_tokens_details.cached_tokens) ?? 0,
+      cache_creation_input_tokens: 0,
+    };
     return data.choices[0].message.content;
   }
 
   async chat(messages, opts = {}) {
     const temperature = opts.temperature ?? 0.0;
     const maxTokens = opts.maxTokens ?? 4096;
+    this.lastUsage = null; // set by the provider path that answers (ADR 0064)
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
@@ -440,7 +473,14 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
     : '';
   return [
     { role: 'system', content: TAILOR_PROMPT },
-    { role: 'user', content: [{ text: baseBlock, cache: true }, { text: jobBlock + instrBlock }] },
+    // The base block rides as a SECOND system message (ADR 0064). Subscription mode
+    // (Agent SDK) folds every system role into its auto-cached systemPrompt, so the
+    // stable prefix (prompt + base résumé + budget) is cached across jobs — the old
+    // shape flattened the user segments and silently dropped the cache breakpoint.
+    // Direct-API Anthropic honours the cache flag via a system-block cache_control;
+    // Gemini/compat flatten system parts in order, keeping the same stable prefix.
+    { role: 'system', content: [{ text: baseBlock, cache: true }] },
+    { role: 'user', content: [{ text: jobBlock + instrBlock }] },
   ];
 }
 
@@ -648,15 +688,21 @@ export async function tailorResume(base, job, signals, client, instructions = ''
   if (!base || base.work.length === 0) {
     throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
   }
+  const t0 = Date.now();
   const response = await client.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 5200, temperature: 0.35 });
   const json = extractJsonObject(response);
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json));
+  // Usage of THIS call (ADR 0064) — the client path that answered sets lastUsage;
+  // null when the provider doesn't report it. Persisted so the user can see what
+  // one résumé costs (and whether the cache is being read).
+  const usage = client.lastUsage ? { ...client.lastUsage, model: client.model || null, ms: Date.now() - t0 } : null;
   return {
     resume,
     changes: { addedSkills: addedSkills(base, resume), titleChanges: titleChanges(base, resume), notes },
     coverLetter: extractCoverLetter(json),
+    usage,
   };
 }
 

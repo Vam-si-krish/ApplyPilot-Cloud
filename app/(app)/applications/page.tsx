@@ -1327,6 +1327,22 @@ export default function ApplicationsPage() {
                           )}
                           <span className="text-[11px] text-slate-muted">Re-render after edits to refresh the PDF.</span>
                         </div>
+
+                        {/* What this generation cost (ADR 0064) — tokens against the
+                            subscription window; cache_read > 0 means the prompt cache worked. */}
+                        {a.tailor_usage && (
+                          <p
+                            className="mt-2 text-[11px] text-slate-dim font-mono"
+                            title="Token usage of the last Generate call. 'cached' tokens are prompt tokens served from the cache (~10× cheaper against your usage window); 0 cached means the cache missed."
+                          >
+                            Generation: {fmtTokens(a.tailor_usage.input_tokens)} in
+                            {a.tailor_usage.cache_read_input_tokens > 0 ? ` (+${fmtTokens(a.tailor_usage.cache_read_input_tokens)} cached)` : ' (0 cached)'}
+                            {' · '}{fmtTokens(a.tailor_usage.output_tokens)} out
+                            {typeof a.tailor_usage.cost_usd === 'number' ? ` · $${a.tailor_usage.cost_usd.toFixed(3)}` : ''}
+                            {a.tailor_usage.ms ? ` · ${Math.round(a.tailor_usage.ms / 1000)}s` : ''}
+                            {a.tailor_usage.model ? ` · ${a.tailor_usage.model}` : ''}
+                          </p>
+                        )}
                       </>
                     ) : (
                       <p className="text-[12px] text-slate-muted py-2">
@@ -1411,6 +1427,12 @@ export default function ApplicationsPage() {
       )}
     </div>
   );
+}
+
+/** "5.6k" style token count for the generation-usage line (ADR 0064). */
+function fmtTokens(n: number | null | undefined): string {
+  if (n == null) return '?';
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
 /** Color a 0–10 score: ≥7 strong (green), 5–6 moderate (amber), else weak (red). */

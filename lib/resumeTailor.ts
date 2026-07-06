@@ -138,7 +138,13 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
     `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(', ') : 'N/A'}`;
   return [
     { role: 'system', content: TAILOR_PROMPT },
-    { role: 'user', content: [{ text: baseBlock, cache: true }, { text: jobBlock }] },
+    // The base block rides as a SECOND system message (ADR 0064). Subscription mode
+    // (Agent SDK) folds every system role into its auto-cached systemPrompt, so the
+    // stable prefix (prompt + base résumé + budget) is cached across jobs — the old
+    // shape flattened the user segments and silently dropped the cache breakpoint.
+    // Direct-API Anthropic honours the cache flag via a system-block cache_control.
+    { role: 'system', content: [{ text: baseBlock, cache: true }] },
+    { role: 'user', content: [{ text: jobBlock }] },
   ];
 }
 

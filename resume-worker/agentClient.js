@@ -203,6 +203,7 @@ async function runOnce(messages, opts, account, model, label) {
   const parts = [];
   let resultText = '';
   let failure = null;
+  let usage = null;
   try {
     for await (const msg of query({ prompt, options })) {
       if (msg.type === 'assistant') {
@@ -212,6 +213,14 @@ async function runOnce(messages, opts, account, model, label) {
       } else if (msg.type === 'result') {
         resultText = typeof msg.result === 'string' ? msg.result : '';
         const u = msg.usage || {};
+        // Captured for persistence (ADR 0064) — the caller reads it off the client.
+        usage = {
+          input_tokens: u.input_tokens ?? null,
+          output_tokens: u.output_tokens ?? null,
+          cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+          cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+          cost_usd: typeof msg.total_cost_usd === 'number' ? msg.total_cost_usd : null,
+        };
         console.log(
           `[agent ${rid}] result task=${label} account=${account.id} subtype=${msg.subtype} turns=${msg.num_turns ?? '?'} costUsd=${msg.total_cost_usd ?? '?'} ` +
             `tokens{in=${u.input_tokens ?? '?'} out=${u.output_tokens ?? '?'} cacheWrite=${u.cache_creation_input_tokens ?? 0} cacheRead=${u.cache_read_input_tokens ?? 0}}`,
@@ -249,7 +258,7 @@ async function runOnce(messages, opts, account, model, label) {
     throw err;
   }
   console.log(`[agent ${rid}] done task=${label} account=${account.id} ${dur}ms textLen=${text.length}`);
-  return text;
+  return { text, usage };
 }
 
 /**
@@ -261,16 +270,22 @@ export function makeAgentClient(model, label = 'agent') {
   const resolvedModel = (model || '').trim() || 'sonnet';
   return {
     model: resolvedModel,
+    /** Usage of the LAST completed call (ADR 0064): tokens in/out + cache read/write
+     *  + cost. Null until a call succeeds or when the SDK didn't report usage. */
+    lastUsage: null,
     /** One single-turn completion across the configured accounts (active first, then
      *  automatic failover on a fast failure). Returns the assistant text. */
     async chat(messages, _opts = {}) {
+      this.lastUsage = null;
       const accounts = resolveAccounts();
       let lastErr = null;
       for (let i = 0; i < accounts.length; i++) {
         const account = accounts[i];
         const isLast = i === accounts.length - 1;
         try {
-          return await runOnce(messages, _opts, account, resolvedModel, label);
+          const { text, usage } = await runOnce(messages, _opts, account, resolvedModel, label);
+          this.lastUsage = usage;
+          return text;
         } catch (e) {
           lastErr = e;
           // Fail over only on FAST failures (credit cap / auth / rate / empty result) —

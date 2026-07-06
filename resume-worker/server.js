@@ -334,11 +334,12 @@ app.post('/tailor', async (req, res) => {
     console.log(`[/tailor] start id=${id} provider=${provider} model=${model}`);
     const client = resolved.client;
     tailorResume(base, job, signals, client, appRow.tailor_instructions || '')
-      .then(async ({ resume, changes, coverLetter }) => {
+      .then(async ({ resume, changes, coverLetter, usage }) => {
         console.log(`[/tailor] done id=${id} ${Date.now() - tStart}ms`);
         await updateApplication(id, {
           tailored_resume: resume,
           tailor_changes: changes,
+          tailor_usage: usage || null, // what this generation cost (ADR 0064)
           status: 'ready',
           error: null,
         });
@@ -411,10 +412,11 @@ async function runFullPipeline({ appRow, base, tailorClient }) {
 
   // 1. Tailor (the one expensive LLM call). Throwing here marks the row failed below.
   await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
-  const { resume, changes, coverLetter } = await tailorResume(base, job, tailorSignals(job), tailorClient, appRow.tailor_instructions || '');
+  const { resume, changes, coverLetter, usage } = await tailorResume(base, job, tailorSignals(job), tailorClient, appRow.tailor_instructions || '');
   await updateApplication(id, {
     tailored_resume: resume,
     tailor_changes: changes,
+    tailor_usage: usage || null, // what this generation cost (ADR 0064)
     status: 'ready',
     error: null,
   });

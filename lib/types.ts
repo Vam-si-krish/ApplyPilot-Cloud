@@ -392,6 +392,20 @@ export interface TailorChanges {
 /** Application lifecycle (ADR 0024): queued → generating → ready → applied; failed = render/AI error. */
 export type ApplicationStatus = 'queued' | 'generating' | 'ready' | 'applied' | 'failed';
 
+/** Token usage of one tailor call (ADR 0064), as the provider reported it. */
+export interface TailorUsage {
+  input_tokens: number | null;
+  output_tokens: number | null;
+  /** Prompt tokens served from cache (~0.1× weight) — 0 means the cache missed. */
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  /** API-$ equivalent the Agent SDK reports (subscription mode only). */
+  cost_usd?: number | null;
+  model?: string | null;
+  /** Wall-clock duration of the call in milliseconds. */
+  ms?: number;
+}
+
 /** One job the user is preparing/applying to, with its tailored résumé + PDF. */
 export interface Application {
   id: string;
@@ -423,6 +437,9 @@ export interface Application {
   /** "Set Aside" tab (ADR 0061): true = parked out of the working Queue (keeps all
    *  state; skipped by the overnight drain until moved back). */
   parked: boolean;
+  /** Token usage of the LAST tailor call (ADR 0064) — what this résumé cost.
+   *  Null = generated before tracking / provider didn't report usage. */
+  tailor_usage: TailorUsage | null;
   created_at: string;
   updated_at: string;
   applied_at: string | null;
