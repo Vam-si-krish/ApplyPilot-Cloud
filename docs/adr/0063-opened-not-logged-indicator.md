@@ -25,10 +25,10 @@ from either tab now means the same thing, no new column).
 - **Clears automatically** when you Mark applied (the row moves to the green applied
   state) or Set Aside (it leaves the working Queue). No manual dismissal needed.
 
-**Colour choice**: the user suggested rose; I used amber instead. Rose is the app's
-error/danger colour (weak scores, failures) and would read as "something broke". Amber
-is the established "pending action / attention" accent, which is what an un-logged open
-is. Emerald stays reserved for applied/done.
+**Colour choice**: amber. Rose is the app's error/danger colour (weak scores, failures)
+and would read as "something broke"; amber is the established "pending action /
+attention" accent, which is what an un-logged open is. Emerald stays reserved for
+applied/done.
 
 ## Consequences
 

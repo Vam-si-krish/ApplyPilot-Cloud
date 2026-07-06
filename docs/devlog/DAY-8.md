@@ -223,6 +223,6 @@ User: after opening a posting from a T&A row and coming back, nothing shows whic
 already opened but not logged an apply for — easy to miss applications. Fix: the open-link now
 stamps the job's `clicked_at` (markOpened, optimistic; same field the Jobs tab uses, so opening
 from either tab is consistent). Rows where `clicked_at && !applied` get a left amber accent rail +
-faint tint + an amber "Opened" pill; clears automatically on Mark applied or Set Aside. Chose
-amber over the user-suggested rose (rose = the app's error colour). Client-only derivation over the
+faint tint + an amber "Opened" pill; clears automatically on Mark applied or Set Aside. Amber
+chosen for "pending/attention" (rose = the app's error colour). Client-only derivation over the
 existing jobs(*) join — no migration/API change. Typecheck + build + 158 tests green.
