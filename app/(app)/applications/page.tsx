@@ -185,6 +185,23 @@ export default function ApplicationsPage() {
     load(true);
   }
 
+  // Record that the user opened this application's posting (ADR 0063), so the row can
+  // flag "opened, but you haven't logged whether you applied". Stored as the JOB's
+  // clicked_at (same field the Jobs tab uses — opening from either tab stays in sync).
+  // Optimistic so the amber state shows the instant they return; skipped once set or
+  // once applied (no point flagging follow-up on a done row).
+  function markOpened(a: ApplicationWithJob) {
+    const job = a.job;
+    if (!job || job.clicked_at || a.applied_at) return;
+    const now = new Date().toISOString();
+    setApps((prev) => prev.map((x) => (x.id === a.id && x.job ? { ...x, job: { ...x.job, clicked_at: now } } : x)));
+    fetch(`/api/jobs/${job.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clicked_at: now }),
+    }).catch(() => {});
+  }
+
   async function remove(id: string) {
     if (!confirm('Remove this application?')) return;
     await fetch(`/api/applications/${id}`, { method: 'DELETE' });
@@ -1006,9 +1023,17 @@ export default function ApplicationsPage() {
             const job = a.job;
             const open = expanded === a.id;
             const generating = genId === a.id || a.status === 'generating';
+            // Opened the posting but never logged an apply (ADR 0063) — needs follow-up.
+            const openedNotLogged = !!job?.clicked_at && !a.applied_at && a.status !== 'applied';
             return (
               <div key={a.id}>
-                <div className="flex items-center gap-3 px-5 py-3 hover:bg-raised/60 transition-colors">
+                <div
+                  className={`flex items-center gap-3 border-l-2 px-5 py-3 transition-colors ${
+                    openedNotLogged
+                      ? 'border-amber-400/70 bg-amber-400/[0.05] hover:bg-amber-400/[0.08]'
+                      : 'border-transparent hover:bg-raised/60'
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={selected.has(a.id)}
@@ -1026,6 +1051,16 @@ export default function ApplicationsPage() {
                   <span className={`shrink-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-md border ${STATUS_STYLE[a.status]}`}>
                     {a.status}
                   </span>
+                  {/* Opened-but-not-logged flag (ADR 0063): you viewed the posting but
+                      never recorded whether you applied. Clears on "Mark applied". */}
+                  {openedNotLogged && (
+                    <span
+                      title="You opened this posting but haven't logged whether you applied. Mark it applied (✓) once you have, or set it aside if you're skipping it."
+                      className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-md border border-amber-400/40 bg-amber-400/10 text-amber-400"
+                    >
+                      <ExternalLink size={10} /> Opened
+                    </span>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-slate-text text-[13px] font-medium truncate">{job?.title ?? 'Job removed'}</p>
                     <p className="text-slate-muted text-[11px] truncate">
@@ -1159,6 +1194,7 @@ export default function ApplicationsPage() {
                       rel="noopener noreferrer"
                       onClick={() => {
                         pendingApply.current = a;
+                        markOpened(a); // flag the row "opened, not yet logged" (ADR 0063)
                         // Auto-download on open (ADR 0061): grab this job's PDFs while the
                         // posting opens — works for Ctrl/Cmd-click background tabs too.
                         // Sequential (await) so the résumé finishes before the cover letter

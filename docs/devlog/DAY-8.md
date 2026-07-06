@@ -217,3 +217,12 @@ so N run concurrently and the filename is honoured; falls back to direct nav on 
 open handler now awaits the résumé before the cover letter. Both download fns → Promise<boolean>;
 all call sites (incl. the bulk cover-letter flow) benefit. Typecheck + build + 158 tests green.
 Client-only — no API/worker/DB change.
+
+## ✅ "Opened, not logged" indicator in Tailor & Apply (ADR 0063)
+User: after opening a posting from a T&A row and coming back, nothing shows which jobs you've
+already opened but not logged an apply for — easy to miss applications. Fix: the open-link now
+stamps the job's `clicked_at` (markOpened, optimistic; same field the Jobs tab uses, so opening
+from either tab is consistent). Rows where `clicked_at && !applied` get a left amber accent rail +
+faint tint + an amber "Opened" pill; clears automatically on Mark applied or Set Aside. Chose
+amber over the user-suggested rose (rose = the app's error colour). Client-only derivation over the
+existing jobs(*) join — no migration/API change. Typecheck + build + 158 tests green.
