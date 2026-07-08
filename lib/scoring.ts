@@ -179,11 +179,16 @@ export function parseScoreResponse(response: string): ScoreResult {
  * truncation (ADR 0056): scraped descriptions are stored as HTML, and tags were both
  * burning ~20-40% of the job tokens and pushing real content past the cut.
  *
- * Prompt caching (ADR 0056): system prompt + résumé are identical for every job in a
- * run, so the résumé segment carries a cache breakpoint — on Anthropic the prefix
- * (system + résumé) bills at ~0.1× from the second job on; OpenAI/DeepSeek/Gemini
- * flatten the parts to the same string as before, keeping their implicit prefix
- * caching intact. Only the JOB POSTING tail is new tokens per job.
+ * Prompt caching (ADR 0056 → ADR 0066): the system prompt + résumé are identical for
+ * every job in a run, so the résumé rides as a SECOND system message carrying the cache
+ * breakpoint. Why a system message and not a user segment: in subscription mode the
+ * worker's Agent-SDK path folds every system role into its auto-cached `systemPrompt` but
+ * FLATTENS user parts (dropping a user-side breakpoint) — so a user-side breakpoint never
+ * caches the résumé there. Direct-API Anthropic honours the `cache:true` system part via a
+ * `cache_control` block; OpenAI/DeepSeek/Gemini flatten system parts in order, keeping the
+ * stable prefix byte-identical for their implicit prefix caching. Only the JOB POSTING
+ * tail is new tokens per job. (`resumeText` is the enriched candidate dossier from
+ * getScoringResumeText — sized to clear Haiku's 4,096-token minimum cacheable prefix.)
  */
 export function buildScoreMessages(
   resumeText: string,
@@ -199,15 +204,10 @@ export function buildScoreMessages(
 
   return [
     { role: "system", content: SCORE_PROMPT },
-    {
-      role: "user",
-      // flattenContent joins parts with '\n\n', reproducing the exact pre-parts string
-      // for providers without cache_control (their implicit prefix caching still applies).
-      content: [
-        { text: `RESUME:\n${resumeText}\n\n---`, cache: true },
-        { text: `JOB POSTING:\n${jobText}` },
-      ],
-    },
+    // Stable prefix (cached across every job in a run).
+    { role: "system", content: [{ text: `RESUME:\n${resumeText}\n\n---`, cache: true }] },
+    // Volatile tail — the per-job posting, after the cache breakpoint.
+    { role: "user", content: [{ text: `JOB POSTING:\n${jobText}` }] },
   ];
 }
 
@@ -228,7 +228,9 @@ export async function scoreJob(
       maxTokens: 1000,
       temperature: 0.1,
     });
-    return parseScoreResponse(response);
+    // Token usage of this call (ADR 0066) — populated by the subscription + Anthropic
+    // paths, null otherwise. Lets the UI show cached vs used tokens + cost per score.
+    return { ...parseScoreResponse(response), usage: llm.lastUsage ?? null };
   } catch (e) {
     return {
       score: 0,
@@ -242,6 +244,7 @@ export async function scoreJob(
       company_tier: null,
       company_tier_note: null,
       tech_stack: null,
+      usage: null,
     };
   }
 }

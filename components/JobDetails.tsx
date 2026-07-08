@@ -176,6 +176,23 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           <p className="text-slate-text text-[12px] leading-relaxed">{job.score_reasoning}</p>
         </div>
       )}
+      {/* Scoring token/cache/cost (ADR 0066) — 'cached' tokens are the résumé prefix served
+          from cache (~10× cheaper against your subscription window); 0 cached = cache miss. */}
+      {job.score_usage && (
+        <p
+          className="text-slate-dim text-[11px] font-mono"
+          title="Token usage of the scoring call. 'cached' = prompt tokens served from cache (~10× cheaper against your usage window); 0 cached means the résumé prefix didn't hit the cache."
+        >
+          Scored: {fmtTokens(job.score_usage.input_tokens)} in
+          {job.score_usage.cache_read_input_tokens > 0
+            ? ` (+${fmtTokens(job.score_usage.cache_read_input_tokens)} cached)`
+            : ' (0 cached)'}
+          {' · '}{fmtTokens(job.score_usage.output_tokens)} out
+          {typeof job.score_usage.cost_usd === 'number' ? ` · $${job.score_usage.cost_usd.toFixed(4)}` : ''}
+          {job.score_usage.ms ? ` · ${(job.score_usage.ms / 1000).toFixed(1)}s` : ''}
+          {job.score_usage.model ? ` · ${job.score_usage.model}` : ''}
+        </p>
+      )}
       {job.full_description && (
         <div>
           <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Description</p>
@@ -184,4 +201,10 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
       )}
     </div>
   );
+}
+
+/** Compact token count for the scoring usage line, e.g. 4200 → "4.2k". */
+function fmtTokens(n: number | null | undefined): string {
+  if (n == null) return '?';
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }

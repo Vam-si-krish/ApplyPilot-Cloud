@@ -105,39 +105,42 @@ describe('parseScoreResponse', () => {
 });
 
 describe('buildScoreMessages', () => {
-  it('uses SCORE_PROMPT as the system message', () => {
+  // ADR 0066: three messages — system(SCORE_PROMPT), system(résumé, cached), user(job).
+  const resumeBlock = (msgs: ReturnType<typeof buildScoreMessages>) =>
+    msgs[1].content as { text: string; cache?: boolean }[];
+  const jobText = (msgs: ReturnType<typeof buildScoreMessages>) =>
+    (msgs[2].content as { text: string }[]).map((p) => p.text).join('\n\n');
+
+  it('uses SCORE_PROMPT as the first system message', () => {
     const msgs = buildScoreMessages('my resume', { title: 'Eng', company: 'Acme', full_description: 'desc' });
     expect(msgs[0]).toEqual({ role: 'system', content: SCORE_PROMPT });
   });
 
-  // The user message is [résumé segment (cached), job segment] (ADR 0056); providers
-  // without cache_control flatten the parts with '\n\n' back to the exact old string.
-  const flatten = (msgs: ReturnType<typeof buildScoreMessages>): string => {
-    const c = msgs[1].content;
-    return typeof c === 'string' ? c : c.map((p) => p.text).join('\n\n');
-  };
-
-  it('embeds resume and job, truncating description to 15000 chars', () => {
-    const longDesc = 'x'.repeat(16000);
-    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', company_size: '51-200 employees', location: 'NYC', full_description: longDesc });
-    const user = flatten(msgs);
-    expect(user.startsWith('RESUME:\nRES\n\n---\n\nJOB POSTING:\n')).toBe(true);
-    expect(user).toContain('TITLE: T');
-    expect(user).toContain('COMPANY: C');
-    expect(user).toContain('COMPANY SIZE: 51-200 employees');
-    expect(user).toContain('LOCATION: NYC');
-    expect(user).toContain('x'.repeat(15000));
-    expect(user).not.toContain('x'.repeat(15001));
+  it('puts the résumé in a cached SECOND system message; the job stays in the user tail (ADR 0066)', () => {
+    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', full_description: 'desc' });
+    expect(msgs).toHaveLength(3);
+    expect(msgs[1].role).toBe('system');
+    const rb = resumeBlock(msgs);
+    expect(rb[0].cache).toBe(true); // the résumé is the cache breakpoint
+    expect(rb[0].text).toContain('RESUME:\nRES');
+    expect(rb[0].text).not.toContain('JOB POSTING'); // per-job content must not poison the cached prefix
+    expect(msgs[2].role).toBe('user');
+    expect(jobText(msgs)).toContain('JOB POSTING:');
   });
 
-  it('marks the résumé segment as a cache breakpoint; the job stays in the volatile tail (ADR 0056)', () => {
-    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', full_description: 'desc' });
-    const parts = msgs[1].content as { text: string; cache?: boolean }[];
-    expect(parts[0].cache).toBe(true);
-    expect(parts[0].text).toContain('RESUME:\nRES');
-    expect(parts[0].text).not.toContain('JOB POSTING'); // per-job content must not poison the cached prefix
-    expect(parts[1].cache).toBeUndefined();
-    expect(parts[1].text).toContain('JOB POSTING:');
+  it('embeds the job fields, truncating description to 15000 chars', () => {
+    const longDesc = 'x'.repeat(16000);
+    const msgs = buildScoreMessages('RES', { title: 'T', company: 'C', company_size: '51-200 employees', location: 'NYC', full_description: longDesc });
+    const job = jobText(msgs);
+    expect(job.startsWith('JOB POSTING:\n')).toBe(true);
+    expect(job).toContain('TITLE: T');
+    expect(job).toContain('COMPANY: C');
+    expect(job).toContain('COMPANY SIZE: 51-200 employees');
+    expect(job).toContain('LOCATION: NYC');
+    expect(job).toContain('x'.repeat(15000));
+    expect(job).not.toContain('x'.repeat(15001));
+    // résumé stays in the cached system block, not the job tail
+    expect(resumeBlock(msgs)[0].text).toContain('RESUME:\nRES');
   });
 
   it('strips HTML from the description before truncation (ADR 0056)', () => {
@@ -146,18 +149,18 @@ describe('buildScoreMessages', () => {
       company: 'C',
       full_description: '<p>Build <strong>React</strong> apps</p><ul><li>5+ years</li></ul>',
     });
-    const user = flatten(msgs);
-    expect(user).toContain('Build');
-    expect(user).toContain('React');
-    expect(user).toContain('5+ years');
-    expect(user).not.toContain('<p>');
-    expect(user).not.toContain('<strong>');
+    const job = jobText(msgs);
+    expect(job).toContain('Build');
+    expect(job).toContain('React');
+    expect(job).toContain('5+ years');
+    expect(job).not.toContain('<p>');
+    expect(job).not.toContain('<strong>');
   });
 
   it('falls back to description when full_description is missing and defaults location to N/A', () => {
     const msgs = buildScoreMessages('R', { title: 'T', company: 'C', description: 'fallback' });
-    const user = flatten(msgs);
-    expect(user).toContain('LOCATION: N/A');
-    expect(user).toContain('DESCRIPTION:\nfallback');
+    const job = jobText(msgs);
+    expect(job).toContain('LOCATION: N/A');
+    expect(job).toContain('DESCRIPTION:\nfallback');
   });
 });

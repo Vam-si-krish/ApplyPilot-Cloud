@@ -51,6 +51,10 @@ export interface Job {
   /** Primary technologies the role centers on, named by the scorer (ADR 0065) — e.g.
    *  ['React','TypeScript']. null = not scored / no clear stack in the posting. */
   tech_stack: string[] | null;
+  /** Token usage of the scoring call that produced this row's fit_score (ADR 0066):
+   *  tokens in/out + cache read/write + cost. null = scored before tracking / provider
+   *  didn't report usage. Cache-read > 0 means the résumé prefix was served from cache. */
+  score_usage: ScoreUsage | null;
   /** 0–100 share of the user's skills the job mentions (ADR 0018); null = not computed. */
   skill_match_score: number | null;
   /** The user's skills this job mentions / doesn't (ADR 0018). */
@@ -125,6 +129,24 @@ export interface ScoreBreakdown {
 /** What's persisted in jobs.score_breakdown — the sub-scores plus missing must-haves + seniority. */
 export type StoredScoreBreakdown = ScoreBreakdown & { missing?: string | null; seniority?: string | null };
 
+/**
+ * Token usage of one scoring LLM call (ADR 0066), as the provider/worker reported it.
+ * Its own scoring-only type (distinct from TailorUsage). Populated for the subscription
+ * (Agent SDK) path and direct-API Anthropic; null when the provider didn't report usage.
+ */
+export interface ScoreUsage {
+  input_tokens: number | null;
+  output_tokens: number | null;
+  /** Prompt tokens served from cache (~0.1× weight) — 0 means the cache missed. */
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  /** API-$ equivalent the Agent SDK reports (subscription); null for providers that don't. */
+  cost_usd?: number | null;
+  model?: string | null;
+  /** Wall-clock duration of the call in milliseconds. */
+  ms?: number;
+}
+
 export interface ScoreResult {
   score: number;
   keywords: string;
@@ -139,6 +161,8 @@ export interface ScoreResult {
   company_tier?: CompanyTier | null;
   company_tier_note?: string | null;
   tech_stack?: string[] | null;
+  /** Token usage of this scoring call (ADR 0066); null when unreported. */
+  usage?: ScoreUsage | null;
 }
 
 export interface Profile {

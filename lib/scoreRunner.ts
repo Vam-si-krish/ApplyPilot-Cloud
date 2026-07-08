@@ -200,6 +200,8 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
           company_tier: result.company_tier ?? null,
           company_tier_note: result.company_tier_note ?? null,
           tech_stack: result.tech_stack ?? null,
+          // Per-score token/cache/cost usage (ADR 0066); null when the provider didn't report it.
+          score_usage: result.usage ?? null,
           scored_at: new Date().toISOString(),
           status: 'scored',
         })

@@ -142,29 +142,33 @@ app.post('/score-jobs', async (req, res) => {
     const toScore = jobs.filter((j) => j.status === 'unscored' || j.status === 'filtered');
     console.log(`[score-jobs] scoring ${toScore.length}/${ids.length} jobs`);
 
-    await Promise.all(
-      toScore.map(async (job) => {
-        try {
-          const result = await scoreJobWorker(resumeText, job, client);
-          const breakdown = result.breakdown
-            ? { ...result.breakdown, missing: result.missing ?? null, seniority: result.seniority ?? null }
-            : null;
-          await updateJob(job.id, {
-            fit_score: result.score,
-            score_note: result.note,
-            score_keywords: result.keywords,
-            score_reasoning: result.reasoning,
-            score_breakdown: breakdown,
-            employment_type: result.employment_type ?? null,
-            scored_at: new Date().toISOString(),
-            status: 'scored',
-          });
-          console.log(`[score-jobs] job ${job.id} scored ${result.score}`);
-        } catch (e) {
-          console.error(`[score-jobs] job ${job.id} failed:`, e instanceof Error ? e.message : String(e));
-        }
-      }),
-    );
+    // Sequential (ADR 0066): the subscription is window-throttled anyway, and scoring one
+    // job at a time lets us read `client.lastUsage` as THIS job's usage — a shared Agent-SDK
+    // client under Promise.all would race and mis-attribute token/cost across jobs. The
+    // stable résumé prefix means job #2+ should read the cache (cacheRead > 0).
+    for (const job of toScore) {
+      try {
+        const result = await scoreJobWorker(resumeText, job, client);
+        const breakdown = result.breakdown
+          ? { ...result.breakdown, missing: result.missing ?? null, seniority: result.seniority ?? null }
+          : null;
+        const usage = client.lastUsage ? { ...client.lastUsage } : null;
+        await updateJob(job.id, {
+          fit_score: result.score,
+          score_note: result.note,
+          score_keywords: result.keywords,
+          score_reasoning: result.reasoning,
+          score_breakdown: breakdown,
+          employment_type: result.employment_type ?? null,
+          score_usage: usage,
+          scored_at: new Date().toISOString(),
+          status: 'scored',
+        });
+        console.log(`[score-jobs] job ${job.id} scored ${result.score} cacheRead=${usage?.cache_read_input_tokens ?? 0}`);
+      } catch (e) {
+        console.error(`[score-jobs] job ${job.id} failed:`, e instanceof Error ? e.message : String(e));
+      }
+    }
 
     console.log(`[score-jobs] done`);
   })().catch((e) => console.error('[score-jobs] background error:', e instanceof Error ? e.message : String(e)));
@@ -672,9 +676,13 @@ app.post('/llm', async (req, res) => {
   const t0 = Date.now();
   console.log(`[/llm] request model=${model} messages=${body.messages.length}`);
   try {
-    const text = await makeAgentClient(model, 'llm').chat(body.messages, { temperature, maxTokens });
-    console.log(`[/llm] ok model=${model} ${Date.now() - t0}ms textLen=${text.length}`);
-    res.json({ text });
+    const client = makeAgentClient(model, 'llm');
+    const text = await client.chat(body.messages, { temperature, maxTokens });
+    // Return the Agent SDK's usage (ADR 0066) so the app can persist + surface per-call
+    // token/cache/cost. One call per request, so client.lastUsage is this call's usage.
+    const usage = client.lastUsage ? { ...client.lastUsage, ms: Date.now() - t0 } : null;
+    console.log(`[/llm] ok model=${model} ${Date.now() - t0}ms textLen=${text.length} cacheRead=${usage?.cache_read_input_tokens ?? 0}`);
+    res.json({ text, usage });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[/llm] FAIL model=${model} ${Date.now() - t0}ms: ${msg}`);

@@ -41,3 +41,37 @@ prompts to set up ESLint — so it's not a gate; unchanged by this work.)
 - Could later add a Jobs filter to hide `low`-tier rows if harvesters get noisy — deferred;
   user was wary of hiding good companies, so kept it badge-only for now.
 - Pre-existing from DAY-9 still open: /api/jobs occasional slow 500s (index/query look).
+
+## ✅ Subscription-scoring prompt caching + per-score token/cost (ADR 0066)
+Follow-up to the caching audit: after ADR 0065 the user switched scoring to subscription/haiku
+(no API key). Caching didn't engage — the résumé breakpoint sat in the *user* message, which the
+worker's Agent-SDK `toPromptAndSystem` flattens (dropping it); and even the whole prefix
+(`SCORE_PROMPT` 2,330 + résumé 1,167 ≈ 3,500 tok, measured via `count_tokens`) was under Haiku's
+**4,096-token cache minimum**. Also no cost visibility (tailoring had it, scoring didn't).
+
+Scoring-only fix (mirroring the ADR-0064 *technique*, **tailoring code untouched**):
+- **Résumé → cached 2nd `system` message** in both `lib/scoring.ts` and `resume-worker/scoring.js`
+  (subscription folds system roles into the auto-cached `systemPrompt`; direct-API maps `cache:true` →
+  `cache_control`; compat stays byte-stable).
+- **Enriched the cached block** — `getScoringResumeText` (app `lib/db.ts` + worker `supabase.js`) now
+  returns rendered résumé **+ base_resume JSON** (`composeScoringResume`). Measured prefix **5,129 tok
+  (+1,033 over 4,096)** → caches on Haiku, and the scorer gets full structured grounding. User chose this
+  over the sonnet-alias / leave-as-is options.
+- **Usage tracking**: worker `/llm` returns `{text, usage}`; `/score-jobs` now scores **sequentially**
+  (clean `client.lastUsage` attribution — a shared client under `Promise.all` would race) and writes
+  `score_usage`. App: `WorkerLLMClient.lastUsage` + `chatAnthropic` capture → `ScoreResult.usage` →
+  `scoreJobRows` write. New `jobs.score_usage jsonb` (migration 0041, applied live; `ScoreUsage` type).
+  JobDetails shows `Scored: X in (+Y cached) · Z out · $ · s · model`.
+
+Verification: typecheck + build clean; `vitest` 160 passed incl. **6 live evals in band** (the résumé
+role move didn't shift scores); `node --check` on the 3 worker files; prefix re-measured at 5,129 ≥ 4,096.
+
+### ⚠ Deploy note
+`resume-worker/scoring.js`, `supabase.js`, `server.js` changed — **must be redeployed on the Worker Mac**
+(the local copy is not production). Until then `/score-jobs` keeps the old no-cache / no-usage behavior.
+The per-score readout is the built-in check: job #2+ of a run should show `(+… cached)`; a persistent
+`0 cached` means the prefix fell back under 4,096.
+
+### Open / notes
+- The worker's `/score-jobs` `scoring.js` is still a stale port missing the ADR-0065 company-tier +
+  tech-stack fields (separate pre-existing gap; not touched here).

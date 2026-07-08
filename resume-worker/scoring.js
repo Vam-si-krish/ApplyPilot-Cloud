@@ -118,26 +118,26 @@ function stripHtml(html) {
   return t.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').trim();
 }
 
-/** Port of lib/scoring.ts buildScoreMessages (ADR 0056): HTML stripped before the
- *  15000-char cut; the résumé segment carries a prompt-cache breakpoint so the
- *  system+résumé prefix is billed at ~0.1× from the second job of a run on Anthropic
- *  (the Agent-SDK /llm path flattens parts — caching there is up to the SDK). */
+/** Port of lib/scoring.ts buildScoreMessages (ADR 0056 → ADR 0066): HTML stripped before
+ *  the 15000-char cut; the résumé rides as a SECOND system message carrying the cache
+ *  breakpoint. The Agent-SDK path (this worker's /score-jobs and /llm) folds every system
+ *  role into its auto-cached systemPrompt but flattens user parts — so the résumé must be a
+ *  system message to cache. `resumeText` is the enriched dossier from getScoringResumeText,
+ *  sized to clear Haiku's 4096-token minimum cacheable prefix. */
 export function buildScoreMessages(resumeText, job) {
   const description = stripHtml(job.full_description || job.description || '').slice(0, 15000);
   const jobText =
     `TITLE: ${job.title ?? ''}\n` +
     `COMPANY: ${job.company ?? ''}\n` +
+    `COMPANY SIZE: ${job.company_size ?? 'N/A'}\n` +
     `LOCATION: ${job.location ?? 'N/A'}\n\n` +
     `DESCRIPTION:\n${description}`;
   return [
     { role: 'system', content: SCORE_PROMPT },
-    {
-      role: 'user',
-      content: [
-        { text: `RESUME:\n${resumeText}\n\n---`, cache: true },
-        { text: `JOB POSTING:\n${jobText}` },
-      ],
-    },
+    // Stable prefix (cached across every job in a run).
+    { role: 'system', content: [{ text: `RESUME:\n${resumeText}\n\n---`, cache: true }] },
+    // Volatile tail — the per-job posting, after the cache breakpoint.
+    { role: 'user', content: [{ text: `JOB POSTING:\n${jobText}` }] },
   ];
 }
 

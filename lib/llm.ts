@@ -13,6 +13,8 @@
  * LLM_PROVIDER pins one explicitly; LLM_MODEL overrides the model name.
  */
 
+import type { ScoreUsage } from './types';
+
 /**
  * A text segment within a message. `cache: true` marks an Anthropic prompt-cache
  * breakpoint (ADR 0031) — everything up to and including that segment is cached and
@@ -144,6 +146,10 @@ export class LLMClient {
   private isAnthropic: boolean;
   // True once we've confirmed the native Gemini API is needed for this model.
   private useNativeGemini = false;
+  /** Token usage of the LAST completed call (ADR 0066): tokens in/out + cache read/write
+   *  (+ cost/ms/model). Set by the subscription (worker /llm) and direct-API Anthropic
+   *  paths; left null by the compat/Gemini paths, which don't report cache-aware usage. */
+  lastUsage: ScoreUsage | null = null;
 
   constructor(
     private baseUrl: string,
@@ -166,6 +172,7 @@ export class LLMClient {
 
   // -- Anthropic Messages API --------------------------------------------------
   private async chatAnthropic(messages: ChatMessage[], temperature: number, maxTokens: number): Promise<string> {
+    const t0 = Date.now();
     // System goes as BLOCKS so a `cache: true` system segment becomes a real
     // cache_control breakpoint (ADR 0064) — a breakpoint on the last stable system
     // block caches the whole prefix ahead of it (prompt + base résumé).
@@ -203,6 +210,18 @@ export class LLMClient {
     });
     if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
+    // Cache-aware usage (ADR 0066): cache_read_input_tokens > 0 confirms the résumé
+    // prefix was served from cache. Direct API doesn't report a $ cost.
+    const u = (data.usage || {}) as Record<string, number | undefined>;
+    this.lastUsage = {
+      input_tokens: u.input_tokens ?? null,
+      output_tokens: u.output_tokens ?? null,
+      cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+      cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+      cost_usd: null,
+      model: this.model,
+      ms: Date.now() - t0,
+    };
     const parts = (data.content || [])
       .filter((b: { type?: string }) => b.type === 'text')
       .map((b: { text?: string }) => b.text || '');
@@ -264,6 +283,7 @@ export class LLMClient {
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
     const temperature = opts.temperature ?? 0.0;
     const maxTokens = opts.maxTokens ?? 4096;
+    this.lastUsage = null; // fresh per call; only the Anthropic path repopulates it
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
@@ -350,6 +370,7 @@ export class WorkerLLMClient extends LLMClient {
   }
 
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
+    this.lastUsage = null;
     if (!this.workerUrl || !this.workerSecret) {
       throw new Error(
         'Claude-subscription mode is selected but the worker is not fully configured — ' +
@@ -386,8 +407,14 @@ export class WorkerLLMClient extends LLMClient {
       console.error(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms HTTP ${resp.status}: ${data.error || '(no body)'}`);
       throw new Error(data.error || `worker /llm error (${resp.status})`);
     }
-    const data = (await resp.json()) as { text?: string };
-    console.log(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms ok textLen=${(data.text ?? '').length}`);
+    const data = (await resp.json()) as { text?: string; usage?: ScoreUsage | null };
+    // Usage the worker captured from the Agent SDK (ADR 0066): tokens in/out + cache
+    // read/write + $ cost. cache_read_input_tokens > 0 means the cached prefix was a hit.
+    this.lastUsage = data.usage
+      ? { ...data.usage, model: data.usage.model ?? this.model, ms: data.usage.ms ?? Date.now() - t0 }
+      : null;
+    const cr = data.usage?.cache_read_input_tokens ?? 0;
+    console.log(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms ok textLen=${(data.text ?? '').length} cacheRead=${cr}`);
     return data.text ?? '';
   }
 }
