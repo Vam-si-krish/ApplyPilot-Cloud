@@ -16,6 +16,7 @@ Inspect the JOB POSTING text.
   • Lawful permanent residency / Green Card — "Green Card holder", "permanent resident required".
   • An active or obtainable Security Clearance — "Secret", "Top Secret", "TS/SCI", "Public Trust", "Q clearance", "DoD/active clearance", "ability to obtain a clearance".
   • Citizenship-restricted authorization — e.g. ITAR/EAR "US Persons only".
+  • No visa sponsorship, EVER — the posting states it will not sponsor an employment visa now OR in the future: "we do not (and will not) sponsor", "no visa sponsorship", "unable to sponsor", "sponsorship is not available", "must not now or in the future require sponsorship", "must have permanent work authorization that does not require sponsorship". The candidate is on F1 OPT/EAD: they can work NOW without sponsorship, but WILL need H-1B/visa sponsorship later, so a role that categorically will not sponsor is a dead end. IMPORTANT — do NOT block a posting that merely requires the candidate to be currently authorized to work in the US, or asks "are you legally authorized to work?" (they are, on OPT/EAD) — only block explicit refusals to EVER sponsor a visa.
   Set SCORE to 1, note the blocker, and stop. (Do NOT use 0 — that is reserved for invalid/non-job content.)
 - Otherwise continue to Phase 2.
 

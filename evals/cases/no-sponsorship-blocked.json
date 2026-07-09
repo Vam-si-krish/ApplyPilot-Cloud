@@ -1,0 +1,12 @@
+{
+  "name": "no-sponsorship-blocked",
+  "description": "A strong skills match that is hard-blocked because the posting categorically refuses visa sponsorship now or in the future — the candidate is on F1 OPT/EAD and will need H-1B later, so this is a dead end and must score exactly 1 regardless of fit (ADR 0067).",
+  "resume": "Priya Nair — Software Engineer on F1 OPT/EAD. 4 years building web applications in React, TypeScript, and Node.js; REST/GraphQL APIs, PostgreSQL, AWS, and CI/CD. Will require H-1B sponsorship in the future.",
+  "job": {
+    "title": "Software Engineer",
+    "company": "Meridian Software",
+    "location": "Austin, TX",
+    "full_description": "We are hiring a Software Engineer to build customer-facing web apps in React, TypeScript, and Node.js against PostgreSQL on AWS. 3+ years required. Please note: we are unable to provide visa sponsorship for this position now or in the future — applicants must have work authorization that does not require sponsorship at any time."
+  },
+  "expect": { "minScore": 1, "maxScore": 1 }
+}

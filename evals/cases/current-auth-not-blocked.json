@@ -1,0 +1,12 @@
+{
+  "name": "current-auth-not-blocked",
+  "description": "Guard against over-blocking: the posting only requires the candidate to be CURRENTLY authorized to work in the US — it does NOT refuse future sponsorship. The candidate is authorized on F1 OPT/EAD, so this must NOT trigger the no-sponsorship hard block and a strong skills match should score high (ADR 0067).",
+  "resume": "Priya Nair — Software Engineer on F1 OPT/EAD (currently authorized to work in the US). 5 years building web applications in React, TypeScript, and Node.js; REST/GraphQL APIs, PostgreSQL, AWS, and CI/CD. Led a small feature team.",
+  "job": {
+    "title": "Software Engineer",
+    "company": "Brightlane Labs",
+    "location": "Remote (US)",
+    "full_description": "We are hiring a Software Engineer to build customer-facing web apps in React, TypeScript, and Node.js against PostgreSQL on AWS. 3+ years required. Applicants must be legally authorized to work in the United States at the time of hire. We value strong product engineers who ship."
+  },
+  "expect": { "minScore": 6, "maxScore": 10 }
+}
