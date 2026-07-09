@@ -3,6 +3,7 @@
 import { CheckCircle2 } from 'lucide-react';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 import type { Job } from '@/lib/types';
+import { scoreUsageCostUsd } from '@/lib/pricing';
 
 /** Expanded detail panel for a job row — shared so Jobs and Past Jobs render identically. */
 export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: string, body: Record<string, unknown>) => void }) {
@@ -177,18 +178,23 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
         </div>
       )}
       {/* Scoring token/cache/cost (ADR 0066) — 'cached' tokens are the résumé prefix served
-          from cache (~10× cheaper against your subscription window); 0 cached = cache miss. */}
+          from cache (~10× cheaper against your subscription window); 0 cached = cache miss.
+          The $ is derived from these tokens at the model's rates (ADR 0068) — the subscription
+          Agent SDK reports no cost_usd, so we price it ourselves. */}
       {job.score_usage && (
         <p
           className="text-slate-dim text-[11px] font-mono"
-          title="Token usage of the scoring call. 'cached' = prompt tokens served from cache (~10× cheaper against your usage window); 0 cached means the résumé prefix didn't hit the cache."
+          title="Token usage of the scoring call. 'cached' = prompt tokens served from cache (~10× cheaper against your usage window); 0 cached means the résumé prefix didn't hit the cache. The $ is the actual API-equivalent cost, derived from these tokens at the model's published rates (input/output/cache-read/cache-write priced separately)."
         >
           Scored: {fmtTokens(job.score_usage.input_tokens)} in
           {job.score_usage.cache_read_input_tokens > 0
             ? ` (+${fmtTokens(job.score_usage.cache_read_input_tokens)} cached)`
             : ' (0 cached)'}
           {' · '}{fmtTokens(job.score_usage.output_tokens)} out
-          {typeof job.score_usage.cost_usd === 'number' ? ` · $${job.score_usage.cost_usd.toFixed(4)}` : ''}
+          {(() => {
+            const cost = scoreUsageCostUsd(job.score_usage);
+            return cost != null ? ` · ${fmtUsd(cost)}` : '';
+          })()}
           {job.score_usage.ms ? ` · ${(job.score_usage.ms / 1000).toFixed(1)}s` : ''}
           {job.score_usage.model ? ` · ${job.score_usage.model}` : ''}
         </p>
@@ -207,4 +213,10 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
 function fmtTokens(n: number | null | undefined): string {
   if (n == null) return '?';
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+/** Per-score USD cost — 4 decimals (scores are sub-cent); tiny non-zero costs floor to "<$0.0001". */
+function fmtUsd(n: number): string {
+  if (n > 0 && n < 0.0001) return '<$0.0001';
+  return `$${n.toFixed(4)}`;
 }
