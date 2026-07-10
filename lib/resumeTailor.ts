@@ -16,9 +16,14 @@
  * points) is returned as `changes` so the UI can show it for confirmation before
  * the résumé is used.
  */
-import { getClient, LLMClient, ChatMessage } from './llm';
-import { normalizeResume, extractJsonObject } from './resume';
-import type { ResumeDoc, ResumeWork, ResumeProject, TailorChanges } from './types';
+import { getClient, LLMClient, ChatMessage } from "./llm";
+import { normalizeResume, extractJsonObject } from "./resume";
+import type {
+  ResumeDoc,
+  ResumeWork,
+  ResumeProject,
+  TailorChanges,
+} from "./types";
 
 /** Scoring-v2 signals we already store, fed to the tailorer so it targets the right keywords. */
 export interface TailorSignals {
@@ -51,7 +56,7 @@ export const TAILOR_PROMPT = `You are an expert résumé writer helping the cand
 
 You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
 - Rewrite bullet points to foreground the job's requirements and keywords, adding plausible detail and metrics consistent with the candidate's real roles.
-- ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
+- ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~45 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
 
 TITLE ALIGNMENT — recruiters shortlist on job-title match, so set "basics.label" to an HONEST variant of the TARGET job title whenever the candidate's real background supports doing that job (targeting "Senior Frontend Engineer", a capable full-stack dev's label becomes "Frontend Engineer · React & TypeScript"). Keep the seniority the dates support: never adopt Senior/Staff/Principal/Lead from the posting unless the base résumé already claims that level. If the role is outside what the candidate could credibly claim, keep the base label.
@@ -100,18 +105,36 @@ Do NOT output name, contact, profiles, dates, locations, or education — they a
  *  deterministic caps in `mergeTailored` so the page can't overflow if it doesn't (ADR 0031). */
 function lengthBudget(base: ResumeDoc): string {
   const summary = summaryBudget(base);
-  const work = base.work.map((w, i) => `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`).join('\n');
-  const projects = base.projects.map((p, i) => `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`).join('\n');
+  const work = base.work
+    .map(
+      (w, i) =>
+        `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`,
+    )
+    .join("\n");
+  const projects = base.projects
+    .map(
+      (p, i) =>
+        `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`,
+    )
+    .join("\n");
   return (
     `Summary: ≤ ${summary} characters.\n` +
-    `Work bullets per role (match or go under, NEVER over):\n${work || '  (none)'}\n` +
-    `Project bullets per project:\n${projects || '  (none)'}\n` +
+    `Work bullets per role (match or go under, NEVER over):\n${work || "  (none)"}\n` +
+    `Project bullets per project:\n${projects || "  (none)"}\n` +
     `Total skill keywords across all groups: ≤ ${skillBudget(base)}.`
   );
 }
 
-export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: TailorSignals): ChatMessage[] {
-  const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
+export function buildTailorMessages(
+  base: ResumeDoc,
+  job: TailorJob,
+  signals: TailorSignals,
+): ChatMessage[] {
+  const desc = (job.full_description || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
   const atsMissing = (signals.atsMissing ?? []).filter(Boolean);
@@ -121,30 +144,30 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
   const experienceLine =
     years != null
       ? `\n\nTOTAL PROFESSIONAL EXPERIENCE: about ${years} years (derived from the employment dates above). Do NOT claim, imply, or round up to more than ${years} years anywhere in the résumé.`
-      : '';
+      : "";
   const baseBlock =
     `BASE RÉSUMÉ (the candidate's real experience — anchor employers/titles/dates/education to this — JSON):\n${JSON.stringify(base)}\n\n` +
     `LENGTH BUDGET (derived from the base — your output MUST stay within these so it fits one page):\n${lengthBudget(base)}` +
     experienceLine;
   // VOLATILE tail — the per-job content, after the cache breakpoint.
   const jobBlock =
-    `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
+    `TARGET JOB:\nTitle: ${job.title ?? "N/A"}\nCompany: ${job.company ?? "N/A"}\n\n` +
     `JOB DESCRIPTION:\n${desc}\n\n` +
     `SIGNALS (from our scorer):\n` +
-    `- Job keywords: ${signals.keywords || 'N/A'}\n` +
-    `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(', ') : 'N/A'}\n` +
-    `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(', ') : 'N/A'}\n` +
-    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}\n` +
-    `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(', ') : 'N/A'}`;
+    `- Job keywords: ${signals.keywords || "N/A"}\n` +
+    `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(", ") : "N/A"}\n` +
+    `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(", ") : "N/A"}\n` +
+    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || "N/A"}\n` +
+    `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(", ") : "N/A"}`;
   return [
-    { role: 'system', content: TAILOR_PROMPT },
+    { role: "system", content: TAILOR_PROMPT },
     // The base block rides as a SECOND system message (ADR 0064). Subscription mode
     // (Agent SDK) folds every system role into its auto-cached systemPrompt, so the
     // stable prefix (prompt + base résumé + budget) is cached across jobs — the old
     // shape flattened the user segments and silently dropped the cache breakpoint.
     // Direct-API Anthropic honours the cache flag via a system-block cache_control.
-    { role: 'system', content: [{ text: baseBlock, cache: true }] },
-    { role: 'user', content: [{ text: jobBlock }] },
+    { role: "system", content: [{ text: baseBlock, cache: true }] },
+    { role: "user", content: [{ text: jobBlock }] },
   ];
 }
 
@@ -160,7 +183,7 @@ function capHighlights(baseHl: string[], tailoredHl?: string[]): string[] {
 
 /** Character budget for the summary: base length + 15% slack, floor 320 (ADR 0031). */
 function summaryBudget(base: ResumeDoc): number {
-  return Math.max(Math.ceil((base.basics.summary || '').length * 1.15), 320);
+  return Math.max(Math.ceil((base.basics.summary || "").length * 1.15), 320);
 }
 
 /** Total-keyword budget across all skill groups: base count + slack (ADR 0031). */
@@ -170,15 +193,26 @@ function skillBudget(base: ResumeDoc): number {
 }
 
 const MONTH_INDEX: Record<string, number> = {
-  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
 };
 
 /** Parse a résumé date ("2019-03", "Mar 2019", "March 2019", "03/2019", "2019") to a
  *  fractional year. An explicit "Present"/"Current" token → 'now'; empty/unparseable → null. */
-function parseYearFraction(raw?: string): number | 'now' | null {
-  const t = (raw || '').trim();
+function parseYearFraction(raw?: string): number | "now" | null {
+  const t = (raw || "").trim();
   if (!t) return null;
-  if (/^(present|current|now|ongoing|to date)$/i.test(t)) return 'now';
+  if (/^(present|current|now|ongoing|to date)$/i.test(t)) return "now";
   let m = t.match(/^(\d{4})[-/](\d{1,2})\b/);
   if (m) return Number(m[1]) + (Number(m[2]) - 1) / 12;
   m = t.match(/^(\d{1,2})[-/](\d{4})$/);
@@ -199,16 +233,20 @@ function parseYearFraction(raw?: string): number | 'now' | null {
  * `now`), floored to a whole year. This is the most generous DEFENSIBLE figure, so it
  * doubles as the ceiling the tailorer may not exceed. Returns null if no date parses.
  */
-export function totalExperienceYears(base: ResumeDoc, now: Date = new Date()): number | null {
+export function totalExperienceYears(
+  base: ResumeDoc,
+  now: Date = new Date(),
+): number | null {
   const nowFrac = now.getFullYear() + now.getMonth() / 12;
   let earliest: number | null = null;
   let latest: number | null = null;
   for (const w of base.work) {
     const start = parseYearFraction(w.startDate);
-    if (typeof start === 'number') earliest = earliest == null ? start : Math.min(earliest, start);
+    if (typeof start === "number")
+      earliest = earliest == null ? start : Math.min(earliest, start);
     const end = parseYearFraction(w.endDate);
     // Open or unparseable end date on a role → treat as ongoing (Present), the résumé convention.
-    const endFrac = end === 'now' || end == null ? nowFrac : end;
+    const endFrac = end === "now" || end == null ? nowFrac : end;
     latest = latest == null ? endFrac : Math.max(latest, endFrac);
   }
   if (earliest == null || latest == null) return null;
@@ -223,26 +261,33 @@ export function totalExperienceYears(base: ResumeDoc, now: Date = new Date()): n
  */
 export function clampYoeClaims(text: string, maxYears: number | null): string {
   if (!text || maxYears == null) return text;
-  return text.replace(/\b(\d{1,2})(\s*\+?\s*)(years?|yrs?)\b/gi, (full, num: string, mid: string, unit: string) =>
-    Number(num) > maxYears ? `${maxYears}${mid}${unit}` : full,
+  return text.replace(
+    /\b(\d{1,2})(\s*\+?\s*)(years?|yrs?)\b/gi,
+    (full, num: string, mid: string, unit: string) =>
+      Number(num) > maxYears ? `${maxYears}${mid}${unit}` : full,
   );
 }
 
 /** Take the model's summary but hard-cap it to the budget, trimmed at a word boundary. */
 function capSummary(base: ResumeDoc, tailored?: string): string | undefined {
-  const t = (tailored || '').trim();
+  const t = (tailored || "").trim();
   if (!t) return base.basics.summary;
   const budget = summaryBudget(base);
   if (t.length <= budget) return t;
   const cut = t.slice(0, budget);
-  const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.]+$/, '').trim();
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut)
+    .replace(/[\s,;:.]+$/, "")
+    .trim();
 }
 
 /** Keep the model's skill groups in order but cap total keywords to the budget (ADR 0031). */
-function capSkills(base: ResumeDoc, tailored: ResumeDoc['skills']): ResumeDoc['skills'] {
+function capSkills(
+  base: ResumeDoc,
+  tailored: ResumeDoc["skills"],
+): ResumeDoc["skills"] {
   const budget = skillBudget(base);
-  const out: ResumeDoc['skills'] = [];
+  const out: ResumeDoc["skills"] = [];
   let used = 0;
   for (const g of tailored) {
     if (used >= budget) break;
@@ -258,7 +303,8 @@ function capSkills(base: ResumeDoc, tailored: ResumeDoc['skills']): ResumeDoc['s
 /** Lowercased set of every skill keyword in a résumé. */
 function skillSet(doc: ResumeDoc): Set<string> {
   const set = new Set<string>();
-  for (const g of doc.skills) for (const k of g.keywords) set.add(k.toLowerCase());
+  for (const g of doc.skills)
+    for (const k of g.keywords) set.add(k.toLowerCase());
   return set;
 }
 
@@ -270,10 +316,10 @@ function skillSet(doc: ResumeDoc): Set<string> {
  */
 function cleanText(s: string): string {
   return s
-    .replace(/\s*—\s*/g, ', ')
-    .replace(/,\s*,/g, ',')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
     .trim();
 }
 
@@ -309,17 +355,28 @@ export function mergeTailored(base: ResumeDoc, tailored: ResumeDoc): ResumeDoc {
   // target role — detected + disclosed via titleChanges(); empty/omitted keeps the base.
   const work: ResumeWork[] = base.work.map((b, i) => ({
     ...b,
-    position: tailored.work[i]?.position?.trim() ? finish(tailored.work[i].position.trim()) : b.position,
-    highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(finish),
+    position: tailored.work[i]?.position?.trim()
+      ? finish(tailored.work[i].position.trim())
+      : b.position,
+    highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(
+      finish,
+    ),
   }));
 
   // skills: keep the model's groups (additions allowed) but CAP the total keyword count
   // (ADR 0031) — a long skills list also overflows the page; fall back to base if empty.
   const tailoredSkills = tailored.skills.filter((g) => g.keywords.length > 0);
-  const skills = tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
+  const skills =
+    tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
 
   // projects: anchor name/url to base; take enhanced (count-capped, em-dash-cleaned) highlights.
-  const projects: ResumeProject[] = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(finish) }));
+  const projects: ResumeProject[] = base.projects.map((b, i) => ({
+    ...b,
+    highlights: capHighlights(
+      b.highlights,
+      tailored.projects[i]?.highlights,
+    ).map(finish),
+  }));
 
   // education: verifiable — copy verbatim from base.
   return { basics, work, education: base.education, skills, projects };
@@ -349,18 +406,23 @@ export function titleChanges(base: ResumeDoc, merged: ResumeDoc): string[] {
   merged.work.forEach((w, i) => {
     const b = base.work[i];
     if (!b) return;
-    const from = (b.position || '').trim();
-    const to = (w.position || '').trim();
-    if (to && to !== from) out.push(`${b.name || `Role ${i + 1}`}: "${from || '—'}" → "${to}"`);
+    const from = (b.position || "").trim();
+    const to = (w.position || "").trim();
+    if (to && to !== from)
+      out.push(`${b.name || `Role ${i + 1}`}: "${from || "—"}" → "${to}"`);
   });
   return out;
 }
 
 /** Pull the model's self-reported "_changes" notes out of the raw JSON. */
 function extractChangeNotes(json: unknown): string[] {
-  if (json && typeof json === 'object' && Array.isArray((json as { _changes?: unknown })._changes)) {
-    return ((json as { _changes: unknown[] })._changes)
-      .filter((x): x is string => typeof x === 'string')
+  if (
+    json &&
+    typeof json === "object" &&
+    Array.isArray((json as { _changes?: unknown })._changes)
+  ) {
+    return (json as { _changes: unknown[] })._changes
+      .filter((x): x is string => typeof x === "string")
       .map((s) => s.trim())
       .filter(Boolean);
   }
@@ -379,13 +441,28 @@ export async function tailorResume(
   client?: LLMClient,
 ): Promise<TailorResult> {
   if (!base || base.work.length === 0) {
-    throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
+    throw new Error(
+      "Base résumé is empty — build it under Applications → Base résumé first.",
+    );
   }
   const llm = client ?? getClient();
-  const response = await llm.chat(buildTailorMessages(base, job, signals), { maxTokens: 4000, temperature: 0.35 });
+  const response = await llm.chat(buildTailorMessages(base, job, signals), {
+    maxTokens: 4000,
+    temperature: 0.35,
+  });
   const json = extractJsonObject(response);
-  if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
+  if (json == null)
+    throw new Error(
+      "Could not parse a tailored résumé from the model response.",
+    );
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json));
-  return { resume, changes: { addedSkills: addedSkills(base, resume), titleChanges: titleChanges(base, resume), notes } };
+  return {
+    resume,
+    changes: {
+      addedSkills: addedSkills(base, resume),
+      titleChanges: titleChanges(base, resume),
+      notes,
+    },
+  };
 }

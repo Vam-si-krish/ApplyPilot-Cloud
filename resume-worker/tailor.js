@@ -11,18 +11,27 @@
  * returns a matching cover letter (ADR 0051), so we don't pay a second round-trip +
  * job-description send for it.
  */
-import { extractLetter } from './coverLetter.js';
+import { extractLetter } from "./coverLetter.js";
 
 // ── LLM client (port of lib/llm.ts) ──────────────────────────────────────────
 
 const PROVIDER_TABLE = {
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/v1', defaultModel: 'gemini-2.0-flash' },
-  openai: { baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
-  deepseek: { baseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
-  anthropic: { baseUrl: 'https://api.anthropic.com/v1', defaultModel: 'claude-haiku-4-5-20251001' },
+  gemini: {
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/v1",
+    defaultModel: "gemini-2.0-flash",
+  },
+  openai: { baseUrl: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini" },
+  deepseek: {
+    baseUrl: "https://api.deepseek.com/v1",
+    defaultModel: "deepseek-chat",
+  },
+  anthropic: {
+    baseUrl: "https://api.anthropic.com/v1",
+    defaultModel: "claude-haiku-4-5-20251001",
+  },
 };
 
-const GEMINI_NATIVE_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_NATIVE_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const MAX_RETRIES = 5;
 const TIMEOUT_MS = 120_000;
 const RATE_LIMIT_BASE_WAIT_MS = 10_000;
@@ -31,15 +40,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Message content may be a string or [{ text, cache? }] segments (ADR 0031). */
 function flattenContent(content) {
-  return typeof content === 'string' ? content : content.map((p) => p.text).join('\n\n');
+  return typeof content === "string"
+    ? content
+    : content.map((p) => p.text).join("\n\n");
 }
 
 /** Anthropic message content with cache_control on cacheable segments (prompt caching). */
 function toAnthropicContent(content) {
-  if (typeof content === 'string') return content;
+  if (typeof content === "string") return content;
   return content.map((p) => {
-    const block = { type: 'text', text: p.text };
-    if (p.cache) block.cache_control = { type: 'ephemeral' };
+    const block = { type: "text", text: p.text };
+    if (p.cache) block.cache_control = { type: "ephemeral" };
     return block;
   });
 }
@@ -59,8 +70,8 @@ class LLMClient {
     this.baseUrl = baseUrl;
     this.model = model;
     this.apiKey = apiKey;
-    this.isGemini = baseUrl.includes('generativelanguage.googleapis.com');
-    this.isAnthropic = baseUrl.includes('api.anthropic.com');
+    this.isGemini = baseUrl.includes("generativelanguage.googleapis.com");
+    this.isAnthropic = baseUrl.includes("api.anthropic.com");
     this.useNativeGemini = false;
   }
 
@@ -81,26 +92,45 @@ class LLMClient {
     const systemBlocks = [];
     const anthMessages = [];
     for (const msg of messages) {
-      if (msg.role === 'system') {
-        const parts = typeof msg.content === 'string' ? [{ text: msg.content }] : msg.content;
+      if (msg.role === "system") {
+        const parts =
+          typeof msg.content === "string"
+            ? [{ text: msg.content }]
+            : msg.content;
         for (const p of parts) {
-          const block = { type: 'text', text: p.text };
-          if (p.cache) block.cache_control = { type: 'ephemeral' };
+          const block = { type: "text", text: p.text };
+          if (p.cache) block.cache_control = { type: "ephemeral" };
           systemBlocks.push(block);
         }
       } else {
-        anthMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: toAnthropicContent(msg.content) });
+        anthMessages.push({
+          role: msg.role === "user" ? "user" : "assistant",
+          content: toAnthropicContent(msg.content),
+        });
       }
     }
-    const payload = { model: this.model, max_tokens: maxTokens, temperature, messages: anthMessages };
+    const payload = {
+      model: this.model,
+      max_tokens: maxTokens,
+      temperature,
+      messages: anthMessages,
+    };
     if (systemBlocks.length) payload.system = systemBlocks;
 
-    const resp = await this.fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
+    const resp = await this.fetchWithTimeout(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+    if (!resp.ok)
+      throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
     const u = data.usage || {};
     this.lastUsage = {
@@ -109,7 +139,10 @@ class LLMClient {
       cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
       cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
     };
-    return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text || '').join('');
+    return (data.content || [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text || "")
+      .join("");
   }
 
   async chatNativeGemini(messages, temperature, maxTokens) {
@@ -117,20 +150,26 @@ class LLMClient {
     const systemParts = [];
     for (const msg of messages) {
       const text = flattenContent(msg.content);
-      if (msg.role === 'system') systemParts.push({ text });
-      else if (msg.role === 'user') contents.push({ role: 'user', parts: [{ text }] });
-      else if (msg.role === 'assistant') contents.push({ role: 'model', parts: [{ text }] });
+      if (msg.role === "system") systemParts.push({ text });
+      else if (msg.role === "user")
+        contents.push({ role: "user", parts: [{ text }] });
+      else if (msg.role === "assistant")
+        contents.push({ role: "model", parts: [{ text }] });
     }
-    const payload = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
+    const payload = {
+      contents,
+      generationConfig: { temperature, maxOutputTokens: maxTokens },
+    };
     if (systemParts.length) payload.systemInstruction = { parts: systemParts };
 
     const url = `${GEMINI_NATIVE_BASE}/models/${this.model}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const resp = await this.fetchWithTimeout(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
+    if (!resp.ok)
+      throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
     const um = data.usageMetadata || {};
     this.lastUsage = {
@@ -143,25 +182,39 @@ class LLMClient {
   }
 
   async chatCompat(messages, temperature, maxTokens) {
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = { "Content-Type": "application/json" };
     if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
     // OpenAI-compat layer has no cache_control — send plain-string content.
-    const compatMessages = messages.map((m) => ({ role: m.role, content: flattenContent(m.content) }));
-    const resp = await this.fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ model: this.model, messages: compatMessages, temperature, max_tokens: maxTokens }),
-    });
+    const compatMessages = messages.map((m) => ({
+      role: m.role,
+      content: flattenContent(m.content),
+    }));
+    const resp = await this.fetchWithTimeout(
+      `${this.baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: this.model,
+          messages: compatMessages,
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      },
+    );
     if ((resp.status === 403 || resp.status === 404) && this.isGemini) {
       throw new GeminiCompatForbidden(await resp.text());
     }
-    if (!resp.ok) throw new HttpStatusError(resp.status, resp.headers, await resp.text());
+    if (!resp.ok)
+      throw new HttpStatusError(resp.status, resp.headers, await resp.text());
     const data = await resp.json();
     const uc = data.usage || {};
     this.lastUsage = {
       input_tokens: uc.prompt_tokens ?? null,
       output_tokens: uc.completion_tokens ?? null,
-      cache_read_input_tokens: (uc.prompt_tokens_details && uc.prompt_tokens_details.cached_tokens) ?? 0,
+      cache_read_input_tokens:
+        (uc.prompt_tokens_details && uc.prompt_tokens_details.cached_tokens) ??
+        0,
       cache_creation_input_tokens: 0,
     };
     return data.choices[0].message.content;
@@ -174,74 +227,114 @@ class LLMClient {
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        if (this.isAnthropic) return await this.chatAnthropic(messages, temperature, maxTokens);
-        if (this.useNativeGemini) return await this.chatNativeGemini(messages, temperature, maxTokens);
+        if (this.isAnthropic)
+          return await this.chatAnthropic(messages, temperature, maxTokens);
+        if (this.useNativeGemini)
+          return await this.chatNativeGemini(messages, temperature, maxTokens);
         return await this.chatCompat(messages, temperature, maxTokens);
       } catch (err) {
         if (err instanceof GeminiCompatForbidden) {
           this.useNativeGemini = true;
           try {
-            return await this.chatNativeGemini(messages, temperature, maxTokens);
+            return await this.chatNativeGemini(
+              messages,
+              temperature,
+              maxTokens,
+            );
           } catch (nativeErr) {
-            const s = nativeErr instanceof HttpStatusError ? `${nativeErr.status} — ${String(nativeErr.body).slice(0, 200)}` : String(nativeErr);
-            throw new Error(`Both Gemini endpoints failed. Compat: 403/404. Native: ${s}`);
+            const s =
+              nativeErr instanceof HttpStatusError
+                ? `${nativeErr.status} — ${String(nativeErr.body).slice(0, 200)}`
+                : String(nativeErr);
+            throw new Error(
+              `Both Gemini endpoints failed. Compat: 403/404. Native: ${s}`,
+            );
           }
         }
-        if (err instanceof HttpStatusError && (err.status === 429 || err.status === 503) && attempt < MAX_RETRIES - 1) {
-          const retryAfter = err.headers.get('Retry-After') || err.headers.get('X-RateLimit-Reset-Requests');
+        if (
+          err instanceof HttpStatusError &&
+          (err.status === 429 || err.status === 503) &&
+          attempt < MAX_RETRIES - 1
+        ) {
+          const retryAfter =
+            err.headers.get("Retry-After") ||
+            err.headers.get("X-RateLimit-Reset-Requests");
           let wait;
           if (retryAfter) {
             const parsed = parseFloat(retryAfter);
-            wait = Number.isNaN(parsed) ? RATE_LIMIT_BASE_WAIT_MS * 2 ** attempt : parsed * 1000;
+            wait = Number.isNaN(parsed)
+              ? RATE_LIMIT_BASE_WAIT_MS * 2 ** attempt
+              : parsed * 1000;
           } else {
             wait = Math.min(RATE_LIMIT_BASE_WAIT_MS * 2 ** attempt, 60_000);
           }
           await sleep(wait);
           continue;
         }
-        if (err instanceof Error && err.name === 'AbortError' && attempt < MAX_RETRIES - 1) {
+        if (
+          err instanceof Error &&
+          err.name === "AbortError" &&
+          attempt < MAX_RETRIES - 1
+        ) {
           await sleep(Math.min(RATE_LIMIT_BASE_WAIT_MS * 2 ** attempt, 60_000));
           continue;
         }
         throw err;
       }
     }
-    throw new Error('LLM request failed after all retries');
+    throw new Error("LLM request failed after all retries");
   }
 }
 
 /** Build a client from an explicit provider + model + key (vault path, ADR 0006/0025). */
 export function makeClient(provider, model, apiKey) {
-  const cfg = PROVIDER_TABLE[String(provider).trim().toLowerCase()] ?? PROVIDER_TABLE.openai;
-  return new LLMClient(cfg.baseUrl, (model || '').trim() || cfg.defaultModel, apiKey);
+  const cfg =
+    PROVIDER_TABLE[String(provider).trim().toLowerCase()] ??
+    PROVIDER_TABLE.openai;
+  return new LLMClient(
+    cfg.baseUrl,
+    (model || "").trim() || cfg.defaultModel,
+    apiKey,
+  );
 }
 
 // ── Résumé helpers (port of lib/resume.ts) ───────────────────────────────────
 
 function str(v) {
-  if (typeof v === 'string') {
+  if (typeof v === "string") {
     const t = v.trim();
     return t.length ? t : undefined;
   }
-  if (typeof v === 'number') return String(v);
+  if (typeof v === "number") return String(v);
   return undefined;
 }
 
 function strList(v) {
-  if (Array.isArray(v)) return v.filter((x) => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
-  if (typeof v === 'string') return v.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean);
+  if (Array.isArray(v))
+    return v
+      .filter((x) => typeof x === "string")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  if (typeof v === "string")
+    return v
+      .split(/\r?\n|,/)
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 
 function asObj(v) {
-  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
 function flattenLocation(v) {
-  if (typeof v === 'string') return str(v);
+  if (typeof v === "string") return str(v);
   const o = asObj(v);
-  const parts = [str(o.city), str(o.region) ?? str(o.countryCode) ?? str(o.country)].filter(Boolean);
-  if (parts.length) return parts.join(', ');
+  const parts = [
+    str(o.city),
+    str(o.region) ?? str(o.countryCode) ?? str(o.country),
+  ].filter(Boolean);
+  if (parts.length) return parts.join(", ");
   return str(o.address);
 }
 
@@ -305,12 +398,15 @@ function normalizeSkills(v) {
   if (!Array.isArray(v)) return [];
   return v
     .map((raw) => {
-      if (typeof raw === 'string') {
+      if (typeof raw === "string") {
         const name = str(raw);
         return name ? { name, keywords: [] } : null;
       }
       const o = asObj(raw);
-      return { name: str(o.name) ?? str(o.category), keywords: strList(o.keywords) };
+      return {
+        name: str(o.name) ?? str(o.category),
+        keywords: strList(o.keywords),
+      };
     })
     .filter((s) => s !== null);
 }
@@ -319,7 +415,12 @@ function normalizeProjects(v) {
   if (!Array.isArray(v)) return [];
   return v.map((raw) => {
     const o = asObj(raw);
-    return { name: str(o.name), description: str(o.description), url: str(o.url), highlights: strList(o.highlights) };
+    return {
+      name: str(o.name),
+      description: str(o.description),
+      url: str(o.url),
+      highlights: strList(o.highlights),
+    };
   });
 }
 
@@ -341,7 +442,7 @@ export function extractJsonObject(text) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidates = fenced ? [fenced[1], text] : [text];
   for (const c of candidates) {
-    const start = c.indexOf('{');
+    const start = c.indexOf("{");
     if (start === -1) continue;
     let depth = 0;
     let inStr = false;
@@ -350,13 +451,13 @@ export function extractJsonObject(text) {
       const ch = c[i];
       if (inStr) {
         if (esc) esc = false;
-        else if (ch === '\\') esc = true;
+        else if (ch === "\\") esc = true;
         else if (ch === '"') inStr = false;
         continue;
       }
       if (ch === '"') inStr = true;
-      else if (ch === '{') depth++;
-      else if (ch === '}') {
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
         depth--;
         if (depth === 0) {
           try {
@@ -377,7 +478,7 @@ export const TAILOR_PROMPT = `You are an expert résumé writer helping the cand
 
 You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
 - Rewrite bullet points to foreground the job's requirements and keywords, adding plausible detail and metrics consistent with the candidate's real roles.
-- ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
+- ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~45 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
 
 TITLE ALIGNMENT — recruiters shortlist on job-title match, so set "basics.label" to an HONEST variant of the TARGET job title whenever the candidate's real background supports doing that job (targeting "Senior Frontend Engineer", a capable full-stack dev's label becomes "Frontend Engineer · React & TypeScript"). Keep the seniority the dates support: never adopt Senior/Staff/Principal/Lead from the posting unless the base résumé already claims that level. If the role is outside what the candidate could credibly claim, keep the base label.
@@ -430,18 +531,32 @@ Do NOT output name, contact, profiles, dates, locations, or education in the ré
 /** Per-section length budget derived from the base résumé (which already fits one page).
  *  Injected into the prompt and mirrored by the deterministic caps in mergeTailored. */
 function lengthBudget(base) {
-  const work = base.work.map((w, i) => `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`).join('\n');
-  const projects = base.projects.map((p, i) => `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`).join('\n');
+  const work = base.work
+    .map(
+      (w, i) =>
+        `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`,
+    )
+    .join("\n");
+  const projects = base.projects
+    .map(
+      (p, i) =>
+        `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`,
+    )
+    .join("\n");
   return (
     `Summary: ≤ ${summaryBudget(base)} characters.\n` +
-    `Work bullets per role (match or go under, NEVER over):\n${work || '  (none)'}\n` +
-    `Project bullets per project:\n${projects || '  (none)'}\n` +
+    `Work bullets per role (match or go under, NEVER over):\n${work || "  (none)"}\n` +
+    `Project bullets per project:\n${projects || "  (none)"}\n` +
     `Total skill keywords across all groups: ≤ ${skillBudget(base)}.`
   );
 }
 
-export function buildTailorMessages(base, job, signals, instructions = '') {
-  const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
+export function buildTailorMessages(base, job, signals, instructions = "") {
+  const desc = (job.full_description || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
   const atsMissing = (signals.atsMissing ?? []).filter(Boolean);
@@ -450,43 +565,44 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
   const experienceLine =
     years != null
       ? `\n\nTOTAL PROFESSIONAL EXPERIENCE: about ${years} years (derived from the employment dates above). Do NOT claim, imply, or round up to more than ${years} years anywhere in the résumé.`
-      : '';
+      : "";
   const baseBlock =
     `BASE RÉSUMÉ (the candidate's real experience — anchor employers/titles/dates/education to this — JSON):\n${JSON.stringify(base)}\n\n` +
     `LENGTH BUDGET (derived from the base — your output MUST stay within these so it fits one page):\n${lengthBudget(base)}` +
     experienceLine;
   // VOLATILE tail — the per-job content, after the cache breakpoint.
   const jobBlock =
-    `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
+    `TARGET JOB:\nTitle: ${job.title ?? "N/A"}\nCompany: ${job.company ?? "N/A"}\n\n` +
     `JOB DESCRIPTION:\n${desc}\n\n` +
     `SIGNALS (from our scorer):\n` +
-    `- Job keywords: ${signals.keywords || 'N/A'}\n` +
-    `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(', ') : 'N/A'}\n` +
-    `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(', ') : 'N/A'}\n` +
-    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}\n` +
-    `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(', ') : 'N/A'}`;
+    `- Job keywords: ${signals.keywords || "N/A"}\n` +
+    `- Candidate skills this job mentions (lead with these): ${matched.length ? matched.join(", ") : "N/A"}\n` +
+    `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(", ") : "N/A"}\n` +
+    `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || "N/A"}\n` +
+    `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(", ") : "N/A"}`;
   // Optional user/recruiter instructions — high priority for EMPHASIS, ORDERING, and which
   // experience to foreground, but still bound by every rule above (never fabricate to satisfy them).
-  const instr = String(instructions || '').trim();
+  const instr = String(instructions || "").trim();
   const instrBlock = instr
     ? `\n\nUSER INSTRUCTIONS (HIGH PRIORITY — the candidate's explicit asks, often relayed from the recruiter). Follow these for emphasis, ordering, and which skills/projects/experience to foreground and how to frame the summary. They do NOT relax the rules above: stay truthful and plausible, keep the length budget, and never invent employers, titles, dates, or education:\n${instr.slice(0, 2000)}`
-    : '';
+    : "";
   return [
-    { role: 'system', content: TAILOR_PROMPT },
+    { role: "system", content: TAILOR_PROMPT },
     // The base block rides as a SECOND system message (ADR 0064). Subscription mode
     // (Agent SDK) folds every system role into its auto-cached systemPrompt, so the
     // stable prefix (prompt + base résumé + budget) is cached across jobs — the old
     // shape flattened the user segments and silently dropped the cache breakpoint.
     // Direct-API Anthropic honours the cache flag via a system-block cache_control;
     // Gemini/compat flatten system parts in order, keeping the same stable prefix.
-    { role: 'system', content: [{ text: baseBlock, cache: true }] },
-    { role: 'user', content: [{ text: jobBlock + instrBlock }] },
+    { role: "system", content: [{ text: baseBlock, cache: true }] },
+    { role: "user", content: [{ text: jobBlock + instrBlock }] },
   ];
 }
 
 function skillSet(doc) {
   const set = new Set();
-  for (const g of doc.skills) for (const k of g.keywords) set.add(k.toLowerCase());
+  for (const g of doc.skills)
+    for (const k of g.keywords) set.add(k.toLowerCase());
   return set;
 }
 
@@ -501,7 +617,7 @@ function capHighlights(baseHl, tailoredHl) {
 
 /** Character budget for the summary: base length + 15% slack, floor 320 (ADR 0031). */
 function summaryBudget(base) {
-  return Math.max(Math.ceil((base.basics.summary || '').length * 1.15), 320);
+  return Math.max(Math.ceil((base.basics.summary || "").length * 1.15), 320);
 }
 
 /** Total-keyword budget across all skill groups: base count + slack (ADR 0031). */
@@ -511,15 +627,26 @@ function skillBudget(base) {
 }
 
 const MONTH_INDEX = {
-  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
 };
 
 /** Parse a résumé date ("2019-03", "Mar 2019", "03/2019", "2019") to a fractional year.
  *  An explicit "Present"/"Current" token → 'now'; empty/unparseable → null. */
 function parseYearFraction(raw) {
-  const t = (raw || '').trim();
+  const t = (raw || "").trim();
   if (!t) return null;
-  if (/^(present|current|now|ongoing|to date)$/i.test(t)) return 'now';
+  if (/^(present|current|now|ongoing|to date)$/i.test(t)) return "now";
   let m = t.match(/^(\d{4})[-/](\d{1,2})\b/);
   if (m) return Number(m[1]) + (Number(m[2]) - 1) / 12;
   m = t.match(/^(\d{1,2})[-/](\d{4})$/);
@@ -546,9 +673,10 @@ export function totalExperienceYears(base, now = new Date()) {
   let latest = null;
   for (const w of base.work) {
     const start = parseYearFraction(w.startDate);
-    if (typeof start === 'number') earliest = earliest == null ? start : Math.min(earliest, start);
+    if (typeof start === "number")
+      earliest = earliest == null ? start : Math.min(earliest, start);
     const end = parseYearFraction(w.endDate);
-    const endFrac = end === 'now' || end == null ? nowFrac : end;
+    const endFrac = end === "now" || end == null ? nowFrac : end;
     latest = latest == null ? endFrac : Math.max(latest, endFrac);
   }
   if (earliest == null || latest == null) return null;
@@ -562,20 +690,24 @@ export function totalExperienceYears(base, now = new Date()) {
  */
 export function clampYoeClaims(text, maxYears) {
   if (!text || maxYears == null) return text;
-  return text.replace(/\b(\d{1,2})(\s*\+?\s*)(years?|yrs?)\b/gi, (full, num, mid, unit) =>
-    Number(num) > maxYears ? `${maxYears}${mid}${unit}` : full,
+  return text.replace(
+    /\b(\d{1,2})(\s*\+?\s*)(years?|yrs?)\b/gi,
+    (full, num, mid, unit) =>
+      Number(num) > maxYears ? `${maxYears}${mid}${unit}` : full,
   );
 }
 
 /** Take the model's summary but hard-cap it to the budget, trimmed at a word boundary. */
 function capSummary(base, tailored) {
-  const t = (tailored || '').trim();
+  const t = (tailored || "").trim();
   if (!t) return base.basics.summary;
   const budget = summaryBudget(base);
   if (t.length <= budget) return t;
   const cut = t.slice(0, budget);
-  const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.]+$/, '').trim();
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut)
+    .replace(/[\s,;:.]+$/, "")
+    .trim();
 }
 
 /**
@@ -585,10 +717,10 @@ function capSummary(base, tailored) {
  */
 function cleanText(s) {
   return s
-    .replace(/\s*—\s*/g, ', ')
-    .replace(/,\s*,/g, ',')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
     .trim();
 }
 
@@ -627,12 +759,23 @@ export function mergeTailored(base, tailored) {
   // detected + disclosed via titleChanges(); empty/omitted keeps the base title.
   const work = base.work.map((b, i) => ({
     ...b,
-    position: tailored.work[i]?.position?.trim() ? finish(tailored.work[i].position.trim()) : b.position,
-    highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(finish),
+    position: tailored.work[i]?.position?.trim()
+      ? finish(tailored.work[i].position.trim())
+      : b.position,
+    highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(
+      finish,
+    ),
   }));
   const tailoredSkills = tailored.skills.filter((g) => g.keywords.length > 0);
-  const skills = tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
-  const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(finish) }));
+  const skills =
+    tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
+  const projects = base.projects.map((b, i) => ({
+    ...b,
+    highlights: capHighlights(
+      b.highlights,
+      tailored.projects[i]?.highlights,
+    ).map(finish),
+  }));
   return { basics, work, education: base.education, skills, projects };
 }
 
@@ -660,16 +803,20 @@ export function titleChanges(base, merged) {
   merged.work.forEach((w, i) => {
     const b = base.work[i];
     if (!b) return;
-    const from = (b.position || '').trim();
-    const to = (w.position || '').trim();
-    if (to && to !== from) out.push(`${b.name || `Role ${i + 1}`}: "${from || '—'}" → "${to}"`);
+    const from = (b.position || "").trim();
+    const to = (w.position || "").trim();
+    if (to && to !== from)
+      out.push(`${b.name || `Role ${i + 1}`}: "${from || "—"}" → "${to}"`);
   });
   return out;
 }
 
 function extractChangeNotes(json) {
-  if (json && typeof json === 'object' && Array.isArray(json._changes)) {
-    return json._changes.filter((x) => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
+  if (json && typeof json === "object" && Array.isArray(json._changes)) {
+    return json._changes
+      .filter((x) => typeof x === "string")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
   return [];
 }
@@ -684,23 +831,43 @@ function extractChangeNotes(json) {
  * maxTokens is raised to fit the résumé JSON AND the ~350-word letter without either
  * crowding the other (the résumé is the priority; the letter is a bonus in the same call).
  */
-export async function tailorResume(base, job, signals, client, instructions = '') {
+export async function tailorResume(
+  base,
+  job,
+  signals,
+  client,
+  instructions = "",
+) {
   if (!base || base.work.length === 0) {
-    throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
+    throw new Error(
+      "Base résumé is empty — build it under Applications → Base résumé first.",
+    );
   }
   const t0 = Date.now();
-  const response = await client.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 5200, temperature: 0.35 });
+  const response = await client.chat(
+    buildTailorMessages(base, job, signals, instructions),
+    { maxTokens: 5200, temperature: 0.35 },
+  );
   const json = extractJsonObject(response);
-  if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
+  if (json == null)
+    throw new Error(
+      "Could not parse a tailored résumé from the model response.",
+    );
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json));
   // Usage of THIS call (ADR 0064) — the client path that answered sets lastUsage;
   // null when the provider doesn't report it. Persisted so the user can see what
   // one résumé costs (and whether the cache is being read).
-  const usage = client.lastUsage ? { ...client.lastUsage, model: client.model || null, ms: Date.now() - t0 } : null;
+  const usage = client.lastUsage
+    ? { ...client.lastUsage, model: client.model || null, ms: Date.now() - t0 }
+    : null;
   return {
     resume,
-    changes: { addedSkills: addedSkills(base, resume), titleChanges: titleChanges(base, resume), notes },
+    changes: {
+      addedSkills: addedSkills(base, resume),
+      titleChanges: titleChanges(base, resume),
+      notes,
+    },
     coverLetter: extractCoverLetter(json),
     usage,
   };
@@ -714,7 +881,8 @@ export async function tailorResume(base, job, signals, client, instructions = ''
  */
 function extractCoverLetter(json) {
   try {
-    const raw = json && typeof json.cover_letter === 'string' ? json.cover_letter : '';
+    const raw =
+      json && typeof json.cover_letter === "string" ? json.cover_letter : "";
     if (!raw.trim()) return null;
     if (!/sincerely/i.test(raw)) return null; // no sign-off → not a real letter
     const cleaned = extractLetter(raw);
@@ -756,8 +924,8 @@ export async function condenseResume(resume, client, pass = 0) {
   const user = `${instruction}\n\nCURRENT RÉSUMÉ (JSON) — shorten it so it fits one page:\n${JSON.stringify(resume)}`;
   const response = await client.chat(
     [
-      { role: 'system', content: CONDENSE_PROMPT },
-      { role: 'user', content: user },
+      { role: "system", content: CONDENSE_PROMPT },
+      { role: "user", content: user },
     ],
     { maxTokens: 2000, temperature: 0.2 },
   );
