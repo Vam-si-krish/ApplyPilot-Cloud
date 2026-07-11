@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { detectProvider, makeWorkerClient, WorkerLLMClient } from './llm';
+import {
+  CHATGPT_SUBSCRIPTION_PROVIDER,
+  detectProvider,
+  isSubscriptionProvider,
+  makeWorkerClient,
+  WorkerLLMClient,
+} from './llm';
 
 describe('detectProvider', () => {
   it('picks Gemini by default when only GEMINI_API_KEY is set', () => {
@@ -43,7 +49,7 @@ describe('detectProvider', () => {
   });
 });
 
-describe('WorkerLLMClient (Claude-subscription mode, ADR 0042)', () => {
+describe('WorkerLLMClient (subscription modes, ADR 0042/0069)', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('POSTs messages + model to the worker /llm with the Bearer secret and returns text', async () => {
@@ -65,12 +71,26 @@ describe('WorkerLLMClient (Claude-subscription mode, ADR 0042)', () => {
     expect(url).toBe('https://worker.example.com/llm'); // trailing slash collapsed
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer shh-secret');
     const body = JSON.parse(init.body as string);
-    expect(body).toMatchObject({ model: 'haiku', temperature: 0.1, maxTokens: 1000, messages });
+    expect(body).toMatchObject({ provider: 'subscription', model: 'haiku', temperature: 0.1, maxTokens: 1000, messages });
   });
 
   it('defaults the model to sonnet when blank', () => {
     expect(new WorkerLLMClient('u', 's', '').model).toBe('sonnet');
     expect(makeWorkerClient('u', 's', '   ').model).toBe('sonnet');
+  });
+
+  it('routes ChatGPT subscription calls explicitly and defaults to GPT-5.4', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) =>
+      new Response(JSON.stringify({ text: 'ready' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = makeWorkerClient('https://worker.example.com', 's', '', CHATGPT_SUBSCRIPTION_PROVIDER);
+    expect(client.model).toBe('gpt-5.4');
+    expect(client.subscriptionProvider).toBe(CHATGPT_SUBSCRIPTION_PROVIDER);
+    expect(isSubscriptionProvider(CHATGPT_SUBSCRIPTION_PROVIDER)).toBe(true);
+    await client.chat([{ role: 'user', content: 'hi' }]);
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({ provider: CHATGPT_SUBSCRIPTION_PROVIDER, model: 'gpt-5.4' });
   });
 
   it('surfaces the worker error message on a non-ok response', async () => {

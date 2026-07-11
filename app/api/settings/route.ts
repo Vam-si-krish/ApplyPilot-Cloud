@@ -60,7 +60,9 @@ export async function PUT(req: Request) {
   }
   if (typeof body.llm_provider === 'string' && body.llm_provider) patch.llm_provider = body.llm_provider;
   if (typeof body.llm_model === 'string' && body.llm_model) patch.llm_model = body.llm_model;
-  // Per-task models (ADR 0025): scoring (cheap, high-volume) vs tailoring (quality).
+  // Per-task models (ADR 0025/0069): chat, tailoring, and everything else (score).
+  if (typeof body.chat_provider === 'string' && body.chat_provider) patch.chat_provider = body.chat_provider;
+  if (typeof body.chat_model === 'string' && body.chat_model) patch.chat_model = body.chat_model;
   if (typeof body.score_provider === 'string' && body.score_provider) patch.score_provider = body.score_provider;
   if (typeof body.score_model === 'string' && body.score_model) patch.score_model = body.score_model;
   if (typeof body.tailor_provider === 'string' && body.tailor_provider) patch.tailor_provider = body.tailor_provider;
