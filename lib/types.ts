@@ -130,9 +130,9 @@ export interface ScoreBreakdown {
 export type StoredScoreBreakdown = ScoreBreakdown & { missing?: string | null; seniority?: string | null };
 
 /**
- * Token usage of one scoring LLM call (ADR 0066/0069), as the provider/worker reported it.
- * Its own scoring-only type (distinct from TailorUsage). Populated for subscription
- * worker paths and providers that report usage; null when usage is unavailable.
+ * Token usage of one scoring LLM call (ADR 0066), as the provider/worker reported it.
+ * Its own scoring-only type (distinct from TailorUsage). Populated for the subscription
+ * (Agent SDK) path and direct-API Anthropic; null when the provider didn't report usage.
  */
 export interface ScoreUsage {
   input_tokens: number | null;
@@ -140,8 +140,6 @@ export interface ScoreUsage {
   /** Prompt tokens served from cache (~0.1× weight) — 0 means the cache missed. */
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
-  /** Reasoning tokens are reported separately by the Codex SDK. */
-  reasoning_output_tokens?: number;
   /** API-$ equivalent the Agent SDK reports (subscription); null for providers that don't. */
   cost_usd?: number | null;
   model?: string | null;
@@ -205,12 +203,11 @@ export interface Settings {
   location_limits: Record<string, number>;
   llm_provider: string; // 'gemini' | 'openai' | 'deepseek' | 'anthropic' — global fallback
   llm_model: string;
-  /** Per-task models (ADR 0025/0069). The three UI lanes are chat, tailoring,
-   *  and everything else (score). Null/absent values use the documented lane fallback.
-   *  'subscription' means Claude Agent SDK; 'chatgpt_subscription' means the Codex
-   *  SDK authenticated with ChatGPT. Both execute on the worker without a vault key. */
-  chat_provider: string; // default 'openai'; pre-0042 rows fall back to score_provider
-  chat_model: string; // default 'gpt-4o-mini'; pre-0042 rows fall back to score_model
+  /** Per-task models (ADR 0025). Scoring is high-volume → cheap; tailoring is
+   *  quality → premium. Null falls back to llm_provider/llm_model.
+   *  A provider of 'subscription' (ADR 0042) runs the lane on the Claude
+   *  subscription via the Agent SDK on the worker (no API key); the *_model holds an
+   *  Agent-SDK alias ('sonnet' | 'opus' | 'haiku'). */
   score_provider: string; // default 'openai'
   score_model: string; // default 'gpt-4o-mini'
   tailor_provider: string; // default 'anthropic'
@@ -431,8 +428,6 @@ export interface TailorUsage {
   /** Prompt tokens served from cache (~0.1× weight) — 0 means the cache missed. */
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
-  /** Reasoning tokens are reported separately by the Codex SDK. */
-  reasoning_output_tokens?: number;
   /** API-$ equivalent the Agent SDK reports (subscription mode only). */
   cost_usd?: number | null;
   model?: string | null;

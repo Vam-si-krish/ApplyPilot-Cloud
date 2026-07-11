@@ -8,41 +8,20 @@
  * jobs 'filtered' and skips the LLM.
  */
 import { scoreJob } from './scoring';
-import { isSubscriptionProvider, makeClient, makeWorkerClient, LLMClient } from './llm';
+import { makeClient, makeWorkerClient, SUBSCRIPTION_PROVIDER, LLMClient } from './llm';
 import { getActiveApiKey, isApiKeyProvider } from './credentials';
 import { supabaseAdmin } from './supabase';
 import type { Job, Settings } from './types';
 
 /** Which LLM is used for which kind of work (ADR 0025). */
-export type LlmTask = 'chat' | 'score' | 'tailor';
+export type LlmTask = 'score' | 'tailor';
 
-type ProviderModel = { provider: string; model: string };
-
-/** Pick the first COMPLETE provider/model pair. Keeping the pair together prevents a
- * rolling migration from combining one lane's provider with another lane's model. */
-function firstCompletePair(...pairs: ProviderModel[]): ProviderModel {
-  return pairs.find((pair) => pair.provider.trim() && pair.model.trim()) ?? pairs[pairs.length - 1];
-}
-
-/** Provider+model for a task, with backward-compatible complete-pair fallbacks.
- * Chat used the score lane before ADR 0069, so a pre-migration row must keep doing so. */
-export function taskProviderModel(settings: Settings, task: LlmTask): ProviderModel {
-  const global = { provider: settings.llm_provider || '', model: settings.llm_model || '' };
-  const score = { provider: settings.score_provider || '', model: settings.score_model || '' };
-  if (task === 'chat') {
-    return firstCompletePair(
-      { provider: settings.chat_provider || '', model: settings.chat_model || '' },
-      score,
-      global,
-    );
-  }
+/** Provider+model for a task, falling back to the global llm_* when unset. */
+function taskProviderModel(settings: Settings, task: LlmTask): { provider: string; model: string } {
   if (task === 'tailor') {
-    return firstCompletePair(
-      { provider: settings.tailor_provider || '', model: settings.tailor_model || '' },
-      global,
-    );
+    return { provider: settings.tailor_provider || settings.llm_provider, model: settings.tailor_model || settings.llm_model };
   }
-  return firstCompletePair(score, global);
+  return { provider: settings.score_provider || settings.llm_provider, model: settings.score_model || settings.llm_model };
 }
 
 /**
@@ -57,27 +36,25 @@ function resolveWorker(settings: Settings): { url: string; secret: string } | nu
 }
 
 /**
- * Build the LLM client for a task (ADR 0006/0025/0042/0069).
- * - a subscription provider: route the task to the worker's /llm, which runs it via
- *   the Claude Agent SDK or OpenAI Codex SDK — no vault/API key is used. If the
+ * Build the LLM client for a task (ADR 0006/0025/0042).
+ * - provider 'subscription' (ADR 0042): route the task to the worker's /llm, which
+ *   runs it on the Claude subscription via the Agent SDK — no API key billed. If the
  *   worker isn't configured we THROW (never silently fall back to a paid env key,
  *   which would defeat the point); for scoring this surfaces as a visible score-0.
  * - an API provider: build from the active vault key; returns undefined when no key
  *   resolves, so the caller falls back to the env-detected singleton.
  */
 export async function buildClientForTask(settings: Settings, task: LlmTask): Promise<LLMClient | undefined> {
-  const selected = taskProviderModel(settings, task);
-  const provider = selected.provider.trim().toLowerCase();
-  const model = selected.model.trim();
+  const { provider, model } = taskProviderModel(settings, task);
 
-  if (isSubscriptionProvider(provider)) {
+  if (provider === SUBSCRIPTION_PROVIDER) {
     // Always return a worker client (never throw here — an unhandled throw inside a
     // serverless handler surfaces to the browser as an opaque 502). If the worker
     // URL/secret can't be resolved, the client fails legibly at call time, which the
     // callers already handle (scoreJob → visible score-0 with the reason; assistant →
     // clean error). We never silently fall back to a paid API key.
     const worker = resolveWorker(settings);
-    return makeWorkerClient(worker?.url ?? '', worker?.secret ?? '', model, provider);
+    return makeWorkerClient(worker?.url ?? '', worker?.secret ?? '', model);
   }
 
   if (!isApiKeyProvider(provider)) return undefined;
@@ -88,11 +65,6 @@ export async function buildClientForTask(settings: Settings, task: LlmTask): Pro
 /** Scoring / company-assessment client (cheap, high-volume task). */
 export async function buildScoringClient(settings: Settings): Promise<LLMClient | undefined> {
   return buildClientForTask(settings, 'score');
-}
-
-/** ApplyBuddy chat client (independent from scoring since ADR 0069). */
-export async function buildChatClient(settings: Settings): Promise<LLMClient | undefined> {
-  return buildClientForTask(settings, 'chat');
 }
 
 /** Tailoring / résumé-parse client (quality task). */

@@ -5,8 +5,8 @@
  * the Cloud profile, and can revise its previous answer on follow-up ("make it
  * shorter / more formal / more casual").
  *
- * Reuses the Cloud LLM client (lib/llm.ts) + the API-key vault/worker, with its own
- * provider/model lane since ADR 0069. This is a SEPARATE call path from fit
+ * Reuses the Cloud LLM client (lib/llm.ts) + the API-key vault, so it runs on the
+ * same active provider/key as scoring. This is a SEPARATE call path from fit
  * scoring — the frozen SCORE_PROMPT is untouched (CLAUDE.md invariant).
  */
 import type { ChatMessage } from './llm';
@@ -91,11 +91,7 @@ export function buildAssistantSystem(profile: Profile): ChatMessage {
   else if (profile.resume_text) facts.resume_text = profile.resume_text;
 
   const content = ASSISTANT_SYSTEM_PROMPT.replace('{{PROFILE_JSON}}', () => JSON.stringify(facts, null, 2));
-  // The full profile is identical across turns until the user edits it. Marking this
-  // stable system block cacheable gives direct Anthropic a real breakpoint; Claude
-  // Agent SDK and Codex subscription paths keep it at the front of their auto-cached
-  // prompt, while OpenAI-compatible providers preserve the same stable prefix.
-  return { role: 'system', content: [{ text: content, cache: true }] };
+  return { role: 'system', content };
 }
 
 export interface AssistantTurn {

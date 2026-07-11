@@ -20,8 +20,6 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     location_limits: {},
     llm_provider: 'deepseek',
     llm_model: 'deepseek-chat',
-    chat_provider: 'openai',
-    chat_model: 'gpt-4o-mini',
     score_provider: 'openai',
     score_model: 'gpt-4o-mini',
     tailor_provider: 'anthropic',

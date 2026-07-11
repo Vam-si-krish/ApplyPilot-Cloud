@@ -66,7 +66,7 @@ Source: `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`.
 > **`score_keywords` and `score_reasoning` as separate columns** (per the brief's data
 > model); the parser still returns all four fields.
 
-## LLM client (ported from llm.py; task routing extended in ADR 0025/0069)
+## LLM client (ported from llm.py)
 - Providers by env key: Gemini (default `gemini-2.0-flash`), OpenAI (`gpt-4o-mini`),
   DeepSeek (`deepseek-chat`), Anthropic (`claude-haiku-4-5-20251001`).
 - `LLM_PROVIDER` pins one; otherwise first key found wins (gemini→openai→deepseek→anthropic).
@@ -75,11 +75,6 @@ Source: `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`.
   Anthropic uses its own Messages API shape.
 - Retry/back-off on 429/503: base 10s, double per attempt, cap 60s, respect `Retry-After`.
   Max 5 attempts, 120s timeout. (Gemini free tier 15 RPM is the binding constraint.)
-- Three independent task lanes resolve complete provider/model pairs: **AI Chat**, **Tailoring**, and
-  **Everything else** (scoring + classification). Claude and ChatGPT subscription pseudo-providers run
-  only on the authenticated always-on worker; neither stores nor silently falls back to an API key.
-- Stable cache prefixes are deliberate: scoring/tailoring keep system + résumé before the volatile job;
-  ApplyBuddy keeps the cache-marked profile system block before conversation turns.
 
 ## Data model (Supabase Postgres)
 Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`.
@@ -89,8 +84,8 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   scored_at, source.
 - **profile**: single row — personal, experience, compensation, work_authorization,
   skills_boundary, resume_text (scoring reads this), resume_pdf_path.
-- **settings**: single row — schedule/search configuration plus legacy `llm_*` and the three task pairs:
-  `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
+- **settings**: single row — schedule_time, timezone, keywords[], locations[], hours_old
+  (24), results_per_query, llm_provider, llm_model, apify_actor_id.
 - **runs**: id, started_at, finished_at, jobs_found, jobs_scored, errors, apify_run_id, status.
 
 ## Re-trigger mechanism for chunked scoring

@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { getProfile, getSettings } from '@/lib/db';
-import { buildChatClient } from '@/lib/scoreRunner';
+import { buildScoringClient } from '@/lib/scoreRunner';
 import { getClient } from '@/lib/llm';
 import { buildAssistantSystem, sanitizeTurns } from '@/lib/assistant';
 
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   // Active vault key for the configured provider; fall back to the env-detected client.
   let client;
   try {
-    client = (await buildChatClient(settings)) ?? getClient();
+    client = (await buildScoringClient(settings)) ?? getClient();
   } catch {
     return NextResponse.json(
       { error: 'No LLM provider configured. Add a key in Settings → API Keys.' },

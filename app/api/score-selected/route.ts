@@ -9,7 +9,7 @@
  * delete its fit score first (Jobs tab, gated by allow_delete_scores, ADR 0048) — that
  * resets it to 'unscored' so this path scores it again.
  *
- * Subscription provider (ADR 0042/0069): each /llm call spawns an SDK subprocess on
+ * Subscription provider (ADR 0042): each /llm call spawns an Agent SDK subprocess on
  * the worker. Calling N of them from Netlify times out the function. Instead the
  * whole batch is delegated to the worker's POST /score-jobs which scores in the
  * background and writes results directly to Supabase; this route responds immediately.
@@ -17,7 +17,7 @@
 import { NextResponse } from 'next/server';
 import { getJobsByIds, getScoringResumeText, getSettings } from '@/lib/db';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
-import { isSubscriptionProvider } from '@/lib/llm';
+import { SUBSCRIPTION_PROVIDER } from '@/lib/llm';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -51,11 +51,11 @@ export async function POST(req: Request) {
 
     // Subscription mode: delegate to the worker's /score-jobs which runs scoring
     // fully in the background. Responds 200 immediately; scores appear on next refresh.
-    if (isSubscriptionProvider(provider)) {
+    if (provider === SUBSCRIPTION_PROVIDER) {
       if (!workerUrl || !workerSecret) {
         console.error(tag, 'subscription mode but worker not configured');
         return NextResponse.json(
-          { error: 'Subscription scoring requires the worker URL and secret to be set in Settings.' },
+          { error: 'Claude subscription scoring requires the worker URL and secret to be set in Settings.' },
           { status: 409 },
         );
       }

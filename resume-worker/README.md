@@ -6,8 +6,8 @@ always-on Mac; the Netlify app calls it over a Cloudflare Tunnel (Phase 4).
 
 ## Why a separate service
 Puppeteer/Chromium (~150 MB, cold starts) and the multi-pass fit loop don't fit serverless limits. This is a
-plain Node process you run on a machine that's always on. It renders and hosts long-running AI work,
-including optional Claude/ChatGPT subscription backends that cannot run in a serverless function.
+plain Node process you run on a machine that's always on. It only **renders** — tailoring (the LLM call)
+already happens in the Next app and is stored on `applications.tailored_resume`.
 
 ## Run locally
 ```bash
@@ -20,10 +20,6 @@ npm start                   # worker on :8787
 
 ## Endpoints
 - `GET /health` → `{ ok, browser }`
-- `GET /version` → deployed commit + feature markers
-- `POST /llm` → one authenticated subscription completion (Claude Agent SDK or ChatGPT/Codex SDK)
-- `POST /score-jobs` → background subscription scoring for selected jobs
-- `POST /tailor` / `POST /tailor-queue` → tailor one application / drain the queue
 - `POST /generate` `{ "id": "<application uuid>" }` with header `Authorization: Bearer <WORKER_SECRET>`
   → renders that application's `tailored_resume`, uploads `resumes/<id>.pdf`, sets the row `ready` + `pdf_path`.
 

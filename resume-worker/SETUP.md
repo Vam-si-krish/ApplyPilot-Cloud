@@ -80,9 +80,9 @@ then restart the worker (`./install-service.sh` reloads it). Verify auth: `claud
 subscription. **Do not** set `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` in this worker's env — they override
 the subscription and bill the API.
 
-In the app: **Settings → AI Models** → set AI Chat, Tailoring, and/or Everything else to **"Claude
-subscription (no API key)"**. Note the plan's monthly Agent-SDK credit cap (Pro $20 · Max5× $100 ·
-Max20× $200), then standard API rates — so high-volume scoring is often better left on a cheap model.
+In the app: **Settings → AI Models** → set Scoring and/or Tailoring provider to **"Claude subscription (no
+API key)"**. Note the plan's monthly Agent-SDK credit cap (Pro $20 · Max5× $100 · Max20× $200), then standard
+API rates — so high-volume scoring is often better left on a cheap API model.
 
 ### 6a. (Optional) Two Claude accounts — double the monthly credit, with failover
 Each Claude plan has its own monthly Agent-SDK credit pool, so a second account doubles the effective cap.
@@ -103,34 +103,6 @@ The worker **auto-detects** `~/.claude-acctN` once it exists. Account 1 keeps us
 - Verify a switch in `logs/worker.out.log`: the `[agent …] start … account=N configDir=…` line shows which
   account each call used, and `[agent] account N failed → failing over to account M` shows a failover.
 
-### 6b. (Optional) ChatGPT subscription mode — no OpenAI API key (ADR 0069)
-The worker can also run any AI lane through OpenAI's official Codex SDK using the ChatGPT account's Codex
-entitlement. The SDK and its pinned CLI are installed by `npm install`; authenticate it once on this Mac:
-
-```bash
-cd /absolute/path/to/ApplyPilot-Cloud/resume-worker
-mkdir -p "$HOME/.applypilot-codex"
-CODEX_HOME="$HOME/.applypilot-codex" ./node_modules/.bin/codex login
-CODEX_HOME="$HOME/.applypilot-codex" ./node_modules/.bin/codex login status
-```
-
-Add the absolute path to `.env` (dotenv does not expand `$HOME`), then restart the worker:
-
-```bash
-CHATGPT_CODEX_HOME=/Users/<you>/.applypilot-codex
-launchctl kickstart -k gui/$(id -u)/com.applypilot.resume-worker
-```
-
-In **Settings → AI Models**, choose **ChatGPT subscription (no API key)** independently for AI Chat,
-Tailoring, or Everything else. `gpt-5.4` is the conservative default; a smaller model is better for
-high-volume scoring. The model dropdown keeps a Custom option because Codex model access can vary by plan.
-
-The worker strips `OPENAI_API_KEY`, `CODEX_API_KEY`, and base-URL overrides from the Codex subprocess. It
-runs in an empty read-only directory with network, web search, MCP, approvals, project instructions, and
-session persistence disabled. Cached-input tokens are normalized into the same usage fields as Claude.
-A positive `cacheRead` in the worker log confirms a stable-prefix hit; zero is a valid miss (or a prefix
-below the provider threshold), so verify across a real multi-job batch rather than a tiny health prompt.
-
 ## Security notes
 - The worker only accepts requests with `Authorization: Bearer <WORKER_SECRET>`; it refuses to run if
   `WORKER_SECRET` is unset.
@@ -141,5 +113,3 @@ below the provider threshold), so verify across a real multi-job batch rather th
 - `curl https://worker.vamsikrish.com/health` fails → check `cloudflared` is running and the DNS route exists.
 - App says "Could not reach the résumé worker" → `RESUME_WORKER_URL`/`SECRET` mismatch, or the Mac is asleep.
 - PDF render fails → see `logs/worker.err.log`; ensure `npm install` finished downloading Chromium.
-- ChatGPT subscription says not logged in → run the two `CODEX_HOME=... codex login/status` commands in
-  §6b as the same macOS user that owns the launchd worker, then restart it.

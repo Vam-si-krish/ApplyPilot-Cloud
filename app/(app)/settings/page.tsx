@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, AlertCircle, Trash2, Plus, X, Mail, Check } from 'lucide-react';
+import { Save, CheckCircle, Trash2, Plus, X, Mail, Check } from 'lucide-react';
 import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/types';
 
 const PROVIDERS = [
@@ -12,9 +12,6 @@ const PROVIDERS = [
   // ADR 0042: run the task on your Claude subscription via the Agent SDK on the
   // worker — no API key billed (uses the plan's monthly Agent-SDK credit).
   { id: 'subscription', label: 'Claude subscription (no API key)', model: 'sonnet' },
-  // ADR 0069: run the task through the Codex SDK authenticated with `codex login`
-  // on the worker. This consumes the user's ChatGPT plan instead of a vault API key.
-  { id: 'chatgpt_subscription', label: 'ChatGPT subscription (no API key)', model: 'gpt-5.4' },
 ];
 
 // Known models per provider — shown as dropdown options. A "Custom…" option keeps the
@@ -26,9 +23,6 @@ const MODELS: Record<string, string[]> = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
   // Agent-SDK model aliases (resolve to the current Claude models on the worker).
   subscription: ['sonnet', 'opus', 'haiku'],
-  // Public model ids accepted by Codex. Custom remains available for account-specific
-  // or newly released models without requiring an app deploy.
-  chatgpt_subscription: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.5'],
 };
 // Friendly labels for the dropdown (falls back to the raw id for anything unlisted).
 const MODEL_LABELS: Record<string, string> = {
@@ -37,7 +31,6 @@ const MODEL_LABELS: Record<string, string> = {
   'gemini-2.0-flash': 'Gemini 2.0 Flash', 'gemini-2.5-flash': 'Gemini 2.5 Flash', 'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'deepseek-chat': 'DeepSeek Chat', 'deepseek-reasoner': 'DeepSeek Reasoner',
   sonnet: 'Claude Sonnet (latest)', opus: 'Claude Opus (latest)', haiku: 'Claude Haiku (latest)',
-  'gpt-5.4': 'GPT-5.4', 'gpt-5.4-mini': 'GPT-5.4 mini', 'gpt-5.5': 'GPT-5.5',
 };
 const CUSTOM_MODEL = '__custom__';
 const defaultModel = (provider: string) => MODELS[provider]?.[0] ?? '';
@@ -100,7 +93,6 @@ export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   // New worker secret to set (write-only). Empty = leave the saved one unchanged;
   // s.resume_worker_secret holds only a masked preview from the GET.
   const [workerSecret, setWorkerSecret] = useState('');
@@ -130,21 +122,16 @@ export default function SettingsPage() {
   async function save() {
     if (!s) return;
     setSaving(true);
-    setSaveError(null);
     try {
       // Only send a new worker secret when one was typed; otherwise the masked value
       // in `s` is sent and the server ignores it (so the saved secret is preserved).
       const newSecret = workerSecret.trim();
       const body = newSecret ? { ...s, resume_worker_secret: newSecret } : s;
-      const response = await fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || `Could not save settings (${response.status})`);
-      }
       // Reflect the newly-set secret as a masked preview and clear the input.
       if (newSecret) {
         patch({ resume_worker_secret: `••••••${newSecret.slice(-4)}` });
@@ -152,8 +139,6 @@ export default function SettingsPage() {
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -181,13 +166,6 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
-
-      {saveError && (
-        <div className="mb-5 flex items-start gap-2 rounded-lg border border-rose/30 bg-rose/10 px-3.5 py-3 text-[12px] text-rose">
-          <AlertCircle size={15} className="mt-0.5 shrink-0" />
-          <span>{saveError}</span>
-        </div>
-      )}
 
       {/* Schedule */}
       <Section title="Daily Schedule">
@@ -366,45 +344,37 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* AI Models — three independent lanes (ADR 0025/0069) */}
+      {/* AI Models — per task (ADR 0025) */}
       <Section title="AI Models">
         <p className="text-slate-muted text-[12px] mb-4">
-          Choose a provider and model independently for <span className="text-sky">AI Chat</span>,{' '}
-          <span className="text-sky">Tailoring</span>, and <span className="text-sky">Everything else</span>. Direct API providers
-          use that provider&apos;s <span className="text-emerald">active key</span> below; subscription providers use the worker login
-          and never silently fall back to a paid key.
+          Choose a model per task. <span className="text-sky">Scoring</span> runs on every fetched job (high volume) — pick a
+          cheap, consistent model. <span className="text-sky">Tailoring</span> rewrites your résumé for each job — pick a premium
+          model. Each task uses the <span className="text-emerald">active key</span> for its provider (set in API Keys below);
+          environment variables are only a fallback.
         </p>
         <p className="text-slate-muted text-[12px] mb-4">
-          <span className="text-emerald">Claude subscription</span> uses the Claude Agent SDK login;{' '}
-          <span className="text-emerald">ChatGPT subscription</span> uses the Codex SDK login. Both require the{' '}
-          <span className="font-mono">worker</span> below to be online and authenticated once on that Mac
-          (<span className="font-mono">claude setup-token</span> or <span className="font-mono">codex login</span>). Plan limits still
-          apply. Scoring is high volume, so choose the smaller model when you route Everything else through a subscription.
+          <span className="text-emerald">Claude subscription (no API key)</span> runs the task on your Claude plan via the
+          worker — no per-token API spend. It needs the <span className="font-mono">worker</span> online (configured below) and a
+          one-time <span className="font-mono">claude setup-token</span> on that machine. Note: this draws from the plan&apos;s{' '}
+          <span className="text-sky">monthly Agent-SDK credit</span> (Pro $20 · Max5× $100 · Max20× $200), then standard API
+          rates — so for high-volume scoring a cheap API model is often the better pick, with the subscription on Tailoring.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <TaskModel
-            title="AI Chat"
-            hint="ApplyBuddy application answers & recruiter replies"
-            provider={s.chat_provider ?? s.score_provider ?? 'openai'}
-            model={s.chat_model ?? s.score_model ?? 'gpt-4o-mini'}
-            onProvider={(prov) => patch({ chat_provider: prov, chat_model: defaultModel(prov) })}
-            onModel={(v) => patch({ chat_model: v })}
-          />
-          <TaskModel
-            title="Tailoring"
-            hint="Résumé structuring, tailoring, condensing & cover letters"
-            provider={s.tailor_provider ?? 'anthropic'}
-            model={s.tailor_model ?? 'claude-sonnet-4-6'}
-            onProvider={(prov) => patch({ tailor_provider: prov, tailor_model: defaultModel(prov) })}
-            onModel={(v) => patch({ tailor_model: v })}
-          />
-          <TaskModel
-            title="Everything else"
-            hint="High-volume job scoring & inbox classification"
+            title="Scoring"
+            hint="High volume · cheap & consistent (e.g. GPT-4o-mini)"
             provider={s.score_provider ?? 'openai'}
             model={s.score_model ?? 'gpt-4o-mini'}
             onProvider={(prov) => patch({ score_provider: prov, score_model: defaultModel(prov) })}
             onModel={(v) => patch({ score_model: v })}
+          />
+          <TaskModel
+            title="Tailoring"
+            hint="Quality · truthful rewriting (e.g. Claude Sonnet 4.6)"
+            provider={s.tailor_provider ?? 'anthropic'}
+            model={s.tailor_model ?? 'claude-sonnet-4-6'}
+            onProvider={(prov) => patch({ tailor_provider: prov, tailor_model: defaultModel(prov) })}
+            onModel={(v) => patch({ tailor_model: v })}
           />
         </div>
       </Section>

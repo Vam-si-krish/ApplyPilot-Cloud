@@ -147,7 +147,7 @@ export class LLMClient {
   // True once we've confirmed the native Gemini API is needed for this model.
   private useNativeGemini = false;
   /** Token usage of the LAST completed call (ADR 0066): tokens in/out + cache read/write
-   *  (+ cost/ms/model). Set by subscription worker paths and direct-API Anthropic
+   *  (+ cost/ms/model). Set by the subscription (worker /llm) and direct-API Anthropic
    *  paths; left null by the compat/Gemini paths, which don't report cache-aware usage. */
   lastUsage: ScoreUsage | null = null;
 
@@ -339,48 +339,41 @@ export function makeClient(provider: string, model: string, apiKey: string): LLM
   return new LLMClient(cfg.baseUrl, (model || '').trim() || cfg.defaultModel, apiKey);
 }
 
-/** Worker-only pseudo-providers (ADR 0042/0069). They have no PROVIDER_TABLE or
- * vault key; WorkerLLMClient delegates to the authenticated SDK on the worker. */
-/** Legacy DB id for the Claude subscription provider (kept for compatibility). */
+/**
+ * Pseudo-provider id (ADR 0042): "run this task on my Claude subscription via the
+ * Agent SDK" instead of a paid API key. It has no PROVIDER_TABLE entry and no vault
+ * key — the actual model call happens on the always-on worker (the only place the
+ * `claude` CLI / Agent SDK can run), so picking it routes the lane through
+ * WorkerLLMClient → the worker's /llm endpoint.
+ */
 export const SUBSCRIPTION_PROVIDER = 'subscription';
-/** ChatGPT subscription provider, executed through the Codex SDK on the worker. */
-export const CHATGPT_SUBSCRIPTION_PROVIDER = 'chatgpt_subscription';
-
-export function isSubscriptionProvider(provider: string): boolean {
-  const id = provider.trim().toLowerCase();
-  return id === SUBSCRIPTION_PROVIDER || id === CHATGPT_SUBSCRIPTION_PROVIDER;
-}
-
-function subscriptionLabel(provider: string): string {
-  return provider === CHATGPT_SUBSCRIPTION_PROVIDER ? 'ChatGPT subscription' : 'Claude subscription';
-}
 
 /** Per-call timeout for worker /llm requests; under typical serverless ceilings. */
 const WORKER_LLM_TIMEOUT_MS = Math.max(10_000, Number(process.env.WORKER_LLM_TIMEOUT_MS) || 60_000);
 
 /**
  * An LLMClient that delegates the actual model call to the worker's `POST /llm`
- * (ADR 0042/0069). Same public `chat()` contract as the base class, so every call site
- * works unchanged; the selected Claude or ChatGPT subscription SDK runs on the worker.
+ * (ADR 0042). Same public `chat()` contract as the base class, so every call site
+ * (typed `LLMClient`) works unchanged — but the model runs on the worker's Claude
+ * subscription via the Agent SDK, with no API key billed. `model` is an Agent-SDK
+ * alias (e.g. 'sonnet' | 'opus' | 'haiku'), passed through to the worker.
  */
 export class WorkerLLMClient extends LLMClient {
   constructor(
     private workerUrl: string,
     private workerSecret: string,
     model: string,
-    public readonly subscriptionProvider: string = SUBSCRIPTION_PROVIDER,
   ) {
     // baseUrl/apiKey are unused here (chat is fully overridden); pass placeholders.
     // Default the model so an empty lane model still resolves to a real alias.
-    const fallbackModel = subscriptionProvider === CHATGPT_SUBSCRIPTION_PROVIDER ? 'gpt-5.4' : 'sonnet';
-    super('https://worker.invalid', (model || '').trim() || fallbackModel, '');
+    super('https://worker.invalid', (model || '').trim() || 'sonnet', '');
   }
 
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
     this.lastUsage = null;
     if (!this.workerUrl || !this.workerSecret) {
       throw new Error(
-        `${subscriptionLabel(this.subscriptionProvider)} mode is selected but the worker is not fully configured — ` +
+        'Claude-subscription mode is selected but the worker is not fully configured — ' +
           'set the worker URL and secret in Settings (or RESUME_WORKER_URL / RESUME_WORKER_SECRET).',
       );
     }
@@ -393,7 +386,6 @@ export class WorkerLLMClient extends LLMClient {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.workerSecret}` },
         body: JSON.stringify({
           messages,
-          provider: this.subscriptionProvider,
           model: this.model,
           temperature: opts.temperature ?? 0.0,
           maxTokens: opts.maxTokens ?? 4096,
@@ -406,7 +398,7 @@ export class WorkerLLMClient extends LLMClient {
       console.error(`[WorkerLLMClient] model=${this.model} ${Date.now() - t0}ms transport error: ${msg}`);
       throw new Error(
         unreachable
-          ? `Could not reach the worker for ${subscriptionLabel(this.subscriptionProvider)} AI (is it running and reachable?).`
+          ? 'Could not reach the worker for Claude-subscription scoring (is it running and reachable?).'
           : `Worker /llm request failed: ${msg}`,
       );
     }
@@ -416,7 +408,7 @@ export class WorkerLLMClient extends LLMClient {
       throw new Error(data.error || `worker /llm error (${resp.status})`);
     }
     const data = (await resp.json()) as { text?: string; usage?: ScoreUsage | null };
-    // Usage the worker captured from the subscription SDK (ADR 0066/0069): tokens + cache
+    // Usage the worker captured from the Agent SDK (ADR 0066): tokens in/out + cache
     // read/write + $ cost. cache_read_input_tokens > 0 means the cached prefix was a hit.
     this.lastUsage = data.usage
       ? { ...data.usage, model: data.usage.model ?? this.model, ms: data.usage.ms ?? Date.now() - t0 }
@@ -427,14 +419,9 @@ export class WorkerLLMClient extends LLMClient {
   }
 }
 
-/** Build a subscription-backed client that calls the worker's /llm (ADR 0042/0069). */
-export function makeWorkerClient(
-  workerUrl: string,
-  workerSecret: string,
-  model: string,
-  provider: string = SUBSCRIPTION_PROVIDER,
-): WorkerLLMClient {
-  return new WorkerLLMClient(workerUrl, workerSecret, model, provider);
+/** Build a subscription-backed client that calls the worker's /llm (ADR 0042). */
+export function makeWorkerClient(workerUrl: string, workerSecret: string, model: string): WorkerLLMClient {
+  return new WorkerLLMClient(workerUrl, workerSecret, model);
 }
 
 let _instance: LLMClient | null = null;

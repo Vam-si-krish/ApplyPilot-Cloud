@@ -31,26 +31,21 @@ import { assessCompany } from './companyCheck.js';
 import { renderResumeToOnePage, renderCoverLetterPdf, getBrowser, closeBrowser } from './render.js';
 import { makeClient, tailorResume, condenseResume } from './tailor.js';
 import { makeAgentClient } from './agentClient.js';
-import { makeChatGPTClient } from './chatgptClient.js';
 import { generateCoverLetter } from './coverLetter.js';
 
 const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
-// Worker-only subscription providers (ADR 0042/0069); neither uses a vault key.
+// ADR 0042: pseudo-provider that runs the task on the Claude subscription via the
+// Agent SDK (no vault key) instead of a paid API key.
 const SUBSCRIPTION_PROVIDER = 'subscription';
-const CHATGPT_SUBSCRIPTION_PROVIDER = 'chatgpt_subscription';
-const isSubscriptionProvider = (provider) =>
-  provider === SUBSCRIPTION_PROVIDER || provider === CHATGPT_SUBSCRIPTION_PROVIDER;
 
 /**
  * Resolve the LLM client for a provider+model (ADR 0025/0042):
- *  - 'subscription' → Claude Agent SDK (no key; uses the Claude plan).
- *  - 'chatgpt_subscription' → OpenAI Codex SDK (no key; uses the ChatGPT plan).
+ *  - 'subscription' → the Agent SDK client (no key; uses the Claude plan).
  *  - an API provider → makeClient with its active vault key.
  * Returns { client } on success, or { error } describing what's missing.
  */
 async function resolveTaskClient(provider, model, label = 'task') {
   if (provider === SUBSCRIPTION_PROVIDER) return { client: makeAgentClient(model, label) };
-  if (provider === CHATGPT_SUBSCRIPTION_PROVIDER) return { client: makeChatGPTClient(model, label) };
   if (!LLM_PROVIDERS.has(provider)) {
     return { error: `Provider "${provider || '(unset)'}" is not a supported LLM provider.` };
   }
@@ -92,7 +87,7 @@ app.get('/health', async (_req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'assess-jobs', 'llm', 'chatgpt-subscription', 'tailor-queue'];
+  const features = ['score-jobs-allow-rescore', 'assess-jobs', 'llm', 'tailor-queue'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -107,9 +102,9 @@ app.get('/version', (_req, res) => {
 
 /**
  * POST /score-jobs {ids: string[]} → {ok, queued} (ADR 0042).
- * Scores the given job IDs using the selected subscription SDK. Designed to
+ * Scores the given job IDs using the subscription provider (Agent SDK). Designed to
  * be called by the cloud app's /api/score-selected when scoring provider is
- * a subscription provider — Netlify times out waiting for individual /llm calls,
+ * 'subscription' — the Netlify function times out waiting for individual /llm calls,
  * so it delegates the whole batch here. Responds 200 immediately; scoring runs in
  * the background and writes directly to Supabase.
  */
@@ -148,7 +143,7 @@ app.post('/score-jobs', async (req, res) => {
     console.log(`[score-jobs] scoring ${toScore.length}/${ids.length} jobs`);
 
     // Sequential (ADR 0066): the subscription is window-throttled anyway, and scoring one
-    // job at a time lets us read `client.lastUsage` as THIS job's usage — a shared subscription
+    // job at a time lets us read `client.lastUsage` as THIS job's usage — a shared Agent-SDK
     // client under Promise.all would race and mis-attribute token/cost across jobs. The
     // stable résumé prefix means job #2+ should read the cache (cacheRead > 0).
     for (const job of toScore) {
@@ -183,7 +178,7 @@ app.post('/score-jobs', async (req, res) => {
  * POST /assess-jobs {ids: string[]} → {ok, queued} (ADR 0009/0042). The company-assessment
  * sibling of /score-jobs: assess the companies behind the given jobs (one LLM call each,
  * writing company_tier / company_tier_note) using the SCORING provider. Called by the cloud
- * app's /api/company-check when scoring is a subscription provider, so slow subscription
+ * app's /api/company-check when scoring is a subscription provider, so the slow Agent-SDK
  * calls run here in the BACKGROUND instead of inside the serverless function's ~60s ceiling.
  * Responds 200 immediately; the app polls /api/score-progress (mode=assess) for progress.
  */
@@ -491,8 +486,8 @@ function hourInTz(tz) {
 /**
  * POST /tailor-queue → drain the overnight tailoring queue (ADR 0043). Fetches every
  * application in status 'queued' (awaiting tailoring) and runs the full pipeline for each
- * — tailor → render+PDF → score — ONE AT A TIME (so a burst can't blow the selected
- * subscription window and Claude account-failover remains attributable per call). Each row is
+ * — tailor → render+PDF → score — ONE AT A TIME (so a burst can't blow the Claude
+ * subscription window and so subscription account-failover works per call). Each row is
  * independent: a failure marks that row 'failed' with a reason and the drain continues.
  *
  * SCHEDULING (the app is on Netlify — vercel.json crons do NOT fire here): the always-on
@@ -661,11 +656,11 @@ app.post('/render-inline', async (req, res) => {
 });
 
 /**
- * POST /llm { messages, provider?, model?, temperature?, maxTokens? } → { text, usage }
- * (ADR 0042/0069). Runs ONE completion on the selected Claude or ChatGPT subscription. This
- * is the backend for the cloud app's serverless AI lanes (scoring, mail classify,
- * assistant, résumé parse) when their provider is a subscription pseudo-provider —
- * the model can only run here, where the local SDK + subscription credentials live.
+ * POST /llm { messages, model?, temperature?, maxTokens? } → { text } (ADR 0042).
+ * Runs ONE single-turn completion on the Claude subscription via the Agent SDK. This
+ * is the backend for the cloud app's serverless AI lanes (scoring, company check, mail
+ * classify, assistant, résumé parse) when their provider is set to "subscription" —
+ * the model can only run here, where the `claude` CLI + subscription credentials live.
  */
 app.post('/llm', async (req, res) => {
   if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
@@ -674,33 +669,23 @@ app.post('/llm', async (req, res) => {
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return res.status(400).json({ error: 'messages[] required' });
   }
-  // Defaulting to Claude preserves compatibility with an app deployed before ADR 0069.
-  const provider = typeof body.provider === 'string' && body.provider.trim()
-    ? body.provider.trim().toLowerCase()
-    : SUBSCRIPTION_PROVIDER;
-  if (!isSubscriptionProvider(provider)) {
-    return res.status(400).json({ error: `provider must be ${SUBSCRIPTION_PROVIDER} or ${CHATGPT_SUBSCRIPTION_PROVIDER}` });
-  }
-  const defaultModel = provider === CHATGPT_SUBSCRIPTION_PROVIDER ? 'gpt-5.4' : 'sonnet';
-  const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : defaultModel;
+  const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : 'sonnet';
   const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
   const maxTokens = typeof body.maxTokens === 'number' ? body.maxTokens : undefined;
 
   const t0 = Date.now();
-  console.log(`[/llm] request provider=${provider} model=${model} messages=${body.messages.length}`);
+  console.log(`[/llm] request model=${model} messages=${body.messages.length}`);
   try {
-    const resolved = await resolveTaskClient(provider, model, 'llm');
-    if (resolved.error) return res.status(409).json({ error: resolved.error });
-    const client = resolved.client;
+    const client = makeAgentClient(model, 'llm');
     const text = await client.chat(body.messages, { temperature, maxTokens });
-    // Return the subscription SDK's usage (ADR 0066/0069) so the app can persist + surface per-call
+    // Return the Agent SDK's usage (ADR 0066) so the app can persist + surface per-call
     // token/cache/cost. One call per request, so client.lastUsage is this call's usage.
     const usage = client.lastUsage ? { ...client.lastUsage, ms: Date.now() - t0 } : null;
-    console.log(`[/llm] ok provider=${provider} model=${model} ${Date.now() - t0}ms textLen=${text.length} cacheRead=${usage?.cache_read_input_tokens ?? 0}`);
+    console.log(`[/llm] ok model=${model} ${Date.now() - t0}ms textLen=${text.length} cacheRead=${usage?.cache_read_input_tokens ?? 0}`);
     res.json({ text, usage });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[/llm] FAIL provider=${provider} model=${model} ${Date.now() - t0}ms: ${msg}`);
+    console.error(`[/llm] FAIL model=${model} ${Date.now() - t0}ms: ${msg}`);
     res.status(500).json({ error: msg });
   }
 });

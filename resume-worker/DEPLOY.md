@@ -34,11 +34,6 @@ That's it. Then verify (section 3). The Cloudflare tunnel
 (`com.applypilot.resume-tunnel`) keeps running on its own and re-publishes its public URL
 to Supabase `settings.resume_worker_url`; you normally don't touch it.
 
-For the ChatGPT-subscription release (ADR 0069), `npm install` adds the official Codex SDK. If this is the
-first deploy using that provider, complete `resume-worker/SETUP.md` §6b (`CODEX_HOME=... codex login` and
-`CHATGPT_CODEX_HOME` in `.env`) before restarting. `GET /version` must then include
-`"chatgpt-subscription"`.
-
 ---
 
 ## 1a. THIS UPDATE — overnight tailoring queue + auto-pipeline (ADR 0043 / 0044)
