@@ -2,7 +2,7 @@
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
 import { resumeToText } from './resume';
-import { pickCanonical } from './dedupe';
+import { partitionByGeneration, pickCanonical } from './dedupe';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
 
 // ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
@@ -343,11 +343,15 @@ export async function getUnscoredBatch(limit: number): Promise<Job[]> {
 }
 
 /**
- * Link duplicate postings (ADR 0057). For each content key: the earliest still-unlinked
- * row is (or stays) the canonical; every other unlinked row gets `duplicate_of`, and —
- * when the canonical is already AI-scored and the duplicate isn't — a verbatim copy of
- * the canonical's score (identical content; the rubric doesn't score location; zero LLM
- * calls, never fabricated). Returns how many rows were linked.
+ * Link duplicate postings (ADR 0057, revised by ADR 0071). Rows sharing a content key
+ * are first split into requisition GENERATIONS by the UTC day they were discovered
+ * (partitionByGeneration) — a duplicate is a duplicate only within a single day, so an
+ * old opening and a later re-post never merge. Within each generation: the earliest
+ * still-unlinked row is (or stays) the canonical; every other unlinked row gets
+ * `duplicate_of`, and — when the canonical is already AI-scored and the duplicate
+ * isn't — a verbatim copy of the canonical's score (identical content; the rubric
+ * doesn't score location; zero LLM calls, never fabricated). Returns how many rows
+ * were linked.
  */
 export async function linkDuplicateJobs(keys: (string | null)[]): Promise<number> {
   const uniq = [...new Set(keys.filter((k): k is string => !!k))];
@@ -367,6 +371,9 @@ export async function linkDuplicateJobs(keys: (string | null)[]): Promise<number
     rows.push(...((data ?? []) as Row[]));
   }
 
+  // Generation split (ADR 0071): linking only within (content_key, UTC day). A generation
+  // whose members are historically linked to a canonical OUTSIDE it (old cross-day links
+  // from before 0071) simply elects its own canonical — never re-parented.
   const groups = new Map<string, Row[]>();
   for (const r of rows) {
     const g = groups.get(r.content_key!) ?? [];
@@ -378,46 +385,48 @@ export async function linkDuplicateJobs(keys: (string | null)[]): Promise<number
   const preferredLocations = await getSettings().then((s) => s.locations ?? []).catch(() => [] as string[]);
 
   let linked = 0;
-  for (const group of groups.values()) {
-    // A group that already has a canonical keeps it (rows point at it — never re-parent,
-    // that would create chains). Otherwise pick the best representative to stay visible.
-    const linkedTargets = new Set(group.map((r) => r.duplicate_of).filter(Boolean));
-    const unlinked = group.filter((r) => r.duplicate_of == null);
-    const canonical = group.find((r) => linkedTargets.has(r.id)) ?? (unlinked.length ? pickCanonical(unlinked, preferredLocations) : null);
-    if (!canonical) continue;
-    const dupes = group.filter((r) => r.id !== canonical.id && r.duplicate_of == null);
-    if (dupes.length === 0) continue;
+  for (const keyGroup of groups.values()) {
+    for (const group of partitionByGeneration(keyGroup)) {
+      // A group that already has a canonical keeps it (rows point at it — never re-parent,
+      // that would create chains). Otherwise pick the best representative to stay visible.
+      const linkedTargets = new Set(group.map((r) => r.duplicate_of).filter(Boolean));
+      const unlinked = group.filter((r) => r.duplicate_of == null);
+      const canonical = group.find((r) => linkedTargets.has(r.id)) ?? (unlinked.length ? pickCanonical(unlinked, preferredLocations) : null);
+      if (!canonical) continue;
+      const dupes = group.filter((r) => r.id !== canonical.id && r.duplicate_of == null);
+      if (dupes.length === 0) continue;
 
-    // Unscored working rows inherit the canonical's score; rows with their own score
-    // (pre-0057 history) or archived rows are linked without being touched otherwise.
-    const canCopy = canonical.fit_score != null;
-    const copyIds = canCopy
-      ? dupes.filter((d) => d.fit_score == null && (d.status === 'unscored' || d.status === 'filtered')).map((d) => d.id)
-      : [];
-    const linkOnlyIds = dupes.map((d) => d.id).filter((id) => !copyIds.includes(id));
+      // Unscored working rows inherit the canonical's score; rows with their own score
+      // (pre-0057 history) or archived rows are linked without being touched otherwise.
+      const canCopy = canonical.fit_score != null;
+      const copyIds = canCopy
+        ? dupes.filter((d) => d.fit_score == null && (d.status === 'unscored' || d.status === 'filtered')).map((d) => d.id)
+        : [];
+      const linkOnlyIds = dupes.map((d) => d.id).filter((id) => !copyIds.includes(id));
 
-    if (copyIds.length > 0) {
-      const { error: e1 } = await supabaseAdmin()
-        .from('jobs')
-        .update({
-          duplicate_of: canonical.id,
-          fit_score: canonical.fit_score,
-          score_note: canonical.score_note,
-          score_keywords: canonical.score_keywords,
-          score_reasoning: canonical.score_reasoning,
-          score_breakdown: canonical.score_breakdown,
-          employment_type: canonical.employment_type,
-          status: 'scored',
-          scored_at: new Date().toISOString(),
-        })
-        .in('id', copyIds);
-      if (e1) throw new Error(`Failed to copy scores to duplicates: ${e1.message}`);
-      linked += copyIds.length;
-    }
-    if (linkOnlyIds.length > 0) {
-      const { error: e2 } = await supabaseAdmin().from('jobs').update({ duplicate_of: canonical.id }).in('id', linkOnlyIds);
-      if (e2) throw new Error(`Failed to link duplicates: ${e2.message}`);
-      linked += linkOnlyIds.length;
+      if (copyIds.length > 0) {
+        const { error: e1 } = await supabaseAdmin()
+          .from('jobs')
+          .update({
+            duplicate_of: canonical.id,
+            fit_score: canonical.fit_score,
+            score_note: canonical.score_note,
+            score_keywords: canonical.score_keywords,
+            score_reasoning: canonical.score_reasoning,
+            score_breakdown: canonical.score_breakdown,
+            employment_type: canonical.employment_type,
+            status: 'scored',
+            scored_at: new Date().toISOString(),
+          })
+          .in('id', copyIds);
+        if (e1) throw new Error(`Failed to copy scores to duplicates: ${e1.message}`);
+        linked += copyIds.length;
+      }
+      if (linkOnlyIds.length > 0) {
+        const { error: e2 } = await supabaseAdmin().from('jobs').update({ duplicate_of: canonical.id }).in('id', linkOnlyIds);
+        if (e2) throw new Error(`Failed to link duplicates: ${e2.message}`);
+        linked += linkOnlyIds.length;
+      }
     }
   }
   return linked;

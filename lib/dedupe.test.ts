@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { jobContentKey, pickCanonical } from './dedupe';
+import { jobContentKey, partitionByGeneration, pickCanonical } from './dedupe';
 
 describe('jobContentKey (ADR 0057, aggressive company+title mode)', () => {
   it('groups the same company+title even when the body varies per city', () => {
@@ -30,6 +30,37 @@ describe('jobContentKey (ADR 0057, aggressive company+title mode)', () => {
 
   it('returns null for fully empty rows (never group unrelated blanks)', () => {
     expect(jobContentKey(null, '', undefined)).toBeNull();
+  });
+});
+
+describe('partitionByGeneration (ADR 0071, duplicates only within a single day)', () => {
+  const row = (id: string, at: string) => ({ id, discovered_at: at });
+  const ids = (parts: Array<Array<{ id: string }>>) => parts.map((p) => p.map((r) => r.id).sort()).sort();
+
+  it('keeps a same-day multi-location blast together', () => {
+    const parts = partitionByGeneration([
+      row('a', '2026-07-11T09:00:00+00:00'),
+      row('b', '2026-07-11T09:00:01+00:00'),
+      row('c', '2026-07-11T23:59:59+00:00'),
+    ]);
+    expect(ids(parts)).toEqual([['a', 'b', 'c']]);
+  });
+
+  it('splits rows discovered on different days — a next-day repost is a fresh posting', () => {
+    const parts = partitionByGeneration([
+      row('day1', '2026-07-10T09:00:00+00:00'),
+      row('day2', '2026-07-11T09:00:00+00:00'),
+    ]);
+    expect(ids(parts)).toEqual([['day1'], ['day2']]);
+  });
+
+  it('an old opening and a months-later re-post never merge', () => {
+    const parts = partitionByGeneration([
+      row('march', '2026-03-02T09:00:00+00:00'),
+      row('july-a', '2026-07-11T09:00:00+00:00'),
+      row('july-b', '2026-07-11T10:00:00+00:00'),
+    ]);
+    expect(ids(parts)).toEqual([['july-a', 'july-b'], ['march']]);
   });
 });
 

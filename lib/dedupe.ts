@@ -45,6 +45,25 @@ export function jobContentKey(
   return createHash('md5').update(`${c}\n${t}\n${d}`).digest('hex');
 }
 
+/**
+ * Split one content-key group into requisition GENERATIONS (ADR 0071, user decision
+ * revising ADR 0057's unbounded cross-run linking): a duplicate is a duplicate only
+ * WITHIN a single day — the effective grouping is (company, title, UTC date of
+ * discovered_at). Same-day multi-location blasts still collapse to one canonical;
+ * a repost on any later day is deliberately a fresh posting (scored fresh, surfaces
+ * as new), so an old opening and a re-opened one can never merge.
+ */
+export function partitionByGeneration<T extends { discovered_at: string }>(rows: T[]): T[][] {
+  const byDay = new Map<string, T[]>();
+  for (const r of rows) {
+    const day = r.discovered_at.slice(0, 10);
+    const g = byDay.get(day);
+    if (g) g.push(r);
+    else byDay.set(day, [r]);
+  }
+  return [...byDay.values()];
+}
+
 /** The score fields copied verbatim from a canonical row to its duplicates —
  *  identical content ⇒ identical score; the rubric does not score location. */
 export const COPYABLE_SCORE_FIELDS = [
