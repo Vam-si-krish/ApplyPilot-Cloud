@@ -76,3 +76,19 @@ gate passed:
 - **Revoke the Netlify personal access token** used for the flip (pasted in the
   session transcript), and consider rotating the macOS admin password + app
   password for the same reason.
+
+## ✅ ADR 0069 re-landed (dev Mac, same day) — ChatGPT subscription + assistant lane
+
+User asked for the reverted feature done properly: `chatgpt_subscription` as a worker-delegated
+provider (mirroring the Claude `subscription` pattern) and an independent provider+model pair
+for ApplyBuddy chat. Cherry-picked `d324e1d` (minus `AGENTS.md`), reviewed it as a PR — the
+Codex client's guardrails held up (API-key env stripped, read-only/no-tools/no-network,
+history off, cache-prefix order preserved). Typecheck + 166 app tests + 3 worker tests green.
+Validated against the local selfhost stack with restored prod data: migration backfill correct,
+chat lane round-trips through /api/settings, PostgREST picks up new columns automatically (the
+image's DDL event trigger reloads its schema cache — autopull needs no extra step).
+
+Deployed with ADR 0070's ordering, now enforced by infrastructure: migration alone in `58e4f2d`
+(laptop autopull applies it), then the code. Remaining human step: `codex login` on the server
+laptop (SETUP.md §6b) before selecting the ChatGPT provider in Settings; the feature ships dark
+until then and changes no defaults.

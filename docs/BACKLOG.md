@@ -43,7 +43,7 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
     confirms — needs user approval per the DB-access etiquette in DAY-5.)
 
 ## P2 — High-value token / performance (cheap)
-- [ ] **C. Prompt-cache the scoring résumé + rubric prefix.**
+- [x] **C. Prompt-cache the scoring résumé + rubric prefix.** *(ADR 0056/0066)*
   - Why: `buildScoreMessages` ([scoring.ts:132](lib/scoring.ts#L132)) puts the stable
     résumé + `SCORE_PROMPT` first and the per-job posting second, but sends **no
     `cache_control`**. Across a batch of hundreds of jobs the prefix is re-billed every
@@ -73,7 +73,7 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
   - Fix: add `<div class="label">${esc(b.label||'')}</div>` to the header (between name
     and contact) when `b.label` is present. Worker change → re-render sample + redeploy.
   - Verify: `node render-sample.js` shows the label; still one page.
-- [ ] **F. Prompt-cache the assistant system prompt (full profile JSON each turn).**
+- [x] **F. Prompt-cache the assistant system prompt (full profile JSON each turn).** *(ADR 0069)*
   - Why: `buildAssistantSystem` ([assistant.ts:88](lib/assistant.ts#L88)) embeds the whole
     profile JSON in the system prompt every turn — stable across the conversation.
   - Fix: mark the system block cacheable (once the assistant route uses the array-content
