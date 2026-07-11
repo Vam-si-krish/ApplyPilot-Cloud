@@ -4,10 +4,14 @@ Replaces the Supabase cloud project with this repo's `selfhost/` stack on the
 always-on server laptop. Zero app-code changes: the app gets a new
 `SUPABASE_URL` + keys, nothing else. Background: `docs/SELFHOST-PLAN.md`.
 
-**Status: phase 0 (build + full validation on the dev Mac) is DONE** — the real
-production data was restored into this stack locally and the app ran against it
-end-to-end (login, stats, jobs, storage roundtrip). What remains is phases 1–3
-below.
+**Status: phases 0–2 are DONE (2026-07-11)** — the stack is live on the server
+laptop, the Funnel URL serves it publicly (`https://vamsis-macbook-pro.tail579e6c.ts.net`),
+the data was restored (jobs=4072 / applications=618), the worker points at
+localhost, and Netlify was flipped and verified end-to-end (see
+`docs/devlog/DAY-13.md`). What remains is **phase 3** below, plus two
+recommended follow-ups: healthchecks.io ping URLs (`HC_PING_*` in
+`selfhost/.env`) and a second backup destination (`BACKUP_DEST2` — iCloud Drive
+is not signed in on the server laptop).
 
 ---
 
@@ -150,3 +154,29 @@ Studio (DB browser): `ssh -L 3001:localhost:3001 <laptop>` → http://localhost:
   Mac, Skyvern does). `KONG_HTTP_PORT` in `.env` is per-machine.
 - **First-boot only**: the db init scripts run only into an empty
   `volumes/db/data`. To re-init: `docker compose down && rm -rf volumes/db/data`.
+
+## Gotchas learned in phases 1–2 (server laptop, 2026-07-11)
+
+- **macOS TCC silently blocks launchd jobs from reading `~/Desktop`** — the
+  watchdog/autopull/backup jobs die with exit 127 (`zsh: can't open input file`)
+  or `operation not permitted`, and **no permission prompt ever appears** for
+  background jobs. Fix (one-time, GUI): System Settings → Privacy & Security →
+  **Full Disk Access** → add **`/bin/zsh`** (⌘⇧G in the file picker) and
+  **`/Applications/OrbStack.app`** (the docker CLI is OrbStack's binary with its
+  own TCC identity — granting zsh alone is not enough). Note: granting OrbStack
+  FDA restarts it, taking the stack down for ~2 min (the stack/watchdog jobs
+  bring it back).
+- **The Tailscale app's CLI crashes when invoked via symlink**
+  (`Fatal error: The current bundleIdentifier is unknown to the registry`).
+  Scripts here call bare `tailscale`, so install a **wrapper script** (not a
+  symlink) at `/opt/homebrew/bin/tailscale`:
+  `#!/bin/sh` + `exec /Applications/Tailscale.app/Contents/MacOS/Tailscale "$@"`.
+- **`systemsetup -setremotelogin on` needs Full Disk Access** — enable sshd
+  directly instead: `sudo launchctl enable system/com.openssh.sshd && sudo
+  launchctl bootstrap system /System/Library/LaunchDaemons/ssh.plist`.
+- **`sysadminctl -autologin set` hangs from a non-GUI session** — write
+  `/etc/kcpassword` + the `autoLoginUser` loginwindow default directly (what
+  System Settings does), after FileVault is off (`fdesetup disable -inputplist`
+  works headless).
+- **`pg_dump` isn't preinstalled on macOS** — `restore-from-cloud.sh` needs it on
+  the host: `brew install libpq` (keg-only; use `/opt/homebrew/opt/libpq/bin`).
