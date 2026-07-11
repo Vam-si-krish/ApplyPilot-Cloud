@@ -372,7 +372,7 @@ export class WorkerLLMClient extends LLMClient {
   ) {
     // baseUrl/apiKey are unused here (chat is fully overridden); pass placeholders.
     // Default the model so an empty lane model still resolves to a real alias.
-    const fallbackModel = subscriptionProvider === CHATGPT_SUBSCRIPTION_PROVIDER ? 'gpt-5.4' : 'sonnet';
+    const fallbackModel = subscriptionProvider === CHATGPT_SUBSCRIPTION_PROVIDER ? 'gpt-5.6-terra' : 'sonnet';
     super('https://worker.invalid', (model || '').trim() || fallbackModel, '');
   }
 

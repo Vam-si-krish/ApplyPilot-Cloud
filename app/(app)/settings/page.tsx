@@ -14,7 +14,7 @@ const PROVIDERS = [
   { id: 'subscription', label: 'Claude subscription (no API key)', model: 'sonnet' },
   // ADR 0069: run the task through the Codex SDK authenticated with `codex login`
   // on the worker. This consumes the user's ChatGPT plan instead of a vault API key.
-  { id: 'chatgpt_subscription', label: 'ChatGPT subscription (no API key)', model: 'gpt-5.4' },
+  { id: 'chatgpt_subscription', label: 'ChatGPT subscription (no API key)', model: 'gpt-5.6-terra' },
 ];
 
 // Known models per provider — shown as dropdown options. A "Custom…" option keeps the
@@ -26,9 +26,10 @@ const MODELS: Record<string, string[]> = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
   // Agent-SDK model aliases (resolve to the current Claude models on the worker).
   subscription: ['sonnet', 'opus', 'haiku'],
-  // Public model ids accepted by Codex. Custom remains available for account-specific
-  // or newly released models without requiring an app deploy.
-  chatgpt_subscription: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.5'],
+  // Public model ids accepted by Codex with a ChatGPT login (learn.chatgpt.com/docs/models,
+  // 2026-07: the GPT-5.6 tiers + previous-gen 5.5; 5.4/5.4-mini are legacy). Custom remains
+  // available for account-specific or newly released models without requiring an app deploy.
+  chatgpt_subscription: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'],
 };
 // Friendly labels for the dropdown (falls back to the raw id for anything unlisted).
 const MODEL_LABELS: Record<string, string> = {
@@ -37,7 +38,8 @@ const MODEL_LABELS: Record<string, string> = {
   'gemini-2.0-flash': 'Gemini 2.0 Flash', 'gemini-2.5-flash': 'Gemini 2.5 Flash', 'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'deepseek-chat': 'DeepSeek Chat', 'deepseek-reasoner': 'DeepSeek Reasoner',
   sonnet: 'Claude Sonnet (latest)', opus: 'Claude Opus (latest)', haiku: 'Claude Haiku (latest)',
-  'gpt-5.4': 'GPT-5.4', 'gpt-5.4-mini': 'GPT-5.4 mini', 'gpt-5.5': 'GPT-5.5',
+  'gpt-5.6-sol': 'GPT-5.6 Sol (flagship)', 'gpt-5.6-terra': 'GPT-5.6 Terra (balanced)',
+  'gpt-5.6-luna': 'GPT-5.6 Luna (fast)', 'gpt-5.5': 'GPT-5.5', 'gpt-5.4': 'GPT-5.4 (legacy)',
 };
 const CUSTOM_MODEL = '__custom__';
 const defaultModel = (provider: string) => MODELS[provider]?.[0] ?? '';

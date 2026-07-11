@@ -21,7 +21,7 @@ import os from 'node:os';
 import { join } from 'node:path';
 
 const DEFAULT_TIMEOUT_MS = Math.max(15_000, Number(process.env.CODEX_SDK_TIMEOUT_MS) || 160_000);
-const DEFAULT_MODEL = 'gpt-5.4';
+const DEFAULT_MODEL = 'gpt-5.6-terra';
 const WORK_DIR = join(os.tmpdir(), 'applypilot-codex-worker');
 const REASONING_EFFORTS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
 
