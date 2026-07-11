@@ -11,17 +11,49 @@ below.
 
 ---
 
-## Phase 1 — one-time manual bootstrap (~30 min, the only hands-on step)
+## Doing this with Claude Code on the server laptop (recommended)
+
+Pull latest, open Claude Code in the repo on the server laptop, and say:
+
+> **follow selfhost/SETUP-SELFHOST.md — do phases 1 and 2**
+
+Claude can execute almost everything below itself. Ground rules for that session:
+
+- **Scope**: phases 1–2 of this file plus the standard worker update
+  (`resume-worker/DEPLOY.md` §1). Never edit app code, never write to the CLOUD
+  database (the restore script only *reads* it), never rotate credentials.
+- **Human moments** — ask the user, don't work around them:
+  1. macOS admin password whenever `sudo` prompts (pmset, Remote Login).
+  2. Clicking the Tailscale sign-in link (`tailscale up` prints a URL).
+  3. System Settings toggles that need the GUI: auto-login ON, FileVault OFF,
+     OrbStack/Docker "Start at login".
+  4. The **cloud DB password** for `restore-from-cloud.sh` (deliberately not in
+     the repo — the user pastes it when asked).
+  5. The **Netlify env flip** (step 4 of phase 2): either the user does it in
+     the browser with the values Claude prints, or the user provides a Netlify
+     personal access token so Claude can do it via `npx netlify-cli env:set …`
+     + trigger a redeploy.
+- **Done means verified**: every checkpoint in phases 1–2 passes — `docker
+  compose ps` all healthy, the restore prints jobs≈4072 / applications≈618, the
+  Funnel URL serves `/rest/v1/jobs?select=id&limit=1` with the anon key from
+  the public internet, and after the Netlify flip the live site shows the data
+  again. Report each gate's result.
+
+## Phase 1 — one-time bootstrap (~30 min; Claude drives, user supplies clicks/passwords)
 
 On the **server laptop**:
 
 1. **Container runtime**: install [OrbStack](https://orbstack.dev) (preferred —
-   lighter, starts at login) or Docker Desktop. In its settings enable
-   **Start at login**.
-2. **Tailscale**: install from tailscale.com or the App Store, sign in.
-   Then enable Tailscale SSH so the dev Mac can drive this machine:
-   `tailscale set --ssh`
-   Also install Tailscale on the **dev Mac** (same tailnet).
+   lighter, starts at login) or Docker Desktop (`brew install --cask orbstack`).
+   In its settings enable **Start at login**, then open it once so the daemon runs.
+2. **Tailscale**: install (`brew install --cask tailscale` or App Store), sign
+   in. The macOS GUI app **cannot** act as a Tailscale-SSH server, so for
+   remote hands from the dev Mac enable plain macOS **Remote Login** instead:
+   ```bash
+   sudo systemsetup -setremotelogin on    # or System Settings → Sharing → Remote Login
+   ```
+   The dev Mac (same tailnet) then reaches this machine with ordinary
+   `ssh <user>@<machine>.<tailnet>.ts.net`.
 3. **Boot resilience** (Terminal):
    ```bash
    sudo pmset -a sleep 0 disablesleep 1     # never sleep (likely already set)
@@ -30,11 +62,10 @@ On the **server laptop**:
    System Settings: **auto-login ON** (Users & Groups), **FileVault OFF**
    (Privacy & Security — otherwise an unattended reboot stops at the unlock
    screen), Software Update: **download only, no auto-restart**.
-4. Make sure the repo exists (it does — the worker runs from it):
-   `~/Desktop/projects/ApplyPilot-Cloud`
-
-Everything after this happens from the dev Mac over `tailscale ssh` (or
-continue in the same terminal).
+4. Make sure the repo is current (it exists — the worker runs from it):
+   `cd ~/Desktop/projects/ApplyPilot-Cloud && git pull`, then do the standard
+   worker update from `resume-worker/DEPLOY.md` §1 (this also drops the worker
+   back to the reverted, pre-ChatGPT code).
 
 ## Phase 2 — stand up + cut over
 
