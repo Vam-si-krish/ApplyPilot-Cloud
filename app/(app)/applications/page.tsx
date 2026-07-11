@@ -11,6 +11,7 @@ import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview'
 import CompanyTierBadge from '@/components/CompanyTierBadge';
 import { useProgress } from '@/components/ProgressContext';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
+import { scoreUsageCostUsd } from '@/lib/pricing';
 
 type View = 'list' | 'parked' | 'base' | 'manual';
 
@@ -41,6 +42,9 @@ export default function ApplicationsPage() {
   const [apps, setApps] = useState<ApplicationWithJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Mirrors `expanded` for async draft loads — a slow full-row fetch must not seed the
+  // editor after the user has moved to another row (see toggleExpand).
+  const expandedRef = useRef<string | null>(null);
   const [genId, setGenId] = useState<string | null>(null); // application currently generating
   const [genCoverId, setGenCoverId] = useState<string | null>(null); // application whose cover letter is generating
   const [atsId, setAtsId] = useState<string | null>(null); // application whose tailored ATS check is running
@@ -164,15 +168,29 @@ export default function ApplicationsPage() {
 
   function toggleExpand(a: ApplicationWithJob) {
     if (expanded === a.id) {
+      expandedRef.current = null;
       setExpanded(null);
       setDraft(null);
       setInstructions('');
       setReviewMode(false);
     } else {
+      expandedRef.current = a.id;
       setExpanded(a.id);
-      setDraft(a.tailored_resume ? structuredClone(a.tailored_resume) : null);
       setInstructions(a.tailor_instructions ?? '');
       setReviewMode(false);
+      // The slim list omits the résumé document — fetch the full row for the editor.
+      // The ref guards against a slow response landing after the user expanded another
+      // row (or collapsed) in the meantime.
+      setDraft(null);
+      if (a.has_resume) {
+        fetchApp(a.id)
+          .then((row) => {
+            if (expandedRef.current === a.id && row?.tailored_resume) {
+              setDraft(structuredClone(row.tailored_resume));
+            }
+          })
+          .catch(() => {});
+      }
     }
   }
 
@@ -205,7 +223,10 @@ export default function ApplicationsPage() {
   async function remove(id: string) {
     if (!confirm('Remove this application?')) return;
     await fetch(`/api/applications/${id}`, { method: 'DELETE' });
-    if (expanded === id) setExpanded(null);
+    if (expanded === id) {
+      expandedRef.current = null;
+      setExpanded(null);
+    }
     setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
     load(true);
   }
@@ -219,7 +240,10 @@ export default function ApplicationsPage() {
     setBulkBusy(true);
     try {
       await Promise.all(ids.map((id) => fetch(`/api/applications/${id}`, { method: 'DELETE' })));
-      if (expanded && ids.includes(expanded)) setExpanded(null);
+      if (expanded && ids.includes(expanded)) {
+        expandedRef.current = null;
+        setExpanded(null);
+      }
       setSelected(new Set());
       setMsg(`Removed ${ids.length} application${ids.length === 1 ? '' : 's'}.`);
       load(true);
@@ -247,7 +271,10 @@ export default function ApplicationsPage() {
           }),
         ),
       );
-      if (expanded && ids.includes(expanded)) setExpanded(null);
+      if (expanded && ids.includes(expanded)) {
+        expandedRef.current = null;
+        setExpanded(null);
+      }
       setSelected(new Set());
       setMsg(parked ? `Set aside ${ids.length} — find them under the Set Aside tab.` : `Moved ${ids.length} back to the Queue.`);
       load(true);
@@ -286,11 +313,14 @@ export default function ApplicationsPage() {
     }
   }
 
-  // Fetch a single application's current row from the list endpoint (used to poll
-  // for the worker's async tailoring result).
+  // Fetch a single application's FULL row (including tailored_resume, which the slim
+  // list omits). Used to poll for the worker's async tailoring result and to load the
+  // editor on expand — polling the whole list here cost ~11 MB per tick at 650 rows.
   async function fetchApp(id: string): Promise<ApplicationWithJob | null> {
-    const d = await fetch('/api/applications').then((r) => r.json());
-    return (d.applications ?? []).find((x: ApplicationWithJob) => x.id === id) ?? null;
+    const r = await fetch(`/api/applications/${id}`);
+    if (!r.ok) return null;
+    const d = await r.json().catch(() => ({}));
+    return d.application ?? null;
   }
 
   async function generate(a: ApplicationWithJob) {
@@ -328,6 +358,7 @@ export default function ApplicationsPage() {
 
       if (row?.status === 'ready') {
         setMsg('Tailored résumé generated.');
+        expandedRef.current = a.id;
         setExpanded(a.id);
         setDraft(row.tailored_resume ? structuredClone(row.tailored_resume) : null);
         // Tailored-résumé scoring removed (ADR 0050): the base fit_score already reflects a
@@ -392,11 +423,11 @@ export default function ApplicationsPage() {
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const selectedGeneratable = [...selected].filter((id) => {
     const a = apps.find((x) => x.id === id);
-    return a?.job && !a.tailored_resume;
+    return a?.job && !a.has_resume;
   }).length;
   // Applications waiting to be tailored — what the overnight drain (and "Run queue now")
   // acts on. Set-aside rows are deliberately excluded (the drain skips them too).
-  const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.tailored_resume && !a.parked).length;
+  const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.has_resume && !a.parked).length;
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(selectableIds));
   }
@@ -412,10 +443,10 @@ export default function ApplicationsPage() {
     // rows (ADR 0060); the per-row Regenerate button is the deliberate redo path.
     const ids = all.filter((id) => {
       const a = apps.find((x) => x.id === id);
-      return a?.job && !a.tailored_resume;
+      return a?.job && !a.has_resume;
     });
     if (ids.length === 0) return;
-    const skipped = all.filter((id) => apps.find((x) => x.id === id)?.tailored_resume).length;
+    const skipped = all.filter((id) => apps.find((x) => x.id === id)?.has_resume).length;
     setBulkBusy(true);
     setMsg(skipped > 0 ? `Skipped ${skipped} that already have a résumé — use a row's Regenerate to redo one.` : null);
     let done = 0;
@@ -462,14 +493,24 @@ export default function ApplicationsPage() {
     }
 
     try {
-      // Bounded-concurrency pool: up to GEN_CONCURRENCY pipelines in flight at once.
       const queue = [...ids];
+      // Cache warm-up: the FIRST generation runs alone so the stable prompt prefix
+      // (system prompt + base résumé, ADR 0056/0064) gets written to the provider's
+      // cache once — launching GEN_CONCURRENCY cold calls at t=0 made every one of
+      // them a cache miss that paid full input price. The rest then read the warm
+      // prefix at ~0.1× the input rate.
+      if (queue.length > 1) {
+        await processApp(queue.shift()!);
+      }
+      // Bounded-concurrency pool: up to GEN_CONCURRENCY pipelines in flight at once.
       const runWorker = async () => {
         for (let id = queue.shift(); id && !limitHit; id = queue.shift()) {
           await processApp(id);
         }
       };
-      await Promise.all(Array.from({ length: Math.min(GEN_CONCURRENCY, ids.length) }, runWorker));
+      if (!limitHit && queue.length > 0) {
+        await Promise.all(Array.from({ length: Math.min(GEN_CONCURRENCY, queue.length) }, runWorker));
+      }
 
       const untouched = ids.length - done;
       setBulkProgress({
@@ -618,7 +659,7 @@ export default function ApplicationsPage() {
   // Local ATS re-check of the TAILORED résumé vs the job (ADR 0053 addendum) — the
   // Jobscan loop: tailor → rescan → confirm the gaps closed. No AI call; instant.
   async function atsCheck(a: ApplicationWithJob, silent = false) {
-    if (atsId || !a.tailored_resume) return;
+    if (atsId || !a.has_resume) return;
     setAtsId(a.id);
     try {
       const r = await fetch('/api/applications/ats-check', {
@@ -651,7 +692,7 @@ export default function ApplicationsPage() {
   // Bulk ATS re-check: run the local base→tailored ATS match for every selected
   // application that has a résumé. Pure CPU on the server, no AI — parallel ×4.
   async function atsCheckSelected() {
-    const targets = filtered.filter((a) => selected.has(a.id) && a.tailored_resume);
+    const targets = filtered.filter((a) => selected.has(a.id) && a.has_resume);
     if (targets.length === 0) {
       setMsg('None of the selected applications has a tailored résumé yet — generate first.');
       setTimeout(() => setMsg(null), 5000);
@@ -1081,11 +1122,11 @@ export default function ApplicationsPage() {
                     title="Generate a job-tailored résumé from your base résumé (truthful reframing)"
                     className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all shrink-0"
                   >
-                    <Sparkles size={12} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate' : 'Generate'}
+                    <Sparkles size={12} /> {generating ? 'Generating…' : a.has_resume ? 'Regenerate' : 'Generate'}
                   </button>
                   {/* Local ATS check of the TAILORED résumé vs this job (ADR 0053 addendum).
                       Auto-runs after generation; click to re-check (e.g. after edits). */}
-                  {a.tailored_resume &&
+                  {a.has_resume &&
                     (atsId === a.id ? (
                       <span className="flex items-center gap-1 text-[11px] text-slate-muted shrink-0" title="Checking ATS match…">
                         <Loader2 size={12} className="animate-spin" /> <span className="hidden sm:inline">ATS…</span>
@@ -1245,7 +1286,7 @@ export default function ApplicationsPage() {
                           title="Generate the tailored résumé using the job description plus your instructions above"
                           className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all"
                         >
-                          <Sparkles size={13} /> {generating ? 'Generating…' : a.tailored_resume ? 'Regenerate with instructions' : 'Generate with instructions'}
+                          <Sparkles size={13} /> {generating ? 'Generating…' : a.has_resume ? 'Regenerate with instructions' : 'Generate with instructions'}
                         </button>
                         <span className="text-[11px] text-slate-muted">
                           The AI already has the job description — these notes tell it what to emphasize. It stays truthful (no fabrication).
@@ -1338,12 +1379,22 @@ export default function ApplicationsPage() {
                             Generation: {fmtTokens(a.tailor_usage.input_tokens)} in
                             {a.tailor_usage.cache_read_input_tokens > 0 ? ` (+${fmtTokens(a.tailor_usage.cache_read_input_tokens)} cached)` : ' (0 cached)'}
                             {' · '}{fmtTokens(a.tailor_usage.output_tokens)} out
-                            {typeof a.tailor_usage.cost_usd === 'number' ? ` · $${a.tailor_usage.cost_usd.toFixed(3)}` : ''}
+                            {(() => {
+                              // Derived API-equivalent cost (ADR 0068) — the subscription SDKs
+                              // (Claude Agent SDK, Codex) report tokens but no invoice figure.
+                              const cost = scoreUsageCostUsd(a.tailor_usage);
+                              return cost != null ? ` · $${cost.toFixed(3)}` : '';
+                            })()}
                             {a.tailor_usage.ms ? ` · ${Math.round(a.tailor_usage.ms / 1000)}s` : ''}
                             {a.tailor_usage.model ? ` · ${a.tailor_usage.model}` : ''}
                           </p>
                         )}
                       </>
+                    ) : a.has_resume ? (
+                      // The slim list omits the document — it's being fetched for the editor.
+                      <p className="flex items-center gap-2 text-[12px] text-slate-muted py-2">
+                        <Loader2 size={13} className="animate-spin" /> Loading tailored résumé…
+                      </p>
                     ) : (
                       <p className="text-[12px] text-slate-muted py-2">
                         No tailored résumé yet. Click <span className="text-violet-300">Generate</span> to reframe your base

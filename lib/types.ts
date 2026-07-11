@@ -440,13 +440,23 @@ export interface TailorUsage {
   ms?: number;
 }
 
-/** One job the user is preparing/applying to, with its tailored résumé + PDF. */
+/** One job the user is preparing/applying to, with its tailored résumé + PDF.
+ *
+ *  The LIST endpoint (/api/applications) returns a SLIM projection of this shape: the
+ *  heavy documents (tailored_resume, cover_letter, job.full_description) are omitted and
+ *  the generated has_resume / has_cover_letter flags (migration 0043) stand in for
+ *  existence checks. GET /api/applications/[id] returns the full row. */
 export interface Application {
   id: string;
   job_id: string;
   status: ApplicationStatus;
   template: string;
-  tailored_resume: ResumeDoc | null;
+  /** Omitted (undefined) in the slim list — check has_resume there instead. */
+  tailored_resume?: ResumeDoc | null;
+  /** Generated column (migration 0043): tailored_resume IS NOT NULL. */
+  has_resume?: boolean;
+  /** Generated column (migration 0043): cover_letter IS NOT NULL. */
+  has_cover_letter?: boolean;
   /** What the AI added/embellished vs the base résumé (ADR 0026); null = none/old. */
   tailor_changes: TailorChanges | null;
   /** Custom tailoring guidance for the AI (ADR 0037), e.g. a recruiter's ask. Null = none. */
@@ -463,8 +473,9 @@ export interface Application {
    *  (method-identical to tailored_match_score) — the "before" in before→after. */
   base_match_score: number | null;
   pdf_path: string | null;
-  /** Cover letter (ADR 0035): generated text, its rendered PDF path, last error. */
-  cover_letter: string | null;
+  /** Cover letter (ADR 0035): generated text, its rendered PDF path, last error.
+   *  The text is omitted (undefined) in the slim list — check has_cover_letter there. */
+  cover_letter?: string | null;
   cover_letter_pdf_path: string | null;
   cover_letter_error: string | null;
   error: string | null;

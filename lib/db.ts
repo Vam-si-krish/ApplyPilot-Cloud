@@ -182,14 +182,26 @@ export async function saveBaseResume(doc: ResumeDoc): Promise<void> {
   if (error) throw new Error(`Failed to save base résumé: ${error.message}`);
 }
 
-/** All applications joined with their job, newest first. */
+/**
+ * All applications joined with their job, newest first — SLIM projection for the list
+ * view. The heavy documents (tailored_resume, cover_letter, job.full_description) are
+ * deliberately excluded: at ~650 rows they made this response ~11 MB. The list only
+ * needs existence (the generated has_resume / has_cover_letter flags, migration 0043);
+ * the full row comes from getApplicationWithJob() when a row is expanded.
+ */
 export async function listApplications(): Promise<ApplicationWithJob[]> {
   const { data, error } = await supabaseAdmin()
     .from('applications')
-    .select('*, job:jobs(*)')
+    .select(
+      'id, job_id, status, template, pdf_path, error, created_at, updated_at, applied_at, ' +
+        'tailor_changes, tailored_fit_score, tailored_score_note, cover_letter_pdf_path, cover_letter_error, ' +
+        'tailor_instructions, tailored_match_score, tailored_match_breakdown, base_match_score, parked, ' +
+        'tailor_usage, has_resume, has_cover_letter, ' +
+        'job:jobs(id, title, company, url, location, fit_score, employment_type, company_tier, company_tier_note, application_url, clicked_at, discovered_at, source)',
+    )
     .order('created_at', { ascending: false });
   if (error) throw new Error(`Failed to list applications: ${error.message}`);
-  return (data ?? []) as ApplicationWithJob[];
+  return (data ?? []) as unknown as ApplicationWithJob[];
 }
 
 /**

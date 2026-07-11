@@ -1,15 +1,29 @@
 /**
+ * GET    /api/applications/[id] — one application with its job, FULL row (including
+ *        tailored_resume / cover_letter, which the slim list endpoint omits).
  * PATCH  /api/applications/[id] — update status / mark applied / edited résumé / template.
  * DELETE /api/applications/[id] — remove the application. Session-gated (ADR 0024).
  */
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getApplicationWithJob } from '@/lib/db';
 import { normalizeResume } from '@/lib/resume';
 import type { ApplicationStatus } from '@/lib/types';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const STATUSES: ApplicationStatus[] = ['queued', 'generating', 'ready', 'applied', 'failed'];
+
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  try {
+    const application = await getApplicationWithJob(params.id);
+    if (!application) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    return NextResponse.json({ application });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+}
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   let body: { status?: unknown; applied_at?: unknown; tailored_resume?: unknown; template?: unknown; tailor_instructions?: unknown; parked?: unknown };
