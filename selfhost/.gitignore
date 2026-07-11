@@ -1,0 +1,7 @@
+.env
+volumes/db/data/
+volumes/storage/
+backups/
+logs/
+*.dump.sql
+*.dump.sql.gz

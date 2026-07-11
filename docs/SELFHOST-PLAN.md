@@ -1,6 +1,7 @@
 # Plan: replace Supabase cloud with the server laptop (self-hosted)
 
-**Date:** 2026-07-11 · **Status: proposal — awaiting go/no-go** (see Decisions at the end)
+**Date:** 2026-07-11 · **Status: accepted — phase 0 built & validated** (bundle
+in `selfhost/`, runbook in `selfhost/SETUP-SELFHOST.md`; phases 1–3 pending)
 
 ## Verdict up front
 

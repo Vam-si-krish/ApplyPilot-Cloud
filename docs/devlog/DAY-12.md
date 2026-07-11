@@ -44,3 +44,23 @@ URL in `settings.resume_worker_url`).
    `subscription` path still serves the reverted app fine in the interim).
 5. After service restores: drain the 96 unscored jobs; optionally mark the stale
    `running` runs (Jul 6–10) as failed.
+
+## ✅ Self-hosting phase 0 built and validated (same day)
+
+User green-lit replacing Supabase cloud with the server laptop
+(`docs/SELFHOST-PLAN.md`). Built `selfhost/`: a 7-service trim of the official
+Supabase docker stack (db 17.6 = cloud version, PostgREST, storage, Kong, auth,
+meta, studio; realtime/imgproxy/functions/pooler dropped) + the zero-touch layer
+(autopull with once-only migration apply, watchdog with healthchecks.io
+dead-man pings, nightly backups to iCloud, launchd installers, one-shot
+bootstrap for the server laptop).
+
+Validated end-to-end on the dev Mac against a **real prod restore** (public
+schema over direct psql — works despite the egress block): all services
+healthy; Kong serves all 4,072 jobs; the actual Next app logged in and returned
+correct /api/stats and /api/jobs; storage upload/download/delete roundtrip
+byte-exact. Gotchas fixed and documented in `selfhost/SETUP-SELFHOST.md`
+(conditional roles.sql, xattr → named volume for storage, PostgREST admin-server
+healthcheck, per-machine Kong port). Remaining: phase 1 bootstrap on the server
+laptop (~30 min hands-on), phase 2 cutover (restore + Netlify env flip), phase 3
+PDF backfill after ~Jul 17.
