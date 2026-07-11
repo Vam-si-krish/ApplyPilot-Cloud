@@ -19,13 +19,21 @@ interface ModelRates {
   cacheWrite: number;
 }
 
-// Keyed by a substring of the model id (matched case-insensitively). Scoring runs on
-// Haiku 4.5; the others are here so a model swap still costs correctly.
+// Keyed by a substring of the model id (matched case-insensitively; first match wins,
+// so specific ids go before family fallbacks). Scoring runs on Haiku 4.5; the others
+// are here so a model swap still costs correctly. GPT rates cover the ChatGPT
+// subscription lane (ADR 0069), whose Codex SDK reports tokens but no cost_usd —
+// rates per OpenAI's published July 2026 pricing (cache read = 0.1× input).
 const RATES: Array<{ match: string; rates: ModelRates }> = [
   { match: "haiku-4-5", rates: { input: 1.0, output: 5.0, cacheRead: 0.1, cacheWrite: 1.25 } },
   { match: "haiku", rates: { input: 1.0, output: 5.0, cacheRead: 0.1, cacheWrite: 1.25 } },
   { match: "sonnet", rates: { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 } },
   { match: "opus", rates: { input: 5.0, output: 25.0, cacheRead: 0.5, cacheWrite: 6.25 } },
+  { match: "gpt-5.6-sol", rates: { input: 5.0, output: 30.0, cacheRead: 0.5, cacheWrite: 6.25 } },
+  { match: "gpt-5.6-terra", rates: { input: 2.5, output: 15.0, cacheRead: 0.25, cacheWrite: 3.125 } },
+  { match: "gpt-5.6-luna", rates: { input: 1.0, output: 6.0, cacheRead: 0.1, cacheWrite: 1.25 } },
+  { match: "gpt-5.5", rates: { input: 5.0, output: 30.0, cacheRead: 0.5, cacheWrite: 6.25 } },
+  { match: "gpt-5.4", rates: { input: 2.5, output: 15.0, cacheRead: 0.25, cacheWrite: 3.125 } },
 ];
 
 function ratesFor(model: string | null | undefined): ModelRates | null {
@@ -35,10 +43,11 @@ function ratesFor(model: string | null | undefined): ModelRates | null {
 }
 
 /**
- * Actual API-equivalent USD cost of one scoring call, computed from its token
- * breakdown. Returns null only when we can't price it (unknown model AND no
- * SDK-reported cost). Prefers the derived figure so the number is consistent with
- * the tokens shown; falls back to the SDK's `cost_usd` for unknown models.
+ * Actual API-equivalent USD cost of one LLM call (scoring or tailoring — TailorUsage is
+ * structurally identical), computed from its token breakdown. Returns null only when we
+ * can't price it (unknown model AND no SDK-reported cost). Prefers the derived figure so
+ * the number is consistent with the tokens shown; falls back to the SDK's `cost_usd` for
+ * unknown models.
  */
 export function scoreUsageCostUsd(usage: ScoreUsage | null | undefined): number | null {
   if (!usage) return null;
