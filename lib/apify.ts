@@ -6,16 +6,24 @@
  */
 import { ApifyClient } from 'apify-client';
 import type { Settings } from './types';
-import { getActiveApiKey } from './credentials';
+import { getActiveApiCredential, getApiCredentialById } from './credentials';
 
 /**
  * Apify client authed with the active vault token (ADR 0006), falling back to the
  * APIFY_TOKEN env var. Async because resolving the active key reads the DB.
  */
-async function client(): Promise<ApifyClient> {
-  const token = await getActiveApiKey('apify');
-  if (!token) throw new Error('No Apify token configured. Add one in Settings → API Keys, or set APIFY_TOKEN.');
-  return new ApifyClient({ token });
+async function client(apiKeyId?: string | null): Promise<{ api: ApifyClient; apiKeyId: string | null }> {
+  const credential = apiKeyId
+    ? await getApiCredentialById(apiKeyId, 'apify')
+    : await getActiveApiCredential('apify');
+  if (!credential) {
+    throw new Error(
+      apiKeyId
+        ? 'The Apify key that started this run no longer exists.'
+        : 'No Apify token configured. Add one in Settings → API Keys, or set APIFY_TOKEN.',
+    );
+  }
+  return { api: new ApifyClient({ token: credential.value }), apiKeyId: credential.id };
 }
 
 // ── Per-portal input builders ─────────────────────────────────────────────
@@ -295,6 +303,7 @@ export function buildActorInput(settings: Settings): Record<string, unknown> {
 export interface StartedRun {
   runId: string;
   defaultDatasetId: string;
+  apiKeyId: string | null;
 }
 
 /** One actor run to start: which portal/actor + the prepared input. */
@@ -352,7 +361,7 @@ export function estimateRunCostUsd(settings: Settings): number {
  */
 export async function startAllPortalRuns(settings: Settings, webhookUrl: string): Promise<StartedRun[]> {
   const specs = planRuns(settings);
-  const apify = await client();
+  const { api: apify, apiKeyId } = await client();
   const results = await Promise.all(
     specs.map(async (spec): Promise<StartedRun | null> => {
       const run = await apify.actor(spec.actorId).start(spec.input, {
@@ -363,7 +372,7 @@ export async function startAllPortalRuns(settings: Settings, webhookUrl: string)
           },
         ],
       });
-      return { runId: run.id, defaultDatasetId: run.defaultDatasetId };
+      return { runId: run.id, defaultDatasetId: run.defaultDatasetId, apiKeyId };
     }),
   );
   return results.filter((r): r is StartedRun => r !== null);
@@ -371,7 +380,8 @@ export async function startAllPortalRuns(settings: Settings, webhookUrl: string)
 
 /** @deprecated Use startAllPortalRuns. Left for tests that import it directly. */
 export async function startActorRun(settings: Settings, webhookUrl: string): Promise<StartedRun> {
-  const run = await (await client())
+  const { api, apiKeyId } = await client();
+  const run = await api
     .actor(settings.apify_actor_id)
     .start(buildActorInput(settings), {
       webhooks: [
@@ -381,18 +391,23 @@ export async function startActorRun(settings: Settings, webhookUrl: string): Pro
         },
       ],
     });
-  return { runId: run.id, defaultDatasetId: run.defaultDatasetId };
+  return { runId: run.id, defaultDatasetId: run.defaultDatasetId, apiKeyId };
 }
 
 // ── Dataset helpers ───────────────────────────────────────────────────────
 
-export async function fetchDatasetItems(datasetId: string): Promise<Record<string, unknown>[]> {
-  const { items } = await (await client()).dataset(datasetId).listItems();
+export async function fetchDatasetItems(
+  datasetId: string,
+  apiKeyId?: string | null,
+): Promise<Record<string, unknown>[]> {
+  const { api } = await client(apiKeyId);
+  const { items } = await api.dataset(datasetId).listItems();
   return items as Record<string, unknown>[];
 }
 
-export async function getRunDatasetId(runId: string): Promise<string | null> {
-  const run = await (await client()).run(runId).get();
+export async function getRunDatasetId(runId: string, apiKeyId?: string | null): Promise<string | null> {
+  const { api } = await client(apiKeyId);
+  const run = await api.run(runId).get();
   return run?.defaultDatasetId ?? null;
 }
 

@@ -13,7 +13,14 @@ vi.mock('./supabase', () => {
   return { supabaseAdmin: () => builder };
 });
 
-import { maskKey, getActiveApiKey, isApiKeyProvider, nextRotationIndex, isCoolingDown } from './credentials';
+import {
+  maskKey,
+  getActiveApiCredential,
+  getActiveApiKey,
+  isApiKeyProvider,
+  nextRotationIndex,
+  isCoolingDown,
+} from './credentials';
 
 describe('maskKey', () => {
   it('keeps the last 4 chars and dots the rest', () => {
@@ -71,9 +78,10 @@ describe('getActiveApiKey precedence', () => {
   });
 
   it('prefers the active DB row over the env var', async () => {
-    mockState.result = { data: { key_value: 'db-key' }, error: null };
+    mockState.result = { data: { id: 'vault-key-id', key_value: 'db-key' }, error: null };
     process.env[ENV] = 'env-key';
     expect(await getActiveApiKey('gemini')).toBe('db-key');
+    expect(await getActiveApiCredential('gemini')).toEqual({ id: 'vault-key-id', value: 'db-key' });
   });
 
   it('falls back to the env var when there is no active DB row', async () => {

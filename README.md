@@ -95,7 +95,9 @@ find a real misjudgement; it becomes a permanent regression check.
 3. Set only the new environment values listed in the backend runbook. Never copy the
    production ApplyPilot backend values.
 4. Set `NEXT_PUBLIC_APP_URL` to the new Netlify/custom-domain URL so webhooks and
-   self-retriggering batches resolve to this deployment.
+   self-retriggering batches resolve to this deployment. Do not leave the documented
+   `your-new-site.netlify.app` placeholder; the app now rejects placeholder/local
+   callback targets before starting a billable actor.
 5. Keep the deployment limited to the three configured accounts. Public account creation
    remains blocked until signup, password reset, and abuse controls are implemented.
 

@@ -516,5 +516,6 @@ export interface Run {
   jobs_scored: number;
   errors: number;
   apify_run_id: string | null;
+  apify_api_key_id: string | null;
   status: RunStatus;
 }

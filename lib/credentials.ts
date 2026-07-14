@@ -25,6 +25,11 @@ export function isApiKeyProvider(v: unknown): v is ApiKeyProvider {
   return typeof v === 'string' && (API_KEY_PROVIDERS as string[]).includes(v);
 }
 
+export interface ApiCredential {
+  id: string | null;
+  value: string;
+}
+
 /** Mask a secret for display: keep the last 4 chars, dot out the rest. */
 export function maskKey(value: string): string {
   const tail = value.slice(-4);
@@ -54,22 +59,42 @@ export function isCoolingDown(cooldownUntil: string | null | undefined, now = Da
  * The key to use for a provider right now: the active vault row's secret, else
  * the legacy env var, else null. Used by the run/scoring paths.
  */
-export async function getActiveApiKey(provider: ApiKeyProvider): Promise<string | null> {
+export async function getActiveApiCredential(provider: ApiKeyProvider): Promise<ApiCredential | null> {
   const { data, error } = await supabaseAdmin()
     .from('api_keys')
-    .select('key_value')
+    .select('id, key_value')
     .eq('provider', provider)
     .eq('is_active', true)
     .maybeSingle();
   if (error) throw new Error(`Failed to load active ${provider} key: ${error.message}`);
   const fromDb = (data?.key_value as string | undefined)?.trim();
-  if (fromDb) return fromDb;
+  if (fromDb) return { id: (data?.id as string | undefined) || null, value: fromDb };
   // The multi-user fork must never spend a deployment owner's API key for another
   // account. Each user supplies vault keys; only the separate onboarding route may
   // call the shared subscription worker (ADR 0073).
   if (process.env.BACKEND_URL) return null;
   const fromEnv = (process.env[PROVIDER_ENV[provider]] || '').trim();
-  return fromEnv || null;
+  return fromEnv ? { id: null, value: fromEnv } : null;
+}
+
+/** Resolve one exact vault credential, used to finish work started with that key. */
+export async function getApiCredentialById(
+  id: string,
+  provider: ApiKeyProvider,
+): Promise<ApiCredential | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('api_keys')
+    .select('id, key_value')
+    .eq('id', id)
+    .eq('provider', provider)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load ${provider} key for run: ${error.message}`);
+  const value = (data?.key_value as string | undefined)?.trim();
+  return value ? { id: data?.id as string, value } : null;
+}
+
+export async function getActiveApiKey(provider: ApiKeyProvider): Promise<string | null> {
+  return (await getActiveApiCredential(provider))?.value ?? null;
 }
 
 /** All vault rows (masked), newest first. */

@@ -5,15 +5,49 @@ import { currentUserId } from './userContext';
  *  serverless timeout given LLM rate limits (Gemini free tier ~15 RPM). */
 export const SCORE_BATCH_SIZE = 5;
 
+export interface AppUrlEnvironment {
+  NEXT_PUBLIC_APP_URL?: string;
+  VERCEL_URL?: string;
+  URL?: string;
+}
+
+const PLACEHOLDER_HOSTS = new Set(['your-new-site.netlify.app']);
+
+function normalizedUrl(value: string | undefined): string | null {
+  const raw = (value || '').trim().replace(/\/$/, '');
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    if (PLACEHOLDER_HOSTS.has(url.hostname.toLowerCase())) return null;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 /** Base URL of this deployment, used to build self-referential trigger URLs. */
-export function appBaseUrl(): string {
-  const u = process.env.NEXT_PUBLIC_APP_URL;
-  if (u) return u.replace(/\/$/, '');
+export function appBaseUrl(env: AppUrlEnvironment = process.env as AppUrlEnvironment): string {
+  const configured = normalizedUrl(env.NEXT_PUBLIC_APP_URL);
+  if (configured) return configured;
   // Vercel injects VERCEL_URL (host only) for the current deployment.
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  const vercel = normalizedUrl(env.VERCEL_URL);
+  if (vercel) return vercel;
   // Netlify injects URL (full site URL) into the build + function runtime.
-  if (process.env.URL) return process.env.URL.replace(/\/$/, '');
+  const netlify = normalizedUrl(env.URL);
+  if (netlify) return netlify;
   return 'http://localhost:3000';
+}
+
+/** Apify callbacks must never be registered against localhost or a template hostname. */
+export function publicWebhookBaseUrl(env: AppUrlEnvironment = process.env as AppUrlEnvironment): string {
+  const base = appBaseUrl(env);
+  const url = new URL(base);
+  if (url.protocol !== 'https:' || url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    throw new Error(
+      'A real public app URL is required before starting Apify. Set NEXT_PUBLIC_APP_URL to this Netlify site URL.',
+    );
+  }
+  return base;
 }
 
 /**

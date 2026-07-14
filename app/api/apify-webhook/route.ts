@@ -58,12 +58,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const datasetId = body.resource?.defaultDatasetId || (runId ? await getRunDatasetId(runId) : null);
+    const apifyApiKeyId = owningRun?.apify_api_key_id ?? null;
+    const datasetId = body.resource?.defaultDatasetId
+      || (runId ? await getRunDatasetId(runId, apifyApiKeyId) : null);
     if (!datasetId) {
       return NextResponse.json({ error: 'no dataset id' }, { status: 400 });
     }
 
-    const items = await fetchDatasetItems(datasetId);
+    const items = await fetchDatasetItems(datasetId, apifyApiKeyId);
     // ?portal= is set by startAllPortalRuns; defaults to 'linkedin' for backward compat.
     const portal = new URL(req.url).searchParams.get('portal') || 'linkedin';
     const source = `apify:${portal}`;

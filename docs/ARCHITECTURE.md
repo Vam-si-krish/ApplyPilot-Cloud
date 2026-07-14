@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0076
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0077
 
 ## Current deployment topology
 
@@ -85,12 +85,13 @@ Netlify scheduled function (daily, UTC)
 POST /api/run
    │  • read settings (keywords, locations, hours_old, actor id)
    │  • start Apify actor run ASYNC → returns runId immediately
-   │  • register a webhook so Apify calls us back on SUCCEEDED
-   │  • insert a `runs` row (apify_run_id, started_at)
+   │  • validate a real public callback URL before starting a billable actor
+   │  • register a webhook so Apify calls us back on terminal events
+   │  • insert a `runs` row (apify_run_id, launching api-key id, started_at)
    ▼
 Apify runs the scrape (minutes) … then calls:
 POST /api/apify-webhook
-   │  • fetch the run's dataset items
+   │  • fetch the run's dataset with the same user-owned key that launched it
    │  • map → job rows, de-dupe by url, insert with status='unscored'
    │  • update the `runs` row (jobs_found)
    │  • kick off /api/score-batch
@@ -121,7 +122,10 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
 - `lib/apify.ts` — actor start + dataset→job mapping. The only place that knows actor
   input schema; swapping actors touches only this file + the settings value. New fork
   accounts default to the pay-per-result `cheap_scraper` actor (ADR 0076); paid rental
-  actors are explicit user choices.
+  actors are explicit user choices. Each run pins its launching vault key because an
+  Apify dataset is private to that account (ADR 0077).
+- `lib/pipeline.ts` — deployment URL resolution and self-trigger helpers. Template/local
+  callback targets are rejected before starting a billable Apify run (ADR 0077).
 - `lib/supabase.ts` — protocol clients for the gateway/PostgREST compatibility boundary.
 - `app/api/*` — thin HTTP handlers; validate input, call lib, write DB.
 

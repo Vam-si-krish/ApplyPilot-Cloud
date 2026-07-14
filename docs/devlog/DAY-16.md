@@ -67,3 +67,29 @@
   worker 6/6 tests passed, typecheck and the 33-page production build passed. Live
   migration and a real user fetch remain the deployment verification step after server
   autopull.
+
+## Pilot 2 stuck Apify-run diagnosis and fix (ADR 0077)
+
+- The key and actor were healthy: Apify reported three successful runs and non-empty
+  datasets. All local rows remained `running` because every webhook was registered at
+  `https://your-new-site.netlify.app` and every dispatch retry returned HTTP 404.
+- Updated deployment URL resolution so the template yields to Netlify's injected real
+  site URL, and added a preflight that refuses local/template callback targets before a
+  billable actor starts.
+- Added `runs.apify_api_key_id`: callback ingestion now uses the exact user-owned Apify
+  credential that launched the private dataset, even if keys rotate or the active choice
+  changes before completion. The single-key original deployment did not expose this bug.
+- Fresh migration passed with the new same-user foreign key. Live migration 0046 was
+  backed up and applied, and each of Pilot 2's historical run rows was pinned to the key
+  that Apify confirmed owns it.
+- Replayed the three successful callbacks locally without another actor run: 303 fetched
+  results became 241 unique restored jobs after URL/content deduplication (71 + 101 + 69
+  newly inserted per run). All three run rows are now finished successfully.
+- Pilot 2's selected OpenAI key authenticates but a real completion returns
+  `insufficient_quota`. Scoring was stopped and its one transient score-0 write reverted,
+  leaving all 241 restored jobs honestly `unscored` until the user funds/selects a working
+  scoring provider. This is separate from the repaired Apify fetch.
+- Final gates: 178 app tests passed (8 credentialed evals skipped), backend 2/2, worker
+  6/6, docs check (103 Markdown files/71 ADRs), typecheck, fresh 46-migration schema,
+  33-page production build, and public gateway/worker health all passed. A new paid actor
+  run was intentionally not started merely to test the fix.

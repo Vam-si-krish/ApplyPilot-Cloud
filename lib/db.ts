@@ -283,10 +283,10 @@ export async function updateApplication(id: string, patch: Partial<Application>)
   if (error) throw new Error(`Failed to update application: ${error.message}`);
 }
 
-export async function createRun(apifyRunId: string | null): Promise<Run> {
+export async function createRun(apifyRunId: string | null, apifyApiKeyId: string | null = null): Promise<Run> {
   const { data, error } = await supabaseAdmin()
     .from('runs')
-    .insert({ apify_run_id: apifyRunId, status: 'running' })
+    .insert({ apify_run_id: apifyRunId, apify_api_key_id: apifyApiKeyId, status: 'running' })
     .select('*')
     .single();
   if (error) throw new Error(`Failed to create run: ${error.message}`);

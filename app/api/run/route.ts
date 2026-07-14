@@ -13,7 +13,7 @@ import { startAllPortalRuns, estimateRunCostUsd } from '@/lib/apify';
 import { rotateAllActiveKeys, ensureApifyKeyWithCredit } from '@/lib/credentials';
 import { getSettings, createRun, getLatestRun } from '@/lib/db';
 import { checkCronAuth, configuredUsers, readSessionToken, SESSION_COOKIE } from '@/lib/auth';
-import { appBaseUrl } from '@/lib/pipeline';
+import { publicWebhookBaseUrl } from '@/lib/pipeline';
 import { cookies } from 'next/headers';
 import { runAsUser } from '@/lib/userContext';
 
@@ -54,6 +54,10 @@ async function handleForUser(req: Request, userId: string, cron: boolean, force:
       }
     }
 
+    // Resolve this before rotating keys or starting billable actors. Placeholder or
+    // local callback targets must fail visibly instead of producing stuck runs.
+    const webhookBase = publicWebhookBaseUrl();
+
     // Auto-rotate (ADR 0007): advance each provider's active key once, before the
     // run reads the Apify token (here) or the LLM key (later, in /api/score-batch).
     if (settings.auto_rotate_keys) await rotateAllActiveKeys();
@@ -70,10 +74,10 @@ async function handleForUser(req: Request, userId: string, cron: boolean, force:
       );
     }
 
-    const webhookUrl = `${appBaseUrl()}/api/apify-webhook?secret=${encodeURIComponent(secret)}&user_id=${encodeURIComponent(userId)}`;
+    const webhookUrl = `${webhookBase}/api/apify-webhook?secret=${encodeURIComponent(secret)}&user_id=${encodeURIComponent(userId)}`;
     // Start one actor per enabled portal in parallel; create a run row per actor.
     const runs = await startAllPortalRuns(settings, webhookUrl);
-    await Promise.all(runs.map((r) => createRun(r.runId)));
+    await Promise.all(runs.map((r) => createRun(r.runId, r.apiKeyId)));
     return NextResponse.json({ ok: true, apify_run_ids: runs.map((r) => r.runId) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
