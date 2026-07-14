@@ -1,5 +1,18 @@
 # Backlog — codebase review (opened 2026-06-23)
 
+## `multi-user-fork` roadmap (current user priority; ADR 0072)
+
+- [ ] **Phase 1: provision the isolated server backend.** Clone the branch into
+  `~/apps/jobpilot-multi`, run `backend/scripts/bootstrap.sh`, and pass the fresh-DB,
+  local/public health, REST, storage, worker, recovery, and backup gates.
+- [ ] **Phase 1: deploy the separate Netlify site and complete an end-to-end smoke test.**
+  Use only the fork credentials, custom domain, and empty data. Do not copy production env.
+- [ ] **Phase 2: write the identity/multi-tenancy ADR before implementation.** Decide the
+  account/session model and ownership enforcement, then cover every table, query, file,
+  worker call, API key, onboarding flow, password reset, and rate/spend boundary.
+- [ ] **Phase 2: implement and verify multi-user isolation before enabling signup.** Add
+  cross-user denial tests and migrate singleton rows; Phase 1 remains owner-only until done.
+
 A living, do-it-one-by-one checklist from a full-codebase review (token efficiency,
 performance, correctness, UX). Work top-to-bottom unless priorities change.
 

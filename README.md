@@ -1,5 +1,11 @@
 # ApplyPilot-Cloud
 
+> **`multi-user-fork` branch:** this branch is becoming a separate multi-user product
+> with its own server-laptop backend and no access to ApplyPilot production data.
+> Phase 1 builds and verifies the isolated single-user baseline; Phase 2 adds account
+> creation and per-user data/API-key isolation. See [ADR 0072](docs/adr/0072-independent-multi-user-fork-foundation.md)
+> and the [backend runbook](backend/README.md).
+
 A single-user, password-protected web app that **runs itself daily in the cloud**:
 it fetches the last 24 hours of job postings (via Apify), scores each **1–10** for
 fit against your resume (via an LLM), and shows a ranked, filterable shortlist.
@@ -12,11 +18,11 @@ exactly** from ApplyPilot-Lite (same prompt, same parser, same model defaults) �
 [How scoring mirrors ApplyPilot-Lite](#how-scoring-mirrors-applypilot-lite).
 
 ## Stack
-- **Next.js 14 (App Router)** on Vercel — React UI + API routes in one deploy
-- **Supabase Postgres** — jobs, profile, settings, runs
+- **Next.js 14 (App Router)** on Netlify — React UI + API routes in one deploy
+- **PostgreSQL on the server laptop** — jobs, profile, settings, runs
 - **Apify** — daily job fetch (configurable actor, default `bebity~linkedin-jobs-scraper`)
 - **LLM scoring** — Gemini `gemini-2.0-flash` by default (OpenAI / DeepSeek / Anthropic supported)
-- **Vercel Cron** — triggers the daily run
+- **Netlify scheduled functions** — trigger the daily run
 - Auth: a single shared password → signed session cookie
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full pipeline and
@@ -24,7 +30,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full pipeline and
 
 ## How it works (the pipeline)
 ```
-Vercel Cron (daily, UTC) ─▶ GET /api/run          start Apify actor ASYNC + webhook
+Netlify schedule (daily)  ─▶ GET /api/run          start Apify actor ASYNC + webhook
 Apify finishes scrape    ─▶ POST /api/apify-webhook ingest jobs → status 'unscored'
                          ─▶ POST /api/score-batch   score N jobs/call, re-trigger until drained
 You open /jobs           ─▶ read scored jobs, sorted by fit score
@@ -33,8 +39,8 @@ Fetch and score are decoupled so no single serverless invocation exceeds the
 function timeout (ADR 0004).
 
 ## Prerequisites
-- Node 20+, a [Supabase](https://supabase.com) project, an [Apify](https://apify.com)
-  account + token, and one LLM API key (Gemini recommended; free tier works).
+- Node 20+, the server-laptop backend from [`backend/`](backend/README.md), an
+  [Apify](https://apify.com) account + token, and one supported LLM API key.
 
 ## Local development
 ```bash
@@ -42,11 +48,12 @@ npm install
 cp .env.example .env.local      # then fill in the values (see below)
 ```
 
-1. **Create the database schema.** In the Supabase dashboard → SQL Editor, run
-   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). It creates
-   the `jobs`, `profile`, `settings`, and `runs` tables and seeds the single profile/settings rows.
+1. **Install the isolated backend.** Follow [`backend/README.md`](backend/README.md).
+   Its migration runner applies every file in `supabase/migrations/` to the fork's
+   separate PostgreSQL database; the directory name is retained for schema history.
 2. **Fill `.env.local`** (all keys documented in [`.env.example`](.env.example)):
-   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `BACKEND_URL`, `BACKEND_SERVICE_KEY`
+   - `RESUME_WORKER_URL`, `RESUME_WORKER_SECRET`
    - `APP_PASSWORD` (the login password) and `AUTH_SECRET` (`openssl rand -hex 32`)
    - `APIFY_TOKEN`, optionally `APIFY_ACTOR_ID`
    - `CRON_SECRET` (`openssl rand -hex 32`)
@@ -74,26 +81,20 @@ bands. `npm run test` validates their structure always, and — when an LLM key 
 environment — scores them live and asserts each lands in band. Add a case whenever you
 find a real misjudgement; it becomes a permanent regression check.
 
-## Deploying
+## Deploying `multi-user-fork`
 
-### Supabase
-1. Create a project. Run `supabase/migrations/0001_init.sql` in the SQL Editor.
-2. Copy the Project URL and the `anon` + `service_role` keys (Project Settings → API).
+1. Install and verify the server backend using [`backend/README.md`](backend/README.md).
+2. Import this repository into a **new Netlify site** and select `multi-user-fork` as
+   the production branch.
+3. Set only the new environment values listed in the backend runbook. Never copy the
+   production ApplyPilot backend values.
+4. Set `NEXT_PUBLIC_APP_URL` to the new Netlify/custom-domain URL so webhooks and
+   self-retriggering batches resolve to this deployment.
+5. Keep the deployment owner-only under the Phase 1 password. Public account creation
+   is blocked until ADR 0072 Phase 2 is implemented and verified.
 
-### Vercel
-1. Import the repo into Vercel.
-2. Add **Environment Variables** (Project Settings → Environment Variables) — every key
-   from `.env.example`. Set `NEXT_PUBLIC_APP_URL` to your deployment URL
-   (e.g. `https://your-app.vercel.app`) so the Apify webhook and score-batch self-trigger
-   resolve correctly.
-3. Deploy. [`vercel.json`](vercel.json) registers the daily cron on `/api/run`.
-
-### Scheduling note (cron is UTC)
-`vercel.json` runs the cron at `0 10 * * *` (10:00 UTC). The schedule is **UTC** — convert
-your desired local time yourself (e.g. 06:00 America/New_York = 10:00 or 11:00 UTC depending
-on DST). The Settings page stores your intended local time/timezone for reference, but the
-authoritative trigger time is the cron expression in `vercel.json`. When `CRON_SECRET` is set,
-Vercel sends it as a Bearer token, which `/api/run` verifies.
+Scheduling uses the committed Netlify functions in `netlify/functions/`. `CRON_SECRET`
+authenticates their calls into the app.
 
 ## How scoring mirrors ApplyPilot-Lite
 The scorer is a faithful TypeScript port of

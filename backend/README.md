@@ -2,6 +2,8 @@
 
 This directory turns the `multi-user-fork` branch into a new application with no
 dependency on Supabase and no access to the existing ApplyPilot production data.
+The architecture decision and phase boundary are recorded in
+[ADR 0072](../docs/adr/0072-independent-multi-user-fork-foundation.md).
 
 Phase 1 intentionally preserves the current single-password experience while proving
 the isolated application end to end. Phase 2 will replace the singleton profile/settings

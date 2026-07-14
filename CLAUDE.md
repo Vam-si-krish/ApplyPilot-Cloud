@@ -6,6 +6,20 @@ against the user's resume (via an LLM), and shows a sorted shortlist. It does
 **not** auto-apply. It is a cloud-native rewrite of the *fetch + score* half of
 `../ApplyPilot-Lite/`, keeping scoring behaviour identical.
 
+## Active branch direction: independent multi-user product
+
+`multi-user-fork` is the foundation of a **new application**, not another frontend for
+the existing ApplyPilot production database. The accepted roadmap is [ADR 0072](docs/adr/0072-independent-multi-user-fork-foundation.md):
+
+- **Phase 1:** reproduce the current app against a completely isolated database, API,
+  file store, worker, credentials, and public path on the server laptop. Keep the
+  shared-password/singleton data model only as a temporary smoke-test baseline.
+- **Phase 2:** add account creation, secure sessions, per-user ownership on every
+  domain table/file, and user-managed Apify/LLM keys before inviting multiple users.
+
+The fork must never point at or copy production backend credentials/data. The frontend
+deploys separately on Netlify; persistent services stay on the server laptop.
+
 ## The rule that matters (scoring discipline)
 **Scoring is deliberate, never fabricated.** As of **ADR 0022** the scorer is a v2 weighted,
 must-have-aware rubric (`SCORE_PROMPT` in `lib/scoring.ts`) — it intentionally **diverges** from the
@@ -28,11 +42,12 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/llm.ts` | Multi-provider LLM client (Gemini/OpenAI/DeepSeek/Anthropic) — port of Lite `llm.py` |
 | `lib/scoring.ts` | `SCORE_PROMPT`, `scoreJob`, `parseScoreResponse` — port of Lite `scorer.py` |
 | `lib/apify.ts` | Apify actor start + input mapping (keywords×locations, last-24h) |
-| `lib/supabase.ts` | Server (service-role) + browser (anon) Supabase clients |
+| `lib/supabase.ts` | REST/storage protocol clients; fork uses `BACKEND_*`, production keeps legacy env fallback |
 | `lib/auth.ts` | Shared-password session cookie sign/verify |
 | `lib/types.ts` | Shared TS types for jobs/profile/settings/runs |
 | `middleware.ts` | Gates every route behind the password session |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |
+| `backend/` | `multi-user-fork` server API, storage, migrations, launchd/autopull/watchdog/backup |
 | `evals/cases/` | Labeled resume+job → expected-score regression cases |
 | `docs/` | PRD, ARCHITECTURE, ADRs, devlog (read before non-trivial changes) |
 
