@@ -41,3 +41,13 @@
   The newest database/files backups were present with mode `0600`.
 - A production-server login smoke test confirmed `/api/settings` reports the managed
   boundary while withholding both the worker URL and secret.
+
+## Account reset operation
+
+- Took a fresh database/files backup, then reset the only completed test account,
+  `pilot2` (UUID ending `0002`), while preserving its fixed login identity.
+- Cascaded its user-owned database data, recreated empty profile/settings/Gmail/scoring
+  singletons, and removed its namespaced résumé and Claude credentials.
+- Verified the configured login still succeeds, onboarding is false, both user
+  directories are absent, the other accounts retain their singleton rows, and public
+  gateway/worker health remains green.
