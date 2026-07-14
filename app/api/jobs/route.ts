@@ -41,10 +41,12 @@ export async function GET(req: Request) {
   // scraped Jobs list. (source IS NULL covers normal scraped rows.)
   q = q.or('source.is.null,source.neq.manual');
 
-  // Duplicate postings (ADR 0057): hide later copies of the same listing — the canonical
-  // row carries the group (with `siblings` attached below). A duplicate the user has
-  // interacted with (applied / shortlisted / opened) stays visible in its own right.
-  q = q.or('duplicate_of.is.null,applied_at.not.is.null,is_shortlisted.eq.true,clicked_at.not.is.null');
+  // Duplicate postings (ADR 0057): the all-runs view collapses later copies under the
+  // canonical. A run-specific view deliberately shows every row fetched by that run;
+  // otherwise duplicates whose canonical belongs to an older run disappear entirely.
+  if (!runId) {
+    q = q.or('duplicate_of.is.null,applied_at.not.is.null,is_shortlisted.eq.true,clicked_at.not.is.null');
+  }
 
   if (search) q = q.or(`title.ilike.%${search}%,company.ilike.%${search}%,location.ilike.%${search}%`);
   if (minScore !== null && minScore !== '') q = q.gte('fit_score', Number(minScore));
@@ -56,7 +58,9 @@ export async function GET(req: Request) {
   if (maxMatch !== null && maxMatch !== '') q = q.lte('prefilter_score', Number(maxMatch));
   if (shortlisted === 'true') q = q.eq('is_shortlisted', true);
   if (easyApply === 'true') q = q.eq('easy_apply', true);
-  if (easyApply === 'false') q = q.eq('easy_apply', false);
+  // Actors frequently omit the flag. The UI renders null as an external application,
+  // so the filter must use the same semantics instead of excluding those rows.
+  if (easyApply === 'false') q = q.or('easy_apply.eq.false,easy_apply.is.null');
   if (applied === 'true') q = q.not('applied_at', 'is', null);
   // Keep jobs you've already applied to out of the working list (they live under the Applied tab).
   if (url.searchParams.get('excludeApplied') === 'true') q = q.is('applied_at', null);

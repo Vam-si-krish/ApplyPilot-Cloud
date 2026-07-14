@@ -69,22 +69,22 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
-  // Defaults to the "recommended" view (ADR 0010): strong jobs (6+) at solid
-  // companies (good/medium). Change the filters to widen.
-  const [minScore, setMinScore] = useState('6');
+  // Start unconstrained so newly fetched/unscored jobs are visible. Recommended
+  // score/company filters remain available, but are opt-in (ADR 0078).
+  const [minScore, setMinScore] = useState('');
   const [maxScore, setMaxScore] = useState(''); // upper fit-score bound — lets you isolate low-fit jobs
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
-  const [companyTier, setCompanyTier] = useState('good,medium');
+  const [companyTier, setCompanyTier] = useState('');
   const [minSkill, setMinSkill] = useState(''); // skill-match % gate for the view
   const [minMatch, setMinMatch] = useState(''); // ATS match % gate (ADR 0053); '0-39' style ranges too
   const [sortBy, setSortBy] = useState<'fit' | 'match'>('fit'); // 'match' = first-filter pass over fresh jobs
   const [recomputing, setRecomputing] = useState(false); // "Recompute ATS match" in flight
   const [employmentType, setEmploymentType] = useState(''); // full_time | contract | internship
   const [limit, setLimit] = useState(300); // page size; "Load more" raises it
-  const [hideApplied, setHideApplied] = useState(true); // keep applied jobs out of the working list
+  const [hideApplied, setHideApplied] = useState(false);
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
-  const [hideInApplications, setHideInApplications] = useState(true); // jobs already queued for tailoring live under Tailor & Apply
+  const [hideInApplications, setHideInApplications] = useState(false);
   const [showMoreFilters, setShowMoreFilters] = useState(false); // collapsible secondary refinements (declutters the bar)
   const [allowDeleteScores, setAllowDeleteScores] = useState(false); // Settings gate (ADR 0048): when on, show bulk "delete score" actions
 
@@ -113,21 +113,14 @@ export default function JobsPage() {
   const pendingApplyJob = useRef<Job | null>(null);
   const [applyDialog, setApplyDialog] = useState<Job | null>(null);
 
-  // Fetch the runs list once on mount, and default the selector to the most recent
-  // run *if* it happened within the last 24h — so the page opens on the latest fetch
-  // instead of "All runs". An older latest run leaves it on "All runs". (The dropdown
-  // itself is unchanged; this only sets the initial selection.)
+  // Fetch the runs list once on mount. Run filtering is always explicit: silently
+  // selecting the latest run hid valid jobs from earlier runs and duplicate groups.
   useEffect(() => {
     fetch('/api/runs')
       .then((r) => (r.ok ? r.json() : { runs: [] }))
       .then((d) => {
         const list: RunSummary[] = d.runs ?? [];
         setRuns(list);
-        if (list.length > 0) {
-          const latest = list.reduce((a, b) => (new Date(a.started_at) >= new Date(b.started_at) ? a : b));
-          const ageMs = Date.now() - new Date(latest.started_at).getTime();
-          if (ageMs <= 24 * 60 * 60 * 1000) setSelectedRunIds([latest.id]);
-        }
       })
       .catch(() => {});
   }, []);
@@ -243,12 +236,18 @@ export default function JobsPage() {
   // Drop the selection whenever the filter set changes (the ids on screen change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, status, minScore, maxScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
+  }, [
+    search, status, minScore, maxScore, minSkill, minMatch, employmentType,
+    easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds,
+  ]);
 
   // Reset pagination when filters change.
   useEffect(() => {
     setLimit(300);
-  }, [search, status, minScore, maxScore, minSkill, employmentType, easyApply, companyTier, selectedRunIds]);
+  }, [
+    search, status, minScore, maxScore, minSkill, minMatch, employmentType,
+    easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds,
+  ]);
 
   // Close the runs dropdown on any click outside it (or Escape).
   useEffect(() => {
@@ -308,16 +307,16 @@ export default function JobsPage() {
   function resetFilters() {
     setSearch('');
     setStatus('all');
-    setMinScore('6');
+    setMinScore('');
     setMaxScore('');
     setMinSkill('');
     setMinMatch('');
     setEmploymentType('');
-    setCompanyTier('good,medium');
+    setCompanyTier('');
     setEasyApply(null);
-    setHideApplied(true);
+    setHideApplied(false);
     setHideOpened(false);
-    setHideInApplications(true);
+    setHideInApplications(false);
     setSelectedRunIds([]);
   }
 
@@ -882,7 +881,7 @@ export default function JobsPage() {
           </button>
 
           <button onClick={resetFilters} className="ml-auto text-[12px] text-slate-muted hover:text-sky underline">
-            Reset
+            Clear all
           </button>
         </div>
 

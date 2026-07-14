@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0077
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0078
 
 ## Current deployment topology
 
@@ -187,3 +187,11 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
 (`NEXT_PUBLIC_APP_URL`) with the `CRON_SECRET`, returning before the child completes.
 Simple and dependency-free; if it proves fragile under load, move to a server-laptop queue
 or a Netlify scheduled continuation (revisit in an ADR).
+
+## Jobs view semantics
+
+The all-runs Jobs view collapses duplicate content under its canonical row. Selecting a
+specific run switches to that run's raw fetched rows so cross-run canonical ownership
+cannot hide results. Filters are explicit and null-aware: newly fetched jobs are visible
+before AI scoring, External includes an omitted `easy_apply` flag, and AI-derived filters
+match only populated values. See ADR 0078.

@@ -87,7 +87,9 @@ must never be publicly readable — a single shared password gates everything (A
 3. **Score every fetched job 1–10** for shortlist fit using the current weighted rubric
    and parser in `lib/scoring.ts` (see ARCHITECTURE §Scoring).
 4. **Present results**: a shortlist sorted by `fit_score` desc, with filters
-   (score range, search, status) and a shortlist toggle. "Run now" button for manual runs.
+   (score range, search, status) and a shortlist toggle. Fresh/unscored results are
+   visible without silently active score/company/run constraints; “Clear all” removes
+   every filter. "Run now" button for manual runs.
 
 ## Success criteria
 - Labeled résumé/job evals remain within their expected score bands and every real

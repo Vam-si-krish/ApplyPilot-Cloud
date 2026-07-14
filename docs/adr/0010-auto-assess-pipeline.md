@@ -1,5 +1,9 @@
 # ADR 0010 — Daily pipeline: auto-assess companies for high scorers + recommended default view
+
 **Status:** accepted · **Date:** 2026-06-18 · **Extends:** ADR 0004 (pipeline), ADR 0009 (company assessment)
+
+> **Default-view portion amended by ADR 0078:** a multi-user account with newly fetched,
+> unscored jobs must start unconstrained. Score/company recommendations remain opt-in.
 ## Context
 ADR 0009 made AI company assessment strictly on-demand. The user now wants the **daily run** to do
 it automatically, but only for jobs worth applying to: fetch → score → for jobs scoring ≥ N, assess
