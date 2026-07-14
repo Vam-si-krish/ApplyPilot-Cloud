@@ -7,9 +7,9 @@ const BUCKET = process.env.RESUMES_BUCKET || 'resumes';
 let _client = null;
 function client() {
   if (_client) return _client;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+  const url = process.env.BACKEND_URL || process.env.SUPABASE_URL;
+  const key = process.env.BACKEND_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('BACKEND_URL and BACKEND_SERVICE_KEY are required');
   // Pass ws explicitly as the realtime transport — @supabase/realtime-js v2.108+ throws
   // "Node.js 20 detected without native WebSocket support" on Node < 22 if no transport
   // is provided (it no longer accepts a globalThis polyfill as a fallback).

@@ -1,0 +1,19 @@
+{
+  "name": "jobpilotmulti-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "migrate": "node migrate.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "http-proxy": "^1.18.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}

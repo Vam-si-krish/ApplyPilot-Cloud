@@ -1,0 +1,15 @@
+services:
+  rest:
+    image: postgrest/postgrest:v14.15
+    container_name: jobpilotmulti-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: ${POSTGREST_DATABASE_URL}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: ${DB_ROLE}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_SERVER_PORT: 3000
+    ports:
+      - "127.0.0.1:${POSTGREST_PORT:-8232}:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

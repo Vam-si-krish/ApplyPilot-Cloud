@@ -15,6 +15,14 @@ function requireEnv(name: string): string {
   return v;
 }
 
+function backendUrl(): string {
+  return process.env.BACKEND_URL || requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+}
+
+function backendServiceKey(): string {
+  return process.env.BACKEND_SERVICE_KEY || requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+}
+
 let _admin: SupabaseClient | null = null;
 
 // Next.js patches global fetch and caches GET responses by default. supabase-js
@@ -27,8 +35,8 @@ const noStoreFetch: typeof fetch = (input, init) => fetch(input, { ...init, cach
 export function supabaseAdmin(): SupabaseClient {
   if (_admin) return _admin;
   _admin = createClient(
-    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
-    requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+    backendUrl(),
+    backendServiceKey(),
     {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { fetch: noStoreFetch },
