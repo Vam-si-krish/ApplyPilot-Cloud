@@ -48,6 +48,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import os from 'node:os';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { claudeUserConfigDir } from './claudeConnection.js';
 
 // Hard ceiling for one SDK call. Tailoring (~4000 tokens) can take 30–90s; 160s leaves
 // headroom while staying UNDER the Applications UI's 180s generate-poll deadline — so a
@@ -112,8 +113,14 @@ function subscriptionEnv(account) {
  * CLAUDE_ACTIVE_ACCOUNT (default 1) is placed FIRST (manual switch); the rest follow in
  * id order as automatic failover.
  */
-export function resolveAccounts(env = process.env) {
+export function resolveAccounts(env = process.env, userId = '') {
   const home = env.HOME || os.homedir();
+
+  // A connected website account gets exactly one isolated Claude login. Never
+  // fail over to the server owner's subscription or another website user's plan.
+  if (userId) {
+    return [{ id: `user:${userId}`, configDir: claudeUserConfigDir(userId, env), token: undefined }];
+  }
   const accounts = [];
 
   // Account 1 — always present; default config dir (Keychain) unless explicitly isolated.
@@ -266,7 +273,7 @@ async function runOnce(messages, opts, account, model, label) {
  * 'opus' | 'haiku') or a full Claude model id; falls back to 'sonnet'. `label` tags
  * the log lines so a task is identifiable (e.g. 'llm' | 'tailor' | 'cover' | 'condense').
  */
-export function makeAgentClient(model, label = 'agent') {
+export function makeAgentClient(model, label = 'agent', userId = '') {
   const resolvedModel = (model || '').trim() || 'sonnet';
   return {
     model: resolvedModel,
@@ -277,7 +284,7 @@ export function makeAgentClient(model, label = 'agent') {
      *  automatic failover on a fast failure). Returns the assistant text. */
     async chat(messages, _opts = {}) {
       this.lastUsage = null;
-      const accounts = resolveAccounts();
+      const accounts = resolveAccounts(process.env, userId);
       let lastErr = null;
       for (let i = 0; i < accounts.length; i++) {
         const account = accounts[i];

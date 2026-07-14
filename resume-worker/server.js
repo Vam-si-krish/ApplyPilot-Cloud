@@ -32,6 +32,12 @@ import { renderResumeToOnePage, renderCoverLetterPdf, getBrowser, closeBrowser }
 import { makeClient, tailorResume, condenseResume } from './tailor.js';
 import { makeAgentClient } from './agentClient.js';
 import { makeChatGPTClient } from './chatgptClient.js';
+import {
+  claudeConnectionStatus,
+  completeClaudeConnection,
+  disconnectClaudeConnection,
+  startClaudeConnection,
+} from './claudeConnection.js';
 import { generateCoverLetter } from './coverLetter.js';
 import { currentUserId, runAsUser, validUserId } from './userContext.js';
 
@@ -52,10 +58,20 @@ const isSubscriptionProvider = (provider) =>
 async function resolveTaskClient(provider, model, label = 'task') {
   const sharedOnboarding = label === 'onboarding';
   const ownerId = '00000000-0000-4000-8000-000000000001';
-  if (isSubscriptionProvider(provider) && currentUserId() !== ownerId && !sharedOnboarding) {
-    return { error: 'Add your own LLM API key for scoring, chat, and tailoring.' };
+  const userId = currentUserId();
+  if (provider === SUBSCRIPTION_PROVIDER) {
+    const connection = userId ? await claudeConnectionStatus(userId) : { connected: false };
+    if (userId && connection.connected) {
+      return { client: makeAgentClient(model, label, userId) };
+    }
+    // Preserve the shared one-time onboarding lane and the owner's legacy local
+    // login. All ordinary work for other accounts requires their own connection.
+    if (userId === ownerId || sharedOnboarding) return { client: makeAgentClient(model, label) };
+    return { error: 'Connect your Claude subscription under Settings → Claude connection.' };
   }
-  if (provider === SUBSCRIPTION_PROVIDER) return { client: makeAgentClient(model, label) };
+  if (provider === CHATGPT_SUBSCRIPTION_PROVIDER && userId !== ownerId && !sharedOnboarding) {
+    return { error: 'Add your own LLM API key or connect Claude under Settings.' };
+  }
   if (provider === CHATGPT_SUBSCRIPTION_PROVIDER) return { client: makeChatGPTClient(model, label) };
   if (!LLM_PROVIDERS.has(provider)) {
     return { error: `Provider "${provider || '(unset)'}" is not a supported LLM provider.` };
@@ -98,6 +114,42 @@ app.get('/health', async (_req, res) => {
   res.json({ ok: true, browser, ts: new Date().toISOString() });
 });
 
+app.get('/claude-connection/status', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await claudeConnectionStatus(currentUserId()));
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/claude-connection/start', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await startClaudeConnection(currentUserId()));
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/claude-connection/complete', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await completeClaudeConnection(currentUserId(), req.body?.code));
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete('/claude-connection', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await disconnectClaudeConnection(currentUserId()));
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 /**
  * GET /version → { commit, features } — a redeploy check. Reports the git commit of the
  * checkout the worker is ACTUALLY running (resolved at request time from this file's dir),
@@ -108,7 +160,7 @@ app.get('/health', async (_req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'assess-jobs', 'llm', 'chatgpt-subscription', 'tailor-queue'];
+  const features = ['score-jobs-allow-rescore', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'tailor-queue'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));

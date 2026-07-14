@@ -139,6 +139,9 @@ Source: `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`.
   only on the authenticated always-on worker; neither stores nor silently falls back to an API key.
 - Stable cache prefixes are deliberate: scoring/tailoring keep system + résumé before the volatile job;
   ApplyBuddy keeps the cache-marked profile system block before conversation turns.
+- Claude subscription login is UUID-isolated. Settings brokers Claude Code's
+  official PKCE flow, and each Agent SDK call receives only the requesting
+  user's `CLAUDE_CONFIG_DIR`; there is no cross-user fallback (ADR 0074).
 
 ## Data model (PostgreSQL; legacy migration directory name retained)
 Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`.

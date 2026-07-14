@@ -64,6 +64,11 @@ cp .env.example .env.local      # then fill in the values (see below)
 4. Upload a résumé PDF in onboarding, then add that account's Apify and LLM keys in
    **Settings**. Hit **Run now** on the Dashboard to kick a run.
 
+To use a Claude subscription instead of an Anthropic API key, open **Settings →
+Claude connection**, authenticate on Anthropic's website, paste the one-time
+authorization code, and select **Claude subscription (no API key)** for Tailoring.
+ApplyPilot never receives the user's Claude password or browser cookies.
+
 ### Commands
 ```bash
 npm run dev          # dev server

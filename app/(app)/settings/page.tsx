@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, AlertCircle, Trash2, Plus, X, Mail, Check } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle, Trash2, Plus, X, Mail, Check, ExternalLink, LogOut } from 'lucide-react';
 import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/types';
 
 const PROVIDERS = [
@@ -127,6 +127,16 @@ export default function SettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ auto_rotate_keys: v }),
     });
+  }
+
+  async function enableClaudeTailoring() {
+    patch({ tailor_provider: 'subscription', tailor_model: 'sonnet' });
+    const response = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tailor_provider: 'subscription', tailor_model: 'sonnet' }),
+    });
+    if (!response.ok) throw new Error('Claude connected, but the tailoring selection could not be saved.');
   }
 
   async function save() {
@@ -369,6 +379,8 @@ export default function SettingsPage() {
       </Section>
 
       {/* AI Models — three independent lanes (ADR 0025/0069) */}
+      <ClaudeConnectionSection onConnected={enableClaudeTailoring} />
+
       <Section title="AI Models">
         <p className="text-slate-muted text-[12px] mb-4">
           Choose a provider and model independently for <span className="text-sky">AI Chat</span>,{' '}
@@ -377,10 +389,9 @@ export default function SettingsPage() {
           and never silently fall back to a paid key.
         </p>
         <p className="text-slate-muted text-[12px] mb-4">
-          <span className="text-emerald">Claude subscription</span> uses the Claude Agent SDK login;{' '}
+          <span className="text-emerald">Claude subscription</span> uses your private connection above;{' '}
           <span className="text-emerald">ChatGPT subscription</span> uses the Codex SDK login. Both require the{' '}
-          <span className="font-mono">worker</span> below to be online and authenticated once on that Mac
-          (<span className="font-mono">claude setup-token</span> or <span className="font-mono">codex login</span>). Plan limits still
+          <span className="font-mono">worker</span> below to be online. Plan limits still
           apply. Scoring is high volume, so choose the smaller model when you route Everything else through a subscription.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -654,6 +665,198 @@ export default function SettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+type ClaudeConnectionState = {
+  connected: boolean;
+  authMethod?: string;
+  subscriptionType?: string | null;
+  email?: string | null;
+  authorizationUrl?: string;
+  expiresInSeconds?: number;
+};
+
+/**
+ * Browser-facing broker for the official Claude Code subscription OAuth flow.
+ * The user authenticates only on claude.com; ApplyPilot receives the one-time
+ * callback code and the worker keeps the resulting login in that user's folder.
+ */
+function ClaudeConnectionSection({ onConnected }: { onConnected: () => Promise<void> }) {
+  const [status, setStatus] = useState<ClaudeConnectionState | null>(null);
+  const [authorizationUrl, setAuthorizationUrl] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function request(init?: RequestInit): Promise<ClaudeConnectionState> {
+    const response = await fetch('/api/claude-connection', init);
+    const data = (await response.json().catch(() => ({}))) as ClaudeConnectionState & { error?: string };
+    if (!response.ok) throw new Error(data.error || `Claude connection failed (${response.status})`);
+    return data;
+  }
+
+  async function reload() {
+    try {
+      setStatus(await request());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  async function start() {
+    setBusy(true);
+    setError(null);
+    const popup = window.open('about:blank', 'applypilot-claude-login');
+    if (popup) popup.opener = null;
+    try {
+      const next = await request({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' }),
+      });
+      if (next.connected) {
+        popup?.close();
+        setStatus(next);
+        await onConnected();
+        return;
+      }
+      const url = next.authorizationUrl || '';
+      setAuthorizationUrl(url);
+      if (popup && url) popup.location.href = url;
+    } catch (e) {
+      popup?.close();
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function complete() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await request({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete', code }),
+      });
+      setStatus(next);
+      await onConnected();
+      setAuthorizationUrl('');
+      setCode('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!window.confirm('Disconnect your Claude subscription from ApplyPilot?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setStatus(await request({ method: 'DELETE' }));
+      setAuthorizationUrl('');
+      setCode('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Claude connection">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[13px] font-medium text-slate-text">Use your Claude subscription for résumé tailoring</p>
+          <p className="text-[12px] text-slate-muted mt-1 max-w-xl">
+            Sign in on Anthropic&apos;s website. ApplyPilot never sees your Claude password or browser cookies; the server
+            stores only the resulting Claude Code login in your private user folder. Your plan limits and Anthropic terms apply.
+          </p>
+        </div>
+        {status?.connected && (
+          <span className="shrink-0 flex items-center gap-1.5 rounded-full border border-emerald/30 bg-emerald/10 px-2.5 py-1 text-[11px] text-emerald">
+            <CheckCircle size={13} /> Connected
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-rose/30 bg-rose/10 px-3.5 py-3 text-[12px] text-rose">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" /> {error}
+        </div>
+      )}
+
+      {status === null ? (
+        <p className="mt-4 text-[12px] text-slate-muted">Checking connection…</p>
+      ) : status.connected ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ink bg-raised px-3.5 py-3">
+          <div className="text-[12px] text-slate-muted">
+            <span className="text-slate-text">{status.email || 'Claude account'}</span>
+            {status.subscriptionType ? ` · ${status.subscriptionType}` : ''}
+          </div>
+          <button
+            onClick={disconnect}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-lg border border-rose/30 px-2.5 py-1.5 text-[12px] text-rose hover:bg-rose/10 disabled:opacity-50"
+          >
+            <LogOut size={13} /> Disconnect
+          </button>
+        </div>
+      ) : authorizationUrl ? (
+        <div className="mt-4 rounded-lg border border-sky/25 bg-sky/5 p-4">
+          <p className="text-[12px] text-slate-text font-medium">Finish connecting Claude</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-slate-muted">
+            <li>Sign in and approve access in the Anthropic tab.</li>
+            <li>Copy the one-time authorization code Anthropic shows.</li>
+            <li>Paste it below within 10 minutes.</li>
+          </ol>
+          <a
+            href={authorizationUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-sky hover:underline"
+          >
+            Reopen Anthropic authorization <ExternalLink size={13} />
+          </a>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Paste the one-time code"
+              autoComplete="off"
+              className="min-w-0 flex-1 rounded-lg border border-ink bg-base/80 px-3 py-2 text-[13px] text-slate-text outline-none focus:border-sky/50"
+            />
+            <button
+              onClick={complete}
+              disabled={busy || !code.trim()}
+              className="rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] text-sky hover:bg-sky/20 disabled:opacity-50"
+            >
+              {busy ? 'Connecting…' : 'Complete connection'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={start}
+          disabled={busy}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] text-sky hover:bg-sky/20 disabled:opacity-50"
+        >
+          <ExternalLink size={13} /> {busy ? 'Starting Claude login…' : 'Connect Claude subscription'}
+        </button>
+      )}
+
+      <p className="mt-3 text-[11px] text-slate-muted">
+        A successful connection automatically selects <span className="text-emerald">Claude subscription (no API key)</span> for Tailoring.
+      </p>
+    </Section>
   );
 }
 

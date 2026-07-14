@@ -24,6 +24,9 @@ permission to use the server subscription only for résumé onboarding.
 - Added `/onboarding`: upload a text-based PDF (10 MB max), extract text, perform one
   subscription-backed faithful parse, store the PDF privately, and derive structured
   résumé, profile, skills, role/location suggestions, and Assistant grounding.
+- Added per-user Claude subscription connection from Settings. The worker brokers
+  Claude Code's official PKCE login into UUID-isolated credential directories and
+  routes ordinary tailoring only through the requesting user's account (ADR 0074).
 
 ## Verification
 

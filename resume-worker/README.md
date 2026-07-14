@@ -22,6 +22,7 @@ npm start                   # worker on :8787
 - `GET /health` → `{ ok, browser }`
 - `GET /version` → deployed commit + feature markers
 - `POST /llm` → one authenticated subscription completion (Claude Agent SDK or ChatGPT/Codex SDK)
+- `GET/POST/DELETE /claude-connection/*` → per-user Claude subscription PKCE login, status, and disconnect
 - `POST /score-jobs` → background subscription scoring for selected jobs
 - `POST /tailor` / `POST /tailor-queue` → tailor one application / drain the queue
 - `POST /generate` `{ "id": "<application uuid>" }` with header `Authorization: Bearer <WORKER_SECRET>`
