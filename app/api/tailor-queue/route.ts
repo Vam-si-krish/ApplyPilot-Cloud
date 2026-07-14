@@ -20,18 +20,18 @@
  */
 import { NextResponse } from 'next/server';
 import { getSettings } from '@/lib/db';
-import { checkCronAuth, verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
-import { cookies } from 'next/headers';
+import { authorizedRouteUser } from '@/lib/routeUser';
+import { runAsUser } from '@/lib/userContext';
+import { workerRequestHeaders } from '@/lib/workerAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 async function handle(req: Request) {
-  const isCron = checkCronAuth(req);
-  const sessionOk = await verifySessionToken(cookies().get(SESSION_COOKIE)?.value);
-  if (!isCron && !sessionOk) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = await authorizedRouteUser(req);
+  if (!auth) return NextResponse.json({ error: 'unauthorized or missing user_id' }, { status: 401 });
+  return runAsUser(auth.userId, async () => {
+  const isCron = auth.isCron;
 
   let settings;
   try {
@@ -52,7 +52,7 @@ async function handle(req: Request) {
   try {
     const r = await fetch(`${url.replace(/\/$/, '')}/tailor-queue`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      headers: workerRequestHeaders(secret),
       // A cron GET forwards scheduled:true so the worker applies the enabled/hour gate;
       // a manual POST omits it, so "Run queue now" drains immediately.
       body: JSON.stringify(isCron ? { scheduled: true } : {}),
@@ -76,6 +76,7 @@ async function handle(req: Request) {
           : String(e);
     return NextResponse.json({ error: msg }, { status: 502 });
   }
+  });
 }
 
 export const GET = handle;

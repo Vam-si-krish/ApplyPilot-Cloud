@@ -25,6 +25,28 @@ function serviceToken(req) {
   return req.get('apikey') || bearer;
 }
 
+function requestUserId(req) {
+  const value = req.get('x-jobpilot-user-id') || '';
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+function postgrestToken(secret, role, userId = null) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const header = encode({ alg: 'HS256', typ: 'JWT' });
+  const payload = encode({
+    role,
+    scope: userId ? 'user' : 'service',
+    ...(userId ? { user_id: userId, sub: userId } : {}),
+    iat: now,
+    exp: now + 300,
+  });
+  const signature = crypto.createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${signature}`;
+}
+
 function storageLocation(root, bucket, objectPath) {
   if (!/^[a-zA-Z0-9_.-]+$/.test(bucket)) throw new Error('Invalid bucket');
   const bucketRoot = path.resolve(root, bucket);
@@ -35,18 +57,19 @@ function storageLocation(root, bucket, objectPath) {
   return target;
 }
 
-function signedToken(secret, bucket, objectPath, expiresAt) {
-  const body = `${bucket}\n${objectPath}\n${expiresAt}`;
+function signedToken(secret, userId, bucket, objectPath, expiresAt) {
+  const body = `${userId}\n${bucket}\n${objectPath}\n${expiresAt}`;
   const signature = crypto.createHmac('sha256', secret).update(body).digest('base64url');
-  return `${expiresAt}.${signature}`;
+  return `${expiresAt}.${userId}.${signature}`;
 }
 
 function validSignedToken(secret, bucket, objectPath, token) {
-  const [expiresRaw, signature = ''] = String(token || '').split('.', 2);
+  const [expiresRaw, userId = '', signature = ''] = String(token || '').split('.', 3);
   const expiresAt = Number(expiresRaw);
-  if (!Number.isFinite(expiresAt) || expiresAt < Math.floor(Date.now() / 1000)) return false;
-  const expected = signedToken(secret, bucket, objectPath, expiresAt).split('.')[1];
-  return safeEqual(signature, expected);
+  if (!Number.isFinite(expiresAt) || expiresAt < Math.floor(Date.now() / 1000)) return null;
+  if (!requestUserId({ get: () => userId })) return null;
+  const expected = signedToken(secret, userId, bucket, objectPath, expiresAt).split('.')[2];
+  return safeEqual(signature, expected) ? userId : null;
 }
 
 function storageParams(req) {
@@ -55,6 +78,8 @@ function storageParams(req) {
 
 export function createApp(options = {}) {
   const serviceKey = options.serviceKey || env('SERVICE_ROLE_KEY');
+  const jwtSecret = options.jwtSecret || env('JWT_SECRET');
+  const dbRole = options.dbRole || process.env.DB_ROLE || 'jobpilot_multi_app';
   const signingSecret = options.signingSecret || env('STORAGE_SIGNING_SECRET');
   const dataRoot = options.dataRoot || path.join(here, 'data');
   const restTarget = options.restTarget || env('REST_TARGET', 'http://127.0.0.1:8232');
@@ -98,7 +123,11 @@ export function createApp(options = {}) {
     next();
   };
 
-  router.use('/rest/v1', requireServiceKey, (req, res) => proxy.web(req, res, { target: restTarget }));
+  router.use('/rest/v1', requireServiceKey, (req, res) => {
+    req.headers.authorization = `Bearer ${postgrestToken(jwtSecret, dbRole, requestUserId(req))}`;
+    delete req.headers['x-jobpilot-user-id'];
+    proxy.web(req, res, { target: restTarget });
+  });
   router.use('/worker', (req, res) => proxy.web(req, res, { target: workerTarget }));
 
   router.post(
@@ -107,11 +136,13 @@ export function createApp(options = {}) {
     express.json({ limit: '32kb' }),
     async (req, res) => {
       const { bucket, objectPath } = storageParams(req);
+      const userId = requestUserId(req);
+      if (!userId) return res.status(400).json({ message: 'User context required' });
       try {
-        await fs.access(storageLocation(dataRoot, bucket, objectPath));
+        await fs.access(storageLocation(dataRoot, userId, path.join(bucket, objectPath)));
         const expiresIn = Math.max(1, Math.min(Number(req.body?.expiresIn) || 60, 86400));
         const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
-        const token = signedToken(signingSecret, bucket, objectPath, expiresAt);
+        const token = signedToken(signingSecret, userId, bucket, objectPath, expiresAt);
         const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
         res.json({ signedURL: `/object/sign/${encodeURIComponent(bucket)}/${encodedPath}?token=${token}` });
       } catch {
@@ -122,11 +153,12 @@ export function createApp(options = {}) {
 
   router.get(/^\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/, async (req, res) => {
     const { bucket, objectPath } = storageParams(req);
-    if (!validSignedToken(signingSecret, bucket, objectPath, req.query.token)) {
+    const userId = validSignedToken(signingSecret, bucket, objectPath, req.query.token);
+    if (!userId) {
       return res.status(401).json({ message: 'Invalid or expired download token' });
     }
     try {
-      const file = storageLocation(dataRoot, bucket, objectPath);
+      const file = storageLocation(dataRoot, userId, path.join(bucket, objectPath));
       const download = typeof req.query.download === 'string' ? path.basename(req.query.download) : '';
       if (download) res.attachment(download);
       else res.type(path.extname(file));
@@ -142,8 +174,10 @@ export function createApp(options = {}) {
     express.raw({ type: () => true, limit: '50mb' }),
     async (req, res) => {
       const { bucket, objectPath } = storageParams(req);
+      const userId = requestUserId(req);
+      if (!userId) return res.status(400).json({ message: 'User context required' });
       try {
-        const file = storageLocation(dataRoot, bucket, objectPath);
+        const file = storageLocation(dataRoot, userId, path.join(bucket, objectPath));
         const exists = await fs.access(file).then(() => true, () => false);
         if (exists && req.get('x-upsert') !== 'true') {
           return res.status(409).json({ message: 'Object already exists', statusCode: '409' });

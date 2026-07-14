@@ -9,6 +9,7 @@
  */
 import { scoreJob } from './scoring';
 import { isSubscriptionProvider, makeClient, makeWorkerClient, LLMClient } from './llm';
+import { currentUserId } from './userContext';
 import { getActiveApiKey, isApiKeyProvider } from './credentials';
 import { supabaseAdmin } from './supabase';
 import type { Job, Settings } from './types';
@@ -77,11 +78,14 @@ export async function buildClientForTask(settings: Settings, task: LlmTask): Pro
     // callers already handle (scoreJob → visible score-0 with the reason; assistant →
     // clean error). We never silently fall back to a paid API key.
     const worker = resolveWorker(settings);
-    return makeWorkerClient(worker?.url ?? '', worker?.secret ?? '', model, provider);
+    return makeWorkerClient(worker?.url ?? '', worker?.secret ?? '', model, provider, currentUserId() ?? '');
   }
 
   if (!isApiKeyProvider(provider)) return undefined;
   const key = await getActiveApiKey(provider);
+  if (!key && process.env.BACKEND_URL) {
+    throw new Error(`No active ${provider} API key — add your own key under Settings → AI tokens.`);
+  }
   return key ? makeClient(provider, model, key) : undefined;
 }
 

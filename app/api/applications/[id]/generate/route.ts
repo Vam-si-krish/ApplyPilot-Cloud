@@ -10,6 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { getSettings } from '@/lib/db';
+import { workerRequestHeaders } from '@/lib/workerAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -31,7 +32,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   try {
     const r = await fetch(`${url.replace(/\/$/, '')}/tailor`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      headers: workerRequestHeaders(secret),
       body: JSON.stringify({ id }),
       // The worker acks (202) before the LLM call runs, so this returns in ~1s.
       signal: AbortSignal.timeout(20_000),

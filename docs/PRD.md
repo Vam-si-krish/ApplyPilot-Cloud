@@ -32,6 +32,12 @@ storage paths, per-user API-key vaults, onboarding, and worker authorization sco
 the requesting user. Migrate singleton `id=1` profile/settings/scoring state into
 user-owned records. Add abuse/rate/spend controls before public access.
 
+**Phase 2A — fixed private accounts (current):** ship the ownership and onboarding model
+first for three environment-configured username/password accounts. Public signup and
+password reset remain disabled. Each account uploads a résumé PDF for AI-assisted initial
+profile/search setup, then supplies its own Apify and LLM API keys for normal operation.
+The owner's server subscription is permitted only for the bounded onboarding parse.
+
 ### Phase 1 acceptance criteria
 
 1. The fork production build and tests pass without changing scoring behavior.

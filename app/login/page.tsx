@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Lock, ArrowRight } from 'lucide-react';
+import { Zap, Lock, ArrowRight, User } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,10 +19,10 @@ export default function LoginPage() {
       const r = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
       if (r.ok) {
-        router.push('/dashboard');
+        router.push('/onboarding');
         router.refresh();
       } else {
         const d = await r.json().catch(() => ({}));
@@ -56,6 +57,21 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={submit} className="card p-6">
+          <label className="label" htmlFor="username">
+            Username
+          </label>
+          <div className="relative mb-4">
+            <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-dim" />
+            <input
+              id="username"
+              autoFocus
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="username"
+              className="input py-2.5 pl-10 text-[14px]"
+            />
+          </div>
           <label className="label" htmlFor="password">
             Password
           </label>
@@ -64,7 +80,7 @@ export default function LoginPage() {
             <input
               id="password"
               type="password"
-              autoFocus
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"

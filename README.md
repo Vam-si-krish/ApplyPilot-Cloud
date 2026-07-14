@@ -2,11 +2,11 @@
 
 > **`multi-user-fork` branch:** this branch is becoming a separate multi-user product
 > with its own server-laptop backend and no access to ApplyPilot production data.
-> Phase 1 builds and verifies the isolated single-user baseline; Phase 2 adds account
-> creation and per-user data/API-key isolation. See [ADR 0072](docs/adr/0072-independent-multi-user-fork-foundation.md)
+> Phase 2A now supports three fixed private accounts with enforced per-user ownership and
+> résumé onboarding. Public self-service signup remains deferred. See [ADR 0073](docs/adr/0073-fixed-accounts-and-enforced-user-ownership.md)
 > and the [backend runbook](backend/README.md).
 
-A single-user, password-protected web app that **runs itself daily in the cloud**:
+A private multi-user web app that **runs itself daily in the cloud**:
 it fetches the last 24 hours of job postings (via Apify), scores each **1–10** for
 fit against your resume (via an LLM), and shows a ranked, filterable shortlist.
 **It does not auto-apply** — the flow stops at *fetched → scored → shortlisted*.
@@ -23,7 +23,7 @@ exactly** from ApplyPilot-Lite (same prompt, same parser, same model defaults) �
 - **Apify** — daily job fetch (configurable actor, default `bebity~linkedin-jobs-scraper`)
 - **LLM scoring** — Gemini `gemini-2.0-flash` by default (OpenAI / DeepSeek / Anthropic supported)
 - **Netlify scheduled functions** — trigger the daily run
-- Auth: a single shared password → signed session cookie
+- Auth: three fixed usernames/passwords → signed identity session cookie
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full pipeline and
 [`docs/adr/`](docs/adr) for the decisions behind it.
@@ -54,17 +54,15 @@ cp .env.example .env.local      # then fill in the values (see below)
 2. **Fill `.env.local`** (all keys documented in [`.env.example`](.env.example)):
    - `BACKEND_URL`, `BACKEND_SERVICE_KEY`
    - `RESUME_WORKER_URL`, `RESUME_WORKER_SECRET`
-   - `APP_PASSWORD` (the login password) and `AUTH_SECRET` (`openssl rand -hex 32`)
-   - `APIFY_TOKEN`, optionally `APIFY_ACTOR_ID`
+   - `APP_USERS_JSON` (three fixed accounts) and `AUTH_SECRET` (`openssl rand -hex 32`)
    - `CRON_SECRET` (`openssl rand -hex 32`)
-   - one LLM key, e.g. `GEMINI_API_KEY`
    - `NEXT_PUBLIC_APP_URL=http://localhost:3000`
 3. **Run it:**
    ```bash
-   npm run dev          # http://localhost:3000  → log in with APP_PASSWORD
+   npm run dev          # http://localhost:3000 → log in with a configured account
    ```
-4. Go to **Profile** and paste your résumé text (this is what scoring reads), then
-   **Settings** to set keywords/locations. Hit **Run now** on the Dashboard to kick a run.
+4. Upload a résumé PDF in onboarding, then add that account's Apify and LLM keys in
+   **Settings**. Hit **Run now** on the Dashboard to kick a run.
 
 ### Commands
 ```bash
@@ -90,8 +88,8 @@ find a real misjudgement; it becomes a permanent regression check.
    production ApplyPilot backend values.
 4. Set `NEXT_PUBLIC_APP_URL` to the new Netlify/custom-domain URL so webhooks and
    self-retriggering batches resolve to this deployment.
-5. Keep the deployment owner-only under the Phase 1 password. Public account creation
-   is blocked until ADR 0072 Phase 2 is implemented and verified.
+5. Keep the deployment limited to the three configured accounts. Public account creation
+   remains blocked until signup, password reset, and abuse controls are implemented.
 
 Scheduling uses the committed Netlify functions in `netlify/functions/`. `CRON_SECRET`
 authenticates their calls into the app.

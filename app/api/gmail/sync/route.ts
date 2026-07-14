@@ -12,9 +12,9 @@
  * /api/gmail/classify-batch directly so it can render live progress.
  */
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { checkCronAuth, verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
 import { resolveGmailContext, fetchChunk, classifyChunk } from '@/lib/mailSync';
+import { authorizedRouteUser } from '@/lib/routeUser';
+import { runAsUser } from '@/lib/userContext';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -23,10 +23,9 @@ const TIME_BUDGET_MS = 50_000; // leave headroom under maxDuration
 const MAX_ITERS = 40; // safety cap per phase
 
 async function handle(req: Request) {
-  const sessionOk = await verifySessionToken(cookies().get(SESSION_COOKIE)?.value);
-  if (!checkCronAuth(req) && !sessionOk) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const auth = await authorizedRouteUser(req);
+  if (!auth) return NextResponse.json({ error: 'unauthorized or missing user_id' }, { status: 401 });
+  return runAsUser(auth.userId, async () => {
 
   const started = Date.now();
   const budgetLeft = () => Date.now() - started < TIME_BUDGET_MS;
@@ -63,6 +62,7 @@ async function handle(req: Request) {
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
+  });
 }
 
 export const GET = handle;

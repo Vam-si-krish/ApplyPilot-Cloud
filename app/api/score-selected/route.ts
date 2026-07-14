@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import { getJobsByIds, getScoringResumeText, getSettings } from '@/lib/db';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import { isSubscriptionProvider } from '@/lib/llm';
+import { workerRequestHeaders } from '@/lib/workerAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
       try {
         resp = await fetch(`${workerUrl}/score-jobs`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerSecret}` },
+          headers: workerRequestHeaders(workerSecret),
           body: JSON.stringify({ ids }),
           signal: AbortSignal.timeout(15_000),
         });

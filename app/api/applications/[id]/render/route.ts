@@ -10,6 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { getSettings } from '@/lib/db';
+import { workerRequestHeaders } from '@/lib/workerAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,7 +31,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   try {
     const r = await fetch(`${url.replace(/\/$/, '')}/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      headers: workerRequestHeaders(secret),
       body: JSON.stringify({ id: params.id }),
       // Worker render (auto-fit, several passes) can take a few seconds.
       signal: AbortSignal.timeout(55_000),

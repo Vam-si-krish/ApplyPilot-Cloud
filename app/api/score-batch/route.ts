@@ -14,7 +14,8 @@
  */
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { checkCronAuth } from '@/lib/auth';
+import { checkCronAuth, configuredUsers } from '@/lib/auth';
+import { runAsUser } from '@/lib/userContext';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import {
   getSettings,
@@ -43,11 +44,7 @@ async function finishUp(): Promise<void> {
   if (running) await finalizeRun(running.id, 'succeeded').catch(() => {});
 }
 
-export async function POST(req: Request) {
-  if (!checkCronAuth(req)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
-
+async function handleForUser(req: Request) {
   const settings = await getSettings();
   const incoming = new URL(req.url).searchParams.get('token');
 
@@ -139,4 +136,13 @@ export async function POST(req: Request) {
   await releaseScoringLock(token);
   await finishUp();
   return NextResponse.json({ ok: true, scored, filtered, done, remaining: 0, done_all: true });
+}
+
+export async function POST(req: Request) {
+  if (!checkCronAuth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const userId = new URL(req.url).searchParams.get('user_id');
+  if (!userId || !configuredUsers().some((user) => user.id === userId)) {
+    return NextResponse.json({ error: 'valid user_id required' }, { status: 400 });
+  }
+  return runAsUser(userId, () => handleForUser(req));
 }

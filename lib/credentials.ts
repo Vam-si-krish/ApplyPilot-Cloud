@@ -64,6 +64,10 @@ export async function getActiveApiKey(provider: ApiKeyProvider): Promise<string 
   if (error) throw new Error(`Failed to load active ${provider} key: ${error.message}`);
   const fromDb = (data?.key_value as string | undefined)?.trim();
   if (fromDb) return fromDb;
+  // The multi-user fork must never spend a deployment owner's API key for another
+  // account. Each user supplies vault keys; only the separate onboarding route may
+  // call the shared subscription worker (ADR 0073).
+  if (process.env.BACKEND_URL) return null;
   const fromEnv = (process.env[PROVIDER_ENV[provider]] || '').trim();
   return fromEnv || null;
 }

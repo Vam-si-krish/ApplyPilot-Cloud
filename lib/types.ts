@@ -9,6 +9,7 @@ export type CompanyTier = 'good' | 'medium' | 'low' | 'unknown';
 
 export interface Job {
   id: string;
+  user_id?: string;
   url: string;
   title: string | null;
   company: string | null;
@@ -168,6 +169,7 @@ export interface ScoreResult {
 }
 
 export interface Profile {
+  user_id?: string;
   id: number; // single-row table, always 1
   personal: Record<string, unknown>;
   experience: Record<string, unknown>;
@@ -187,6 +189,7 @@ export interface Profile {
 }
 
 export interface Settings {
+  user_id?: string;
   id: number; // single-row table, always 1
   schedule_time: string; // 'HH:MM' in the user's timezone
   timezone: string; // IANA tz, e.g. 'America/New_York'
@@ -261,6 +264,7 @@ export interface Settings {
  * the progress bar.
  */
 export interface ScoringState {
+  user_id?: string;
   id: number;
   active: boolean;
   stop_requested: boolean;
@@ -279,6 +283,7 @@ export type ApiKeyProvider = 'gemini' | 'openai' | 'deepseek' | 'anthropic' | 'a
 
 /** Server-side row in the api_keys table. Holds the raw secret — never send to the browser. */
 export interface ApiKey {
+  user_id?: string;
   id: string;
   provider: ApiKeyProvider;
   label: string;
@@ -309,6 +314,7 @@ export type MailCategory = 'recruiter' | 'applied' | 'shortlisted' | 'action_nee
 export type MailApplySource = 'easy_apply' | 'company_portal';
 
 export interface MailMessage {
+  user_id?: string;
   id: string;
   gmail_id: string;
   thread_id: string | null;
@@ -329,6 +335,7 @@ export interface MailMessage {
 
 /** Single-row Gmail connection (OAuth app creds + the authorized account). */
 export interface GmailConnection {
+  user_id?: string;
   id: number;
   client_id: string | null;
   client_secret: string | null;
@@ -447,6 +454,7 @@ export interface TailorUsage {
  *  the generated has_resume / has_cover_letter flags (migration 0043) stand in for
  *  existence checks. GET /api/applications/[id] returns the full row. */
 export interface Application {
+  user_id?: string;
   id: string;
   job_id: string;
   status: ApplicationStatus;
@@ -498,6 +506,7 @@ export interface ApplicationWithJob extends Application {
 export type RunStatus = 'running' | 'succeeded' | 'failed';
 
 export interface Run {
+  user_id?: string;
   id: string;
   started_at: string;
   finished_at: string | null;

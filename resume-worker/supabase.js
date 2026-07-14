@@ -1,20 +1,28 @@
 /** Supabase access for the worker (service role — server-only). */
 import { createClient } from '@supabase/supabase-js';
 import ws from 'ws';
+import { currentUserId } from './userContext.js';
 
 const BUCKET = process.env.RESUMES_BUCKET || 'resumes';
 
-let _client = null;
+const clients = new Map();
 function client() {
-  if (_client) return _client;
+  const userId = currentUserId();
+  const cacheKey = userId || 'service';
+  if (clients.has(cacheKey)) return clients.get(cacheKey);
   const url = process.env.BACKEND_URL || process.env.SUPABASE_URL;
   const key = process.env.BACKEND_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('BACKEND_URL and BACKEND_SERVICE_KEY are required');
   // Pass ws explicitly as the realtime transport — @supabase/realtime-js v2.108+ throws
   // "Node.js 20 detected without native WebSocket support" on Node < 22 if no transport
   // is provided (it no longer accepts a globalThis polyfill as a fallback).
-  _client = createClient(url, key, { auth: { persistSession: false }, realtime: { transport: ws } });
-  return _client;
+  const instance = createClient(url, key, {
+    auth: { persistSession: false },
+    realtime: { transport: ws },
+    ...(userId ? { global: { headers: { 'x-jobpilot-user-id': userId } } } : {}),
+  });
+  clients.set(cacheKey, instance);
+  return instance;
 }
 
 /** Load an application row (id, status, template, tailored_resume). */
@@ -87,6 +95,7 @@ export async function getActiveApiKey(provider) {
   if (error) throw new Error(`load active ${provider} key: ${error.message}`);
   const fromDb = (data?.key_value || '').trim();
   if (fromDb) return fromDb;
+  if (process.env.BACKEND_URL) return null;
   const fromEnv = (process.env[PROVIDER_ENV[provider]] || '').trim();
   return fromEnv || null;
 }

@@ -32,6 +32,9 @@ fi
 
 node "$BACKEND/migrate.mjs" >> "$LOG" 2>&1
 docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" up -d >> "$LOG" 2>&1
+# PostgREST's notification listener has missed schema invalidations in practice; a
+# branch update is infrequent and a restart guarantees new tables/relationships load.
+docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" restart rest >> "$LOG" 2>&1
 launchctl kickstart -k "gui/$(id -u)/com.jobpilotmulti.backend" >> "$LOG" 2>&1 || true
 launchctl kickstart -k "gui/$(id -u)/com.jobpilotmulti.worker" >> "$LOG" 2>&1 || true
 log "updated to $(git rev-parse --short HEAD)"

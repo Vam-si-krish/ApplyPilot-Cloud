@@ -13,6 +13,8 @@ import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, 
 import { atsMatchScores } from '@/lib/prefilter';
 import { jobContentKey } from '@/lib/dedupe';
 import { triggerScoreBatch } from '@/lib/pipeline';
+import { configuredUsers } from '@/lib/auth';
+import { runAsUser } from '@/lib/userContext';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -37,6 +39,17 @@ export async function POST(req: Request) {
 
   const runId = body.resource?.id || body.eventData?.actorRunId || null;
   const eventType = body.eventType || '';
+  const requestedUserId = new URL(req.url).searchParams.get('user_id');
+  const owningRun = runId ? await getRunByApifyId(runId).catch(() => null) : null;
+  const userId = owningRun?.user_id || requestedUserId;
+  if (!userId || !configuredUsers().some((user) => user.id === userId)) {
+    return NextResponse.json({ error: 'could not resolve webhook owner' }, { status: 400 });
+  }
+  if (owningRun && requestedUserId && owningRun.user_id !== requestedUserId) {
+    return NextResponse.json({ error: 'webhook owner mismatch' }, { status: 403 });
+  }
+
+  return runAsUser(userId, async () => {
 
   // Non-success terminal events: mark the run failed and stop.
   if (eventType && eventType !== 'ACTOR.RUN.SUCCEEDED') {
@@ -56,8 +69,7 @@ export async function POST(req: Request) {
     const source = `apify:${portal}`;
 
     // Resolve the internal run UUID so jobs can be grouped by run in the UI.
-    const internalRun = runId ? await getRunByApifyId(runId).catch(() => null) : null;
-    const internalRunId = internalRun?.id ?? null;
+    const internalRunId = owningRun?.id ?? null;
 
     const mapped = items
       .map((it) => mapDatasetItemToJob(it, source))
@@ -90,7 +102,7 @@ export async function POST(req: Request) {
       // De-dupe by url; ignore rows that already exist.
       const { data, error } = await supabaseAdmin()
         .from('jobs')
-        .upsert(rows, { onConflict: 'url', ignoreDuplicates: true })
+        .upsert(rows, { onConflict: 'user_id,url', ignoreDuplicates: true })
         .select('id');
       if (error) throw new Error(error.message);
       inserted = data?.length ?? 0;
@@ -120,4 +132,5 @@ export async function POST(req: Request) {
     if (runId) await updateRunByApifyId(runId, { status: 'failed', finished_at: new Date().toISOString() }).catch(() => {});
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+  });
 }

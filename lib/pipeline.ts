@@ -1,4 +1,5 @@
 /** Shared constants + self-trigger helpers for the decoupled pipeline (ADR 0004). */
+import { currentUserId } from './userContext';
 
 /** Jobs scored per /api/score-batch invocation. Keep small to stay under the
  *  serverless timeout given LLM rate limits (Gemini free tier ~15 RPM). */
@@ -24,11 +25,14 @@ export function appBaseUrl(): string {
  * the manual button, overlapping runs) can't double-score. With a `token` → a
  * CONTINUE of that owning session's loop.
  */
-export function triggerScoreBatch(token?: string): void {
+export function triggerScoreBatch(token?: string, explicitUserId?: string): void {
   const secret = process.env.CRON_SECRET || '';
-  const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+  const userId = explicitUserId || currentUserId();
+  if (!userId) throw new Error('Cannot trigger scoring without a user context');
+  const params = new URLSearchParams({ user_id: userId });
+  if (token) params.set('token', token);
   // Intentionally not awaited — we want the current invocation to return.
-  void fetch(`${appBaseUrl()}/api/score-batch${qs}`, {
+  void fetch(`${appBaseUrl()}/api/score-batch?${params}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}` },
   }).catch(() => {

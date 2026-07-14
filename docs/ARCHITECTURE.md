@@ -46,17 +46,25 @@ Isolation is enforced operationally in Phase 1:
 - files/secrets/backups: the fork checkout's `backend/` runtime directories and `.env`;
 - lifecycle: `com.jobpilotmulti.backend|worker|autopull|watchdog|backup`.
 
-Phase 1 still has the original singleton rows (`profile.id=1`, `settings.id=1`) and shared
-password. It proves isolation/deployment only. ADR 0072 requires Phase 2 to introduce a
-real user identity and enforce `user_id` ownership at every database, route, file, job,
-worker, and API-key boundary before multiple people can use the app.
+Phase 2A is implemented per ADR 0073. Three fixed server-side accounts carry stable UUIDs
+in signed sessions. Middleware injects the verified UUID; the gateway converts it into a
+short-lived PostgREST JWT. Forced PostgreSQL RLS then scopes every domain table even when
+application code omits a filter. Files are physically namespaced by UUID and worker calls
+carry the same identity. `profile.id=1` and similar singleton selectors remain for code
+compatibility, but their real primary key is `user_id`, so each account has its own row.
+
+First login leads to PDF résumé onboarding. Netlify extracts PDF text, makes one bounded
+anti-fabrication parse through the owner's subscription worker, and initializes only that
+user's structured résumé, profile facts, skills, roles, and locations. All normal Apify,
+scoring, chat, and tailoring paths require keys from that user's vault; deployment-level
+LLM/Apify fallback is disabled in the fork.
 
 ## Stack
 | Layer | Choice | Role |
 |---|---|---|
 | Frontend + API | Next.js 14 (App Router) on Netlify | React UI + API routes in one deploy |
 | Database | PostgreSQL on the server laptop | jobs, profile, settings, runs |
-| Auth | Shared password → signed cookie (ADR 0003) | single-user gate |
+| Auth | Three fixed username/passwords → signed identity cookie (ADR 0073) | private multi-user gate; signup deferred |
 | Job fetching | Apify actor via `apify-client` (ADR 0005) | daily last-24h fetch |
 | Scoring | LLM API, default Gemini `gemini-2.0-flash` | port of Lite `scorer.py` |
 | Scheduling | Netlify scheduled functions → `/api/run` | daily trigger (UTC) |

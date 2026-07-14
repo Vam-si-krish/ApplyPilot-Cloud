@@ -33,6 +33,7 @@ import { makeClient, tailorResume, condenseResume } from './tailor.js';
 import { makeAgentClient } from './agentClient.js';
 import { makeChatGPTClient } from './chatgptClient.js';
 import { generateCoverLetter } from './coverLetter.js';
+import { currentUserId, runAsUser, validUserId } from './userContext.js';
 
 const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
 // Worker-only subscription providers (ADR 0042/0069); neither uses a vault key.
@@ -49,6 +50,11 @@ const isSubscriptionProvider = (provider) =>
  * Returns { client } on success, or { error } describing what's missing.
  */
 async function resolveTaskClient(provider, model, label = 'task') {
+  const sharedOnboarding = label === 'onboarding';
+  const ownerId = '00000000-0000-4000-8000-000000000001';
+  if (isSubscriptionProvider(provider) && currentUserId() !== ownerId && !sharedOnboarding) {
+    return { error: 'Add your own LLM API key for scoring, chat, and tailoring.' };
+  }
   if (provider === SUBSCRIPTION_PROVIDER) return { client: makeAgentClient(model, label) };
   if (provider === CHATGPT_SUBSCRIPTION_PROVIDER) return { client: makeChatGPTClient(model, label) };
   if (!LLM_PROVIDERS.has(provider)) {
@@ -65,6 +71,15 @@ app.use(express.json({ limit: '2mb' }));
 const PORT = process.env.PORT || 8787;
 const HOST = process.env.HOST;
 const SECRET = process.env.WORKER_SECRET || '';
+
+// Netlify authenticates the user, then forwards the verified UUID. Keep it in an
+// async context so every DB/storage call made by this request carries the RLS identity.
+app.use((req, res, next) => {
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/version')) return next();
+  const userId = req.get('x-jobpilot-user-id');
+  if (userId && validUserId(userId)) return runAsUser(userId.toLowerCase(), next);
+  return res.status(400).json({ error: 'valid user context required' });
+});
 
 function authed(req) {
   if (!SECRET) return false; // refuse to run wide-open
@@ -690,7 +705,8 @@ app.post('/llm', async (req, res) => {
   const t0 = Date.now();
   console.log(`[/llm] request provider=${provider} model=${model} messages=${body.messages.length}`);
   try {
-    const resolved = await resolveTaskClient(provider, model, 'llm');
+    const purpose = body.purpose === 'onboarding' ? 'onboarding' : 'llm';
+    const resolved = await resolveTaskClient(provider, model, purpose);
     if (resolved.error) return res.status(409).json({ error: resolved.error });
     const client = resolved.client;
     const text = await client.chat(body.messages, { temperature, maxTokens });

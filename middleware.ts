@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
+import { readSessionToken, SESSION_COOKIE } from '@/lib/auth';
 
 // Paths reachable without a session:
 //  - the login page + its auth endpoints
@@ -7,17 +7,24 @@ import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth';
 //    CRON_SECRET / the webhook secret (ADR 0004). /api/run also accepts a
 //    session and re-checks internally.
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];
-const SELF_AUTH_PATHS = ['/api/run', '/api/apify-webhook', '/api/score-batch', '/api/assess-batch', '/api/gmail/sync', '/api/gmail/fetch', '/api/gmail/classify-batch'];
+const SELF_AUTH_PATHS = ['/api/run', '/api/apify-webhook', '/api/score-batch', '/api/assess-batch', '/api/tailor-queue', '/api/gmail/sync', '/api/gmail/fetch', '/api/gmail/classify-batch'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (PUBLIC_PATHS.includes(pathname) || SELF_AUTH_PATHS.includes(pathname)) {
+  if (PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
 
-  const valid = await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-  if (valid) return NextResponse.next();
+  const session = await readSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  if (session) {
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-jobpilot-user-id', session.userId);
+    requestHeaders.set('x-jobpilot-username', session.username);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  if (SELF_AUTH_PATHS.includes(pathname)) return NextResponse.next();
 
   // Unauthenticated: 401 for API, redirect to /login for pages.
   if (pathname.startsWith('/api/')) {

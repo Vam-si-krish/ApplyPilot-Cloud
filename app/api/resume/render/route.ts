@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { getSettings } from '@/lib/db';
 import { normalizeResume } from '@/lib/resume';
+import { workerRequestHeaders } from '@/lib/workerAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   try {
     const r = await fetch(`${url.replace(/\/$/, '')}/render-inline`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      headers: workerRequestHeaders(secret),
       body: JSON.stringify({ resume, template }),
       signal: AbortSignal.timeout(55_000),
     });

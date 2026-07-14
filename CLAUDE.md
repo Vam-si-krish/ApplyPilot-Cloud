@@ -14,8 +14,9 @@ the existing ApplyPilot production database. The accepted roadmap is [ADR 0072](
 - **Phase 1:** reproduce the current app against a completely isolated database, API,
   file store, worker, credentials, and public path on the server laptop. Keep the
   shared-password/singleton data model only as a temporary smoke-test baseline.
-- **Phase 2:** add account creation, secure sessions, per-user ownership on every
-  domain table/file, and user-managed Apify/LLM keys before inviting multiple users.
+- **Phase 2A (current):** three fixed `APP_USERS_JSON` accounts, signed identity sessions,
+  forced database RLS, per-user files/keys/jobs/settings, and PDF résumé onboarding. Public
+  signup is deferred; normal work uses each account's own Apify/LLM keys.
 
 The fork must never point at or copy production backend credentials/data. The frontend
 deploys separately on Netlify; persistent services stay on the server laptop.
@@ -43,7 +44,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/scoring.ts` | `SCORE_PROMPT`, `scoreJob`, `parseScoreResponse` — port of Lite `scorer.py` |
 | `lib/apify.ts` | Apify actor start + input mapping (keywords×locations, last-24h) |
 | `lib/supabase.ts` | REST/storage protocol clients; fork uses `BACKEND_*`, production keeps legacy env fallback |
-| `lib/auth.ts` | Shared-password session cookie sign/verify |
+| `lib/auth.ts` | Fixed-account credential validation + identity session sign/verify |
 | `lib/types.ts` | Shared TS types for jobs/profile/settings/runs |
 | `middleware.ts` | Gates every route behind the password session |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |

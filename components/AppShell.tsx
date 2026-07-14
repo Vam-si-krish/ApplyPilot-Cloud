@@ -56,6 +56,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [username, setUsername] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false); // mobile nav drawer
 
   useEffect(() => {
@@ -72,6 +73,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       clearInterval(t);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    fetch('/api/auth/me').then((response) => response.ok ? response.json() : null)
+      .then((data) => data?.username && setUsername(data.username)).catch(() => {});
+  }, []);
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -160,6 +166,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
+        {username && <p className="mx-6 mb-1 truncate font-mono text-[10px] text-slate-dim">@{username}</p>}
         <button
           onClick={logout}
           className="mx-3 mb-3 flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-slate-muted hover:text-rose hover:bg-rose/10 transition-all"

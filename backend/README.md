@@ -1,13 +1,12 @@
-# Independent server-laptop backend (Phase 1)
+# Independent server-laptop backend
 
 This directory turns the `multi-user-fork` branch into a new application with no
 dependency on Supabase and no access to the existing ApplyPilot production data.
 The architecture decision and phase boundary are recorded in
 [ADR 0072](../docs/adr/0072-independent-multi-user-fork-foundation.md).
 
-Phase 1 intentionally preserves the current single-password experience while proving
-the isolated application end to end. Phase 2 will replace the singleton profile/settings
-model with accounts and per-user ownership.
+Phase 2A supports three fixed accounts with forced RLS ownership and user-namespaced files.
+Public signup remains deferred; credentials are configured only in Netlify.
 
 ## Isolation
 
@@ -38,7 +37,7 @@ The bootstrap creates random credentials in `backend/.env`, creates only the new
 database/role, applies migrations, installs the isolated services, mounts the Funnel
 path, and verifies local and public health endpoints.
 
-## Netlify Phase 1 variables
+## Netlify variables
 
 Set these on the new Netlify site. Secrets are copied from the server laptop's
 `~/apps/jobpilot-multi/backend/.env`; never copy the production Netlify values.
@@ -48,10 +47,12 @@ BACKEND_URL=<PUBLIC_URL>
 BACKEND_SERVICE_KEY=<SERVICE_ROLE_KEY>
 RESUME_WORKER_URL=<PUBLIC_URL>/worker
 RESUME_WORKER_SECRET=<WORKER_SECRET>
-APP_PASSWORD=<new temporary Phase 1 password>
+APP_USERS_JSON=<three fixed account objects matching migration 0044 UUIDs>
 AUTH_SECRET=<new random value>
 CRON_SECRET=<new random value>
 NEXT_PUBLIC_APP_URL=<new Netlify/custom-domain URL>
+ONBOARDING_SUBSCRIPTION_PROVIDER=chatgpt_subscription
+ONBOARDING_SUBSCRIPTION_MODEL=gpt-5.4
 ```
 
 Apify and LLM keys can be added through the existing Settings UI after login. The new

@@ -369,6 +369,8 @@ export class WorkerLLMClient extends LLMClient {
     private workerSecret: string,
     model: string,
     public readonly subscriptionProvider: string = SUBSCRIPTION_PROVIDER,
+    private userId: string = '',
+    private purpose: string = '',
   ) {
     // baseUrl/apiKey are unused here (chat is fully overridden); pass placeholders.
     // Default the model so an empty lane model still resolves to a real alias.
@@ -390,13 +392,18 @@ export class WorkerLLMClient extends LLMClient {
     try {
       resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.workerSecret}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.workerSecret}`,
+          ...(this.userId ? { 'x-jobpilot-user-id': this.userId } : {}),
+        },
         body: JSON.stringify({
           messages,
           provider: this.subscriptionProvider,
           model: this.model,
           temperature: opts.temperature ?? 0.0,
           maxTokens: opts.maxTokens ?? 4096,
+          ...(this.purpose ? { purpose: this.purpose } : {}),
         }),
         signal: AbortSignal.timeout(WORKER_LLM_TIMEOUT_MS),
       });
@@ -433,8 +440,10 @@ export function makeWorkerClient(
   workerSecret: string,
   model: string,
   provider: string = SUBSCRIPTION_PROVIDER,
+  userId: string = '',
+  purpose: string = '',
 ): WorkerLLMClient {
-  return new WorkerLLMClient(workerUrl, workerSecret, model, provider);
+  return new WorkerLLMClient(workerUrl, workerSecret, model, provider, userId, purpose);
 }
 
 let _instance: LLMClient | null = null;

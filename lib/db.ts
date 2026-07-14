@@ -213,7 +213,7 @@ export async function addApplications(jobIds: string[]): Promise<number> {
   const rows = jobIds.map((job_id) => ({ job_id, status: 'queued' }));
   const { data, error } = await supabaseAdmin()
     .from('applications')
-    .upsert(rows, { onConflict: 'job_id', ignoreDuplicates: true })
+    .upsert(rows, { onConflict: 'user_id,job_id', ignoreDuplicates: true })
     .select('id');
   if (error) throw new Error(`Failed to add applications: ${error.message}`);
   return data?.length ?? 0;
@@ -528,7 +528,7 @@ export async function insertMailMessages(rows: Partial<MailMessage>[]): Promise<
   if (rows.length === 0) return 0;
   const { data, error } = await supabaseAdmin()
     .from('mail_messages')
-    .upsert(rows, { onConflict: 'gmail_id', ignoreDuplicates: true })
+    .upsert(rows, { onConflict: 'user_id,gmail_id', ignoreDuplicates: true })
     .select('id');
   if (error) throw new Error(`Failed to insert mail: ${error.message}`);
   return data?.length ?? 0;
@@ -555,7 +555,7 @@ export async function insertFetchedMail(rows: FetchedMailRow[]): Promise<number>
   const payload = rows.map((r) => ({ ...r, status: 'pending', category: null }));
   const { data, error } = await supabaseAdmin()
     .from('mail_messages')
-    .upsert(payload, { onConflict: 'gmail_id', ignoreDuplicates: true })
+    .upsert(payload, { onConflict: 'user_id,gmail_id', ignoreDuplicates: true })
     .select('id');
   if (error) throw new Error(`Failed to insert fetched mail: ${error.message}`);
   return data?.length ?? 0;
