@@ -5,7 +5,7 @@
  * user can swap between cheap/standard variants from the Settings UI.
  */
 import { ApifyClient } from 'apify-client';
-import type { Settings } from './types';
+import type { EmploymentType, Settings } from './types';
 import { getActiveApiCredential, getApiCredentialById } from './credentials';
 
 /**
@@ -471,6 +471,26 @@ function stringArray(item: Record<string, unknown>, key: string): string[] | nul
     .filter(Boolean);
 }
 
+/** Normalize actor-specific job-type labels into the database/UI contract. */
+export function normalizeEmploymentType(value: string | null): EmploymentType | null {
+  const type = (value || '').trim().toLowerCase();
+  if (!type) return null;
+  if (type.includes('full')) return 'full_time';
+  if (type.includes('contract') || type.includes('freelance')) return 'contract';
+  if (type.includes('intern')) return 'internship';
+  return 'unknown';
+}
+
+function actorEasyApply(item: Record<string, unknown>): boolean | null {
+  const direct = firstBool(item, ['easyApply', 'isEasyApply', 'easy_apply', 'isEasyApplyJob']);
+  if (direct !== null) return direct;
+  const type = firstString(item, ['applyType', 'applicationType']);
+  if (!type) return null;
+  if (/easy[ _-]?apply/i.test(type)) return true;
+  if (/external/i.test(type)) return false;
+  return null;
+}
+
 export interface MappedJob {
   url: string;
   title: string | null;
@@ -480,6 +500,7 @@ export interface MappedJob {
   full_description: string | null;
   application_url: string | null;
   easy_apply: boolean | null;
+  employment_type: EmploymentType | null;
   /** Company headcount/size text when an actor provides it (often absent in job-search results). */
   company_size: string | null;
   /** Skill-match outputs from the actor's resumeKeywords feature (ADR 0018); null when not provided. */
@@ -539,8 +560,10 @@ export function mapDatasetItemToJob(item: Record<string, unknown>, source: strin
       'description', 'descriptionText', 'description_text', 'jobDescription', 'fullDescription', 'descriptionHtml', 'description_html',
     ]),
     application_url: applyUrl ?? url,
-    // LinkedIn actors expose easyApply as a boolean; other portals return null.
-    easy_apply: firstBool(item, ['easyApply', 'isEasyApply', 'easy_apply', 'isEasyApplyJob']),
+    easy_apply: actorEasyApply(item),
+    employment_type: normalizeEmploymentType(firstString(item, [
+      'contractType', 'employmentType', 'employment_type', 'jobType', 'job_type',
+    ])),
     company_size: firstSize(item, [
       'companySize', 'companySizeRange', 'employeeCount', 'numEmployees', 'companyEmployeesCount', 'staffCount', 'employees',
       'org_linkedin_size', 'org_linkedin_headcount',

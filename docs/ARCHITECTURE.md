@@ -194,4 +194,6 @@ The all-runs Jobs view collapses duplicate content under its canonical row. Sele
 specific run switches to that run's raw fetched rows so cross-run canonical ownership
 cannot hide results. Filters are explicit and null-aware: newly fetched jobs are visible
 before AI scoring, External includes an omitted `easy_apply` flag, and AI-derived filters
-match only populated values. See ADR 0078.
+match only populated values. The Apify output adapter owns normalization of source filter
+metadata: actor `contractType` becomes the persisted employment enum and actor `applyType`
+becomes `easy_apply`, so those filters do not wait on the LLM. See ADR 0078.

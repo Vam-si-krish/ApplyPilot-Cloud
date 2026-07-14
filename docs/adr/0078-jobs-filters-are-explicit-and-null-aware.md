@@ -16,6 +16,11 @@ their canonical belonged to an earlier run. Finally, the UI displayed a missing
 `easy_apply` value as an external application while the API's External filter accepted
 only explicit `false`, excluding all null actor results.
 
+The selected LinkedIn actor already returns `contractType` and `applyType`, but the
+ingestion adapter discarded both fields. Consequently Employment type and Easy Apply
+were needlessly dependent on later AI scoring even though deterministic source data was
+available at fetch time.
+
 ## Decision
 
 - Jobs opens with no score, company, run, apply-type, or hide-rule constraint.
@@ -25,6 +30,9 @@ only explicit `false`, excluding all null actor results.
   rather than applying the cross-run duplicate collapse.
 - External applications mean `easy_apply = false OR easy_apply IS NULL`, matching how the
   row is labeled in the UI.
+- The Apify adapter normalizes actor `contractType`/employment labels into the existing
+  employment enum and `applyType` into `easy_apply` during ingestion. Source metadata is
+  preferred over waiting for AI scoring.
 - Every match-changing filter clears bulk selection and resets pagination.
 
 ## Consequences
@@ -32,8 +40,9 @@ only explicit `false`, excluding all null actor results.
 - Fresh/unscored jobs are immediately visible and each filter behaves independently.
 - An all-runs view remains deduplicated and grouped; a specific run can intentionally
   contain repeated/multi-location rows so its displayed count matches that fetch.
-- Null AI-derived employment/company/fit fields still do not satisfy a user-selected AI
-  filter. The difference is that those filters are no longer silently active.
+- Null AI-derived company/fit fields still do not satisfy a user-selected AI filter. The
+  difference is that those filters are no longer silently active, while employment and
+  apply-type filters work immediately whenever the actor provides their source fields.
 
 ## Verification
 

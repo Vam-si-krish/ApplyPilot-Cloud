@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   planRuns, mapDatasetItemToJob, booleanKeywordQuery, parseLinkedInLocation,
   buildLinkedInSearchUrl, titleSearchTerms, careerSiteLocations, estimateRunCostUsd,
+  normalizeEmploymentType,
 } from './apify';
 import type { Settings } from './types';
 
@@ -242,5 +243,29 @@ describe('mapDatasetItemToJob — skill-match outputs (ADR 0018)', () => {
     const job = mapDatasetItemToJob({ url: 'https://x/job/2', title: 'Backend' }, 'linkedin');
     expect(job?.skill_match_score).toBeNull();
     expect(job?.matched_skills).toBeNull();
+  });
+});
+
+describe('mapDatasetItemToJob — filter metadata (ADR 0078)', () => {
+  it('maps cheap_scraper contractType and applyType before AI scoring', () => {
+    const fullTime = mapDatasetItemToJob({
+      url: 'https://x/job/3', contractType: 'Full-time', applyType: 'EXTERNAL',
+    }, 'linkedin');
+    expect(fullTime?.employment_type).toBe('full_time');
+    expect(fullTime?.easy_apply).toBe(false);
+
+    const contract = mapDatasetItemToJob({
+      url: 'https://x/job/4', contractType: 'Contract', applyType: 'EASY_APPLY',
+    }, 'linkedin');
+    expect(contract?.employment_type).toBe('contract');
+    expect(contract?.easy_apply).toBe(true);
+  });
+
+  it('normalizes common actor employment labels', () => {
+    expect(normalizeEmploymentType('Full-time')).toBe('full_time');
+    expect(normalizeEmploymentType('Freelance contract')).toBe('contract');
+    expect(normalizeEmploymentType('Internship')).toBe('internship');
+    expect(normalizeEmploymentType('Temporary')).toBe('unknown');
+    expect(normalizeEmploymentType(null)).toBeNull();
   });
 });
