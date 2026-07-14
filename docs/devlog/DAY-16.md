@@ -51,3 +51,19 @@
 - Verified the configured login still succeeds, onboarding is false, both user
   directories are absent, the other accounts retain their singleton rows, and public
   gateway/worker health remains green.
+
+## Apify first-run fix for new accounts (ADR 0076)
+
+- Pilot accounts inherited `bebity~linkedin-jobs-scraper`, which now requires a
+  $29.99/month rental plus usage. A valid user-owned Apify key therefore failed before
+  the first scrape.
+- Added migration 0045: future rows default to the already-supported pay-per-result
+  `cheap_scraper~linkedin-job-scraper`; only Pilot 2/3 inherited Bebity rows change,
+  Vamsi/custom choices remain untouched, and their cooldown is cleared for one fresh
+  credit check.
+- Settings now identifies cheap_scraper as the recommended pay-per-result option and
+  labels Bebity as a paid rental. Official actor pages and trade-offs are in ADR 0076.
+- Verification: 175 app tests passed (8 credentialed evals skipped), backend 2/2 and
+  worker 6/6 tests passed, typecheck and the 33-page production build passed. Live
+  migration and a real user fetch remain the deployment verification step after server
+  autopull.

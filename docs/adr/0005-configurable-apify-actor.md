@@ -1,5 +1,8 @@
 # ADR 0005 — Configurable Apify actor, LinkedIn default
 **Status:** accepted · **Date:** 2026-06-17
+
+> **Amended by ADR 0076:** the multi-user fork now defaults new accounts to the
+> pay-per-result `cheap_scraper` actor; Bebity remains an optional paid rental.
 ## Context
 Apify job-board actors each have their own input schema and output shape. The brief wants the
 actor to be swappable and the input mapped from the user's keywords × locations + a last-24h window.

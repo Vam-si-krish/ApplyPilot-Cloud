@@ -58,8 +58,8 @@ const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const ACTORS = [
-  { id: 'bebity~linkedin-jobs-scraper', label: 'Standard (bebity)' },
-  { id: 'cheap_scraper~linkedin-job-scraper', label: 'Cheapest (cheap_scraper)' },
+  { id: 'cheap_scraper~linkedin-job-scraper', label: 'Pay per result — recommended (cheap_scraper)' },
+  { id: 'bebity~linkedin-jobs-scraper', label: 'Paid rental — $29.99/mo + usage (bebity)' },
   { id: 'fascinating_lentil~linkedin-jobs-scraper', label: 'Alternative (fascinating_lentil)' },
 ];
 
@@ -516,7 +516,7 @@ export default function SettingsPage() {
         </p>
         <div className="flex flex-col gap-3 mb-5">
           {[
-            { key: 'linkedin',     label: 'LinkedIn',     actor: 'bebity~linkedin-jobs-scraper (configurable below)' },
+            { key: 'linkedin',     label: 'LinkedIn',     actor: 'Pay-per-result actor (configurable below)' },
             { key: 'indeed',       label: 'Indeed',       actor: 'misceres~indeed-scraper' },
             { key: 'glassdoor',    label: 'Glassdoor',    actor: 'bebity~glassdoor-jobs-scraper' },
             { key: 'career_sites', label: 'Career sites', actor: 'fantastic-jobs~career-site-job-listing-api · ⚠ $12 / 1k jobs on the free tier' },
@@ -562,7 +562,7 @@ export default function SettingsPage() {
                 label="Actor ID"
                 value={s.apify_actor_id}
                 onChange={(v) => patch({ apify_actor_id: v.replace(/\//g, '~') })}
-                placeholder="bebity~linkedin-jobs-scraper"
+                placeholder="cheap_scraper~linkedin-job-scraper"
               />
             </div>
 

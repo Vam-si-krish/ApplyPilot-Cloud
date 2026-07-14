@@ -112,5 +112,6 @@ current fork scope is instead the two-phase server-laptop plan at the top of thi
 
 ## Open questions / risks
 - Exact Apify actor input schema varies per actor — input mapping is abstracted and the
-  actor id is configurable (ADR 0005). Default: `bebity~linkedin-jobs-scraper`.
+  actor id is configurable (ADR 0005). The fork defaults to the pay-per-result
+  `cheap_scraper~linkedin-job-scraper` (ADR 0076); paid rental actors remain optional.
 - Re-trigger mechanism for chunked scoring (self-fetch vs. queue) — see ARCHITECTURE.

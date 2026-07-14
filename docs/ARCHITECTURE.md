@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0075
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0076
 
 ## Current deployment topology
 
@@ -119,7 +119,9 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
 - `lib/apify.ts` — actor start + dataset→job mapping. The only place that knows actor
-  input schema; swapping actors touches only this file + the settings value.
+  input schema; swapping actors touches only this file + the settings value. New fork
+  accounts default to the pay-per-result `cheap_scraper` actor (ADR 0076); paid rental
+  actors are explicit user choices.
 - `lib/supabase.ts` — protocol clients for the gateway/PostgREST compatibility boundary.
 - `app/api/*` — thin HTTP handlers; validate input, call lib, write DB.
 
