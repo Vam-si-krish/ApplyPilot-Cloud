@@ -1,6 +1,6 @@
 # ADR 0015 — Per-location fetch limits (LinkedIn fan-out)
 
-**Status:** accepted · **Date:** 2026-06-18 · **Refines** [ADR 0005](0005-apify-integration.md)
+**Status:** accepted · **Date:** 2026-06-18 · **Refines** [ADR 0005](0005-configurable-apify-actor.md)
 
 ## Context
 Search used a single `results_per_query` applied to every keyword × location equally. With locations of

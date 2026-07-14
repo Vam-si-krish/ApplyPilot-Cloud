@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ApplyPilot résumé worker (ADR 0024 Phase 3): renders tailored résumé JSON to a polished, one-page, ATS-readable PDF via Puppeteer and uploads it to Supabase Storage. Runs on an always-on Mac; the Netlify app calls it over a Cloudflare Tunnel.",
+  "description": "ApplyPilot always-on worker for isolated résumé rendering and per-user subscription-backed AI tasks.",
   "scripts": {
     "start": "node server.js",
     "sample": "node render-sample.js",

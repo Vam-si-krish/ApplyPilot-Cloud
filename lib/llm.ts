@@ -383,7 +383,7 @@ export class WorkerLLMClient extends LLMClient {
     if (!this.workerUrl || !this.workerSecret) {
       throw new Error(
         `${subscriptionLabel(this.subscriptionProvider)} mode is selected but the worker is not fully configured — ` +
-          'set the worker URL and secret in Settings (or RESUME_WORKER_URL / RESUME_WORKER_SECRET).',
+          'configure the résumé worker URL and secret for this deployment.',
       );
     }
     const url = `${this.workerUrl.replace(/\/$/, '')}/llm`;

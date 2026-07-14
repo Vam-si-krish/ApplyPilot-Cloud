@@ -19,6 +19,7 @@ import { getJobsByIds, getScoringResumeText, getSettings } from '@/lib/db';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import { isSubscriptionProvider } from '@/lib/llm';
 import { workerRequestHeaders } from '@/lib/workerAuth';
+import { resolveWorkerConfig } from '@/lib/workerConfig';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -37,8 +38,9 @@ export async function POST(req: Request) {
   try {
     const settings = await getSettings();
     const provider = (settings.score_provider || settings.llm_provider || '').trim().toLowerCase();
-    const workerUrl = (settings.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL || '').replace(/\/$/, '');
-    const workerSecret = settings.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET || '';
+    const worker = resolveWorkerConfig(settings);
+    const workerUrl = worker?.url || '';
+    const workerSecret = worker?.secret || '';
 
     console.log(tag, 'start', JSON.stringify({ provider, workerUrl: workerUrl.slice(0, 40), hasSecret: !!workerSecret }));
 
@@ -56,7 +58,7 @@ export async function POST(req: Request) {
       if (!workerUrl || !workerSecret) {
         console.error(tag, 'subscription mode but worker not configured');
         return NextResponse.json(
-          { error: 'Subscription scoring requires the worker URL and secret to be set in Settings.' },
+          { error: 'Subscription scoring requires the deployment worker to be configured.' },
           { status: 409 },
         );
       }

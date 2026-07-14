@@ -250,10 +250,12 @@ export interface Settings {
    *  job's fit score / company score / match score / tailored résumé. Default false so a
    *  stray click can't wipe scores. Flip on, delete, flip off. (Renamed from allow_rescore.) */
   allow_delete_scores: boolean;
+  /** Legacy single-owner worker override. Ignored and hidden in managed fork deployments. */
   resume_worker_url: string | null;
-  /** Shared Bearer secret for the worker (ADR 0027). Server-only; the settings GET
-   *  masks it. Falls back to the RESUME_WORKER_SECRET env var when unset. */
+  /** Legacy single-owner worker secret. Ignored and hidden in managed fork deployments. */
   resume_worker_secret: string | null;
+  /** True in the multi-user fork: worker routing is deployment-managed and not user-editable. */
+  worker_managed?: boolean;
   updated_at: string;
 }
 

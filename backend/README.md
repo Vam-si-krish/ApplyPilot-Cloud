@@ -5,8 +5,9 @@ dependency on Supabase and no access to the existing ApplyPilot production data.
 The architecture decision and phase boundary are recorded in
 [ADR 0072](../docs/adr/0072-independent-multi-user-fork-foundation.md).
 
-Phase 2A supports three fixed accounts with forced RLS ownership and user-namespaced files.
-Public signup remains deferred; credentials are configured only in Netlify.
+Phase 2A supports three fixed accounts with forced RLS ownership, user-namespaced files,
+and optional UUID-isolated Claude subscription connections. Public signup remains
+deferred; credentials are configured only in Netlify.
 
 ## Isolation
 
@@ -22,6 +23,13 @@ Public signup remains deferred; credentials are configured only in Netlify.
 The gateway implements only the REST and storage protocol used by this app. The
 `@supabase/supabase-js` package remains temporarily as a protocol client; there is no
 Supabase project or Supabase backend behind it.
+
+The worker is also a deployment-managed boundary. In this fork, Netlify must supply
+`RESUME_WORKER_URL` and `RESUME_WORKER_SECRET`; user settings cannot view or redirect
+worker traffic (ADR 0075). Claude credentials live under
+`backend/data/claude-users/<uuid>/`, are never shared across UUIDs, and are included in
+mode-`0600` local backups because OAuth refresh credentials may be present. Encrypted
+off-host backup handling is required before public signup.
 
 ## Install on the server laptop
 

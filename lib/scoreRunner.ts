@@ -13,6 +13,7 @@ import { currentUserId } from './userContext';
 import { getActiveApiKey, isApiKeyProvider } from './credentials';
 import { supabaseAdmin } from './supabase';
 import type { Job, Settings } from './types';
+import { resolveWorkerConfig } from './workerConfig';
 
 /** Which LLM is used for which kind of work (ADR 0025). */
 export type LlmTask = 'chat' | 'score' | 'tailor';
@@ -47,17 +48,6 @@ export function taskProviderModel(settings: Settings, task: LlmTask): ProviderMo
 }
 
 /**
- * Resolve the worker URL + shared secret used to reach the always-on worker, the
- * same way the render proxy does (DB value wins so Settings edits take effect with
- * no redeploy; env var is the bootstrap fallback). Returns null when unconfigured.
- */
-function resolveWorker(settings: Settings): { url: string; secret: string } | null {
-  const url = settings.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL || '';
-  const secret = settings.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET || '';
-  return url && secret ? { url, secret } : null;
-}
-
-/**
  * Build the LLM client for a task (ADR 0006/0025/0042/0069).
  * - a subscription provider: route the task to the worker's /llm, which runs it via
  *   the Claude Agent SDK or OpenAI Codex SDK — no vault/API key is used. If the
@@ -77,7 +67,7 @@ export async function buildClientForTask(settings: Settings, task: LlmTask): Pro
     // URL/secret can't be resolved, the client fails legibly at call time, which the
     // callers already handle (scoreJob → visible score-0 with the reason; assistant →
     // clean error). We never silently fall back to a paid API key.
-    const worker = resolveWorker(settings);
+    const worker = resolveWorkerConfig(settings);
     return makeWorkerClient(worker?.url ?? '', worker?.secret ?? '', model, provider, currentUserId() ?? '');
   }
 

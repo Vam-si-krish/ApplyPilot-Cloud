@@ -20,23 +20,29 @@ runs on the server laptop, without Supabase or another cloud database.
 
 ### Delivery phases
 
-**Phase 1 — isolated baseline (current):** preserve the existing behavior and temporary
+**Phase 1 — isolated baseline (complete):** preserve the existing behavior and temporary
 shared-password login while proving that an empty, independent installation can boot,
 accept profile/settings/API-key data, fetch and score jobs, and generate/download files.
 This phase establishes deployment, recovery, migrations, watchdog, and backups. It is
 not a multi-user release and must not be opened for public signup.
 
-**Phase 2 — multi-user product:** add account creation/login, password reset/session
-management, user ownership columns and enforcement across every table/query, per-user
-storage paths, per-user API-key vaults, onboarding, and worker authorization scoped to
-the requesting user. Migrate singleton `id=1` profile/settings/scoring state into
-user-owned records. Add abuse/rate/spend controls before public access.
+**Phase 2 — multi-user product:** add user ownership columns and forced enforcement
+across every table/query, per-user storage paths, per-user API-key vaults, onboarding,
+and worker authorization scoped to the requesting user. These foundations are now in
+Phase 2A. Public account creation, password reset/session controls, encryption at rest,
+and abuse/rate/spend controls remain Phase 2B gates before public access.
 
 **Phase 2A — fixed private accounts (current):** ship the ownership and onboarding model
 first for three environment-configured username/password accounts. Public signup and
 password reset remain disabled. Each account uploads a résumé PDF for AI-assisted initial
-profile/search setup, then supplies its own Apify and LLM API keys for normal operation.
-The owner's server subscription is permitted only for the bounded onboarding parse.
+profile/search setup, then supplies its own Apify/LLM API keys or connects its own
+UUID-isolated Claude subscription for normal work. The owner's server subscription is
+permitted only for the bounded onboarding parse.
+
+**Phase 2B — public-account readiness (next):** replace fixed credentials with account
+creation, verified recovery, session controls, and operational account lifecycle. Encrypt
+API/OAuth credentials at rest, define encrypted off-host backup handling, add rate/spend
+limits and abuse monitoring, and rerun cross-user denial tests before enabling signup.
 
 ### Phase 1 acceptance criteria
 
@@ -51,9 +57,9 @@ The owner's server subscription is permitted only for the bounded onboarding par
 
 ## Inherited product baseline
 
-The sections below record the original single-owner product behavior that Phase 1 must
-reproduce. The `multi-user-fork` direction and acceptance criteria above supersede its
-hosting, user-count, and provisioning assumptions.
+The sections below record the original single-owner product behavior. The
+`multi-user-fork` direction and accepted ADRs supersede its hosting, user-count,
+provisioning, and scoring assumptions.
 
 ## What & why
 A **single-user, password-protected, cloud-hosted** web app that automatically
@@ -78,14 +84,14 @@ must never be publicly readable — a single shared password gates everything (A
    A Netlify scheduled function (UTC) triggers `/api/run`.
 2. On each run, **fetch the last 24h** of postings matching saved keywords × locations,
    via Apify (not local scraping). `hours_old` defaults to 24, configurable.
-3. **Score every fetched job 1–10** for fit against the resume, using the **exact**
-   scoring prompt + parser from `ApplyPilot-Lite/scorer.py` (see ARCHITECTURE §Scoring).
+3. **Score every fetched job 1–10** for shortlist fit using the current weighted rubric
+   and parser in `lib/scoring.ts` (see ARCHITECTURE §Scoring).
 4. **Present results**: a shortlist sorted by `fit_score` desc, with filters
    (score range, search, status) and a shortlist toggle. "Run now" button for manual runs.
 
 ## Success criteria
-- Given the **same resume + job description**, the TypeScript scorer produces the
-  **same score and parsed fields** as the Python version (verified by `evals/cases/`).
+- Labeled résumé/job evals remain within their expected score bands and every real
+  misjudgement added as a regression case continues to pass.
 - A manual trigger of `/api/run` results in jobs landing in the configured backend as `unscored`,
   then transitioning to `scored` with `fit_score` populated — end to end, no single
   serverless invocation exceeding the platform timeout.

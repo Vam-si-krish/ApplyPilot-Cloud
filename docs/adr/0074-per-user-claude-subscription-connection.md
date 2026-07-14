@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-07-14
+- Builds on/amends: ADR 0073
 
 ## Context
 
@@ -29,6 +30,9 @@ The always-on worker brokers Claude Code's official login flow:
 Ordinary Claude subscription work is then bound to that exact user directory.
 There is no cross-user fallback. The original owner's legacy login remains only
 for the owner and for the explicitly shared, one-time onboarding lane.
+
+After a successful connection, Settings automatically selects Claude subscription
+for the tailoring lane. Users may later choose another provider without disconnecting.
 
 The connection can be removed from Settings. Disconnect deletes only that
 user's UUID-namespaced credentials. Backups containing worker data are mode

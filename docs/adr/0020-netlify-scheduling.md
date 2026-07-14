@@ -1,6 +1,6 @@
 # ADR 0020 — Scheduling on Netlify (not Vercel cron)
 
-**Status:** accepted · **Date:** 2026-06-18 · **Supersedes the cron half of** [ADR 0004](0004-decoupled-pipeline.md)
+**Status:** accepted · **Date:** 2026-06-18 · **Supersedes the cron half of** [ADR 0004](0004-decouple-fetch-and-score.md)
 
 ## Context
 The app was built assuming **Vercel Cron** (`vercel.json` → `/api/run`, `/api/gmail/sync`). The project

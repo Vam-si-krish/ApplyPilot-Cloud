@@ -1,22 +1,21 @@
 # CLAUDE.md — ApplyPilot-Cloud
 
-A single-user, password-protected web app that **runs itself daily in the cloud**:
-it fetches the last 24h of job postings (via Apify), scores each 1–10 for fit
-against the user's resume (via an LLM), and shows a sorted shortlist. It does
-**not** auto-apply. It is a cloud-native rewrite of the *fetch + score* half of
-`../ApplyPilot-Lite/`, keeping scoring behaviour identical.
+A private multi-user, password-protected web app that **runs itself daily**:
+it fetches recent job postings through Apify, scores each 0–10 for fit against
+the authenticated user's résumé, and supports shortlisting, tailoring, cover
+letters, inbox tracking, and application tracking. It does **not** auto-apply.
 
 ## Active branch direction: independent multi-user product
 
 `multi-user-fork` is the foundation of a **new application**, not another frontend for
 the existing ApplyPilot production database. The accepted roadmap is [ADR 0072](docs/adr/0072-independent-multi-user-fork-foundation.md):
 
-- **Phase 1:** reproduce the current app against a completely isolated database, API,
-  file store, worker, credentials, and public path on the server laptop. Keep the
-  shared-password/singleton data model only as a temporary smoke-test baseline.
-- **Phase 2A (current):** three fixed `APP_USERS_JSON` accounts, signed identity sessions,
+- **Phase 1 (complete):** isolated database, API, file store, worker, credentials,
+  public path, services, recovery, and backups on the server laptop.
+- **Phase 2A (implemented/current private release):** three fixed `APP_USERS_JSON` accounts, signed identity sessions,
   forced database RLS, per-user files/keys/jobs/settings, and PDF résumé onboarding. Public
-  signup is deferred; normal work uses each account's own Apify/LLM keys.
+  signup is deferred; normal work uses each account's own Apify/LLM keys or its own
+  connected Claude subscription (ADR 0074).
 
 The fork must never point at or copy production backend credentials/data. The frontend
 deploys separately on Netlify; persistent services stay on the server laptop.
@@ -45,8 +44,9 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/apify.ts` | Apify actor start + input mapping (keywords×locations, last-24h) |
 | `lib/supabase.ts` | REST/storage protocol clients; fork uses `BACKEND_*`, production keeps legacy env fallback |
 | `lib/auth.ts` | Fixed-account credential validation + identity session sign/verify |
+| `lib/workerConfig.ts` | Trusted worker resolution; deployment-only in the multi-user fork |
 | `lib/types.ts` | Shared TS types for jobs/profile/settings/runs |
-| `middleware.ts` | Gates every route behind the password session |
+| `middleware.ts` | Gates routes and replaces caller identity headers from the signed session |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |
 | `backend/` | `multi-user-fork` server API, storage, migrations, launchd/autopull/watchdog/backup |
 | `evals/cases/` | Labeled resume+job → expected-score regression cases |
@@ -58,7 +58,8 @@ npm run dev          # local dev server (http://localhost:3000)
 npm run build        # production build
 npm run typecheck    # tsc --noEmit
 npm run test         # vitest (scoring parser + LLM + evals)
-npm run lint         # next lint
+npm run docs:check   # Markdown links + required living-document workflow
+# npm run lint is not configured yet; Next currently opens an interactive prompt
 ```
 
 ## Conventions
@@ -70,6 +71,9 @@ npm run lint         # next lint
   webhook; scoring is chunked (`SCORE_BATCH_SIZE` jobs/invocation) and re-triggers
   until the unscored queue is empty.
 - Conventional commits with the *why* in the body (`feat(scope): …`).
+- **Architecture and documentation are gates.** Follow `AGENTS.md` and
+  `docs/DEVELOPMENT.md`: read Architecture before non-trivial changes, update living
+  docs when reality changes, and record every implemented slice in the devlog.
 
 ## Context docs (read before non-trivial changes)
 - `docs/devlog/` — **start here in a new session**: latest DAY-N holds current state
@@ -78,8 +82,11 @@ npm run lint         # next lint
 - `docs/ARCHITECTURE.md` — pipeline + data flow + module boundaries.
 - `docs/adr/` — decisions with trade-offs; add an ADR when you make or reverse one.
 - `docs/AI_WORKFLOW.md` — how AI assistance is used and verified here.
+- `docs/DEVELOPMENT.md` — mandatory architecture/documentation definition of done.
 - `git log` — every change carries its *why* in the body.
 
 ## Source of truth
-`../ApplyPilot-Lite/` is authoritative for scoring logic, the LLM client behaviour,
-the data model, and the UI design. When in doubt, open it.
+Current code plus accepted, non-superseded ADRs are authoritative. `docs/PRD.md` and
+`docs/ARCHITECTURE.md` are the living product/technical summaries and must be kept in
+sync. `../ApplyPilot-Lite/` is historical reference material only; scoring intentionally
+diverged in ADR 0022 and later decisions.

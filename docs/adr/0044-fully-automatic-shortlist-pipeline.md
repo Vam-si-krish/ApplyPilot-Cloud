@@ -42,7 +42,7 @@ tune it. The skill-match gate **reuses** the existing `min_skill_match` column.
     `skill_match_score` below the threshold; a **null** score (skills unset / actor gave none)
     is left to be scored, so the gate never silently drops everything.
   - Stage 4 (low-score archive) runs at **assessment START** (the top of
-    [assess-batch](../../app/api/assess-batch/route.ts)), so company-assessment LLM calls are
+    historical `app/api/assess-batch/route.ts`), so company-assessment LLM calls are
     spent only on survivors. Only touches `scored` rows ≤ cutoff (can't race the scorer).
   - Stage 6 (top-N → Tailor & Apply) runs once when **assessment drains** (`finishPipeline`):
     `getTopJobsForTailoring` takes `scored` jobs, drops `low`-tier companies (keeps

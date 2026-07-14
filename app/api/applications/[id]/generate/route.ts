@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { getSettings } from '@/lib/db';
 import { workerRequestHeaders } from '@/lib/workerAuth';
+import { resolveWorkerConfig } from '@/lib/workerConfig';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -18,11 +19,8 @@ export const maxDuration = 30;
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const id = params.id;
   const settings = await getSettings().catch(() => null);
-  // The UI-configured value wins (so editing it in Settings takes effect without a
-  // redeploy); the env var is the fallback/bootstrap default.
-  const url = settings?.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL;
-  const secret = settings?.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET;
-  if (!url || !secret) {
+  const worker = resolveWorkerConfig(settings);
+  if (!worker) {
     return NextResponse.json(
       { error: 'Résumé worker not configured — set RESUME_WORKER_URL and RESUME_WORKER_SECRET.' },
       { status: 503 },
@@ -30,9 +28,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   }
 
   try {
-    const r = await fetch(`${url.replace(/\/$/, '')}/tailor`, {
+    const r = await fetch(`${worker.url}/tailor`, {
       method: 'POST',
-      headers: workerRequestHeaders(secret),
+      headers: workerRequestHeaders(worker.secret),
       body: JSON.stringify({ id }),
       // The worker acks (202) before the LLM call runs, so this returns in ~1s.
       signal: AbortSignal.timeout(20_000),

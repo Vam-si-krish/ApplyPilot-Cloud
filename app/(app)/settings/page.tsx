@@ -624,8 +624,9 @@ export default function SettingsPage() {
         </p>
       </Section>
 
-      {/* Résumé Worker */}
-      <Section title="Résumé Worker">
+      {/* Legacy single-owner deployments can edit their tunnel. In the multi-user
+          fork this trusted endpoint is deployment-managed and intentionally hidden. */}
+      {!s.worker_managed && <Section title="Résumé Worker">
         <p className="text-slate-muted text-[12px] mb-4">
           The URL and shared secret for your local Puppeteer worker (résumé tailoring + PDF rendering).
           What you set here takes precedence over the <span className="font-mono text-sky">RESUME_WORKER_URL</span> /
@@ -654,7 +655,7 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
-      </Section>
+      </Section>}
 
       <div className="sticky bottom-0 -mx-2 flex items-center gap-3 bg-void/85 px-2 py-3 backdrop-blur">
         <SaveBtn onClick={save} loading={saving} />

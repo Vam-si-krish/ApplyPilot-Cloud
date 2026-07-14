@@ -1,5 +1,7 @@
 # Architecture — ApplyPilot-Cloud
 
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0075
+
 ## Current deployment topology
 
 The application code has two deliberately separate deployment identities:
@@ -13,7 +15,7 @@ The rest of this document describes the application pipeline shared by both iden
 Where it says “Supabase,” the fork uses the compatibility boundary described below; no
 Supabase cloud project or Supabase backend service is involved.
 
-## `multi-user-fork` Phase 1 backend
+## `multi-user-fork` backend
 
 ```text
 Browser
@@ -38,7 +40,7 @@ legacy Supabase environment names. PostgREST provides the database REST semantic
 gateway implements only the storage operations the app uses. This is compatibility, not
 a Supabase dependency.
 
-Isolation is enforced operationally in Phase 1:
+Deployment isolation is enforced operationally:
 
 - database/role: `jobpilot_multi` / `jobpilot_multi_app` in the shared PostgreSQL cluster;
 - processes/ports: `jobpilotmulti-rest`, 8231–8233;
@@ -55,9 +57,15 @@ compatibility, but their real primary key is `user_id`, so each account has its 
 
 First login leads to PDF résumé onboarding. Netlify extracts PDF text, makes one bounded
 anti-fabrication parse through the owner's subscription worker, and initializes only that
-user's structured résumé, profile facts, skills, roles, and locations. All normal Apify,
-scoring, chat, and tailoring paths require keys from that user's vault; deployment-level
-LLM/Apify fallback is disabled in the fork.
+user's structured résumé, profile facts, skills, roles, and locations. Normal work uses
+keys from that user's vault or that user's UUID-isolated Claude subscription connection;
+deployment-level LLM/Apify fallback is disabled in the fork.
+
+In a managed fork (`BACKEND_URL` is configured), the résumé worker URL and secret are
+deployment-owned environment values. Settings cannot reveal or override them. This keeps
+authenticated users from redirecting server-side worker calls and makes the trusted
+Netlify → gateway → worker route explicit (ADR 0075). Legacy deployments without
+`BACKEND_URL` retain their existing settings override for compatibility.
 
 ## Stack
 | Layer | Choice | Role |
@@ -66,7 +74,7 @@ LLM/Apify fallback is disabled in the fork.
 | Database | PostgreSQL on the server laptop | jobs, profile, settings, runs |
 | Auth | Three fixed username/passwords → signed identity cookie (ADR 0073) | private multi-user gate; signup deferred |
 | Job fetching | Apify actor via `apify-client` (ADR 0005) | daily last-24h fetch |
-| Scoring | LLM API, default Gemini `gemini-2.0-flash` | port of Lite `scorer.py` |
+| Scoring | User-selected LLM API or UUID-isolated subscription lane | current weighted shortlist rubric |
 | Scheduling | Netlify scheduled functions → `/api/run` | daily trigger (UTC) |
 
 ## The pipeline (the one control flow)
@@ -102,28 +110,37 @@ score of N jobs would blow the timeout. So: Apify runs async and calls back; sco
 is chunked so no invocation exceeds the limit, re-triggering until the queue drains.
 
 ## Module boundaries
+- `lib/auth.ts`, `lib/userContext.ts`, `middleware.ts` — session verification and the
+  only trusted source of request identity. Caller-supplied identity headers are replaced.
+- `lib/db.ts` — user-scoped data access; forced PostgreSQL RLS remains the final boundary.
 - `lib/scoring.ts` — **pure** where possible: `parseScoreResponse(text)` and the prompt
   are deterministic and unit-tested. `scoreJob(resume, job)` makes the one LLM call.
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
+- `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
+  environment values only; legacy settings fallback is isolated here.
 - `lib/apify.ts` — actor start + dataset→job mapping. The only place that knows actor
   input schema; swapping actors touches only this file + the settings value.
-- `lib/supabase.ts` — `supabaseAdmin()` (service-role, server-only) and
-  `supabaseBrowser()` (anon). API routes and server components use admin; client uses anon.
+- `lib/supabase.ts` — protocol clients for the gateway/PostgREST compatibility boundary.
 - `app/api/*` — thin HTTP handlers; validate input, call lib, write DB.
 
-## Scoring (replicated exactly from ApplyPilot-Lite)
-Source: `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`.
-1. `SCORE_PROMPT` copied verbatim (expert Talent Acquisition Strategist; PHASE 1 content
-   validation; PHASE 2 alignment; 0–10 rubric; strict `SCORE/KEYWORDS/NOTE/REASONING` format).
-2. User message: `RESUME:\n{resume}\n\n---\n\nJOB POSTING:\nTITLE/COMPANY/LOCATION/DESCRIPTION`,
-   description truncated to **6000 chars**.
-3. LLM call with `temperature: 0.2`, `max_tokens: 512`.
-4. Parser: line-prefixed `SCORE:`/`KEYWORDS:`/`NOTE:`/`REASONING:`; score clamped to 0–10;
-   `0` = invalid content / not a real job description. LLM error → score 0 (visible).
+## Scoring (current v2 contract)
 
-> Lite stored `score_reasoning` as `"{keywords}\n{reasoning}"` combined. Cloud keeps
-> **`score_keywords` and `score_reasoning` as separate columns** (per the brief's data
-> model); the parser still returns all four fields.
+ADR 0022 retired exact behavioral parity with the original Lite scorer. The current
+contract lives in `lib/scoring.ts` and its tests/evals:
+
+1. Validate that the posting is a real role and apply explicit hard blockers.
+2. Score must-have skills (0–60), role relevance (0–25), and experience/seniority
+   (0–15). A missing core hard requirement caps the overall score at 4; a modest years
+   shortfall alone does not.
+3. Include the posting title, company, location, metadata, and HTML-stripped description
+   truncated to 15,000 characters. Company assessment is returned in the same LLM call.
+4. Make one LLM call per job with `temperature: 0.1` and `maxTokens: 1000`, preserving
+   the stable cacheable résumé/rubric prefix.
+5. Parse and clamp the structured response. Parse/provider failure produces a visible
+   score of 0; the application never fabricates a score.
+
+The labeled evals protect directional score bands and known regressions, not equality
+with a retired Python implementation.
 
 ## LLM client (ported from llm.py; task routing extended in ADR 0025/0069)
 - Providers by env key: Gemini (default `gemini-2.0-flash`), OpenAI (`gpt-4o-mini`),
@@ -145,15 +162,19 @@ Source: `../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`.
 
 ## Data model (PostgreSQL; legacy migration directory name retained)
 Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`.
-- **jobs**: id, url (unique), title, company, location, salary, full_description,
+- Every domain row carries `user_id`; forced RLS and composite foreign keys prevent
+  cross-user reads, writes, and relationships.
+- **app_users / api_keys**: fixed-account identities and each user's provider vault.
+- **jobs**: id, URL unique per user, title, company, location, salary, full_description,
   application_url, fit_score (0–10, null=unscored), score_note, score_keywords,
   score_reasoning, status (unscored|scored|archived), is_shortlisted, discovered_at,
   scored_at, source.
-- **profile**: single row — personal, experience, compensation, work_authorization,
+- **profile**: one row per user — personal, experience, compensation, work_authorization,
   skills_boundary, resume_text (scoring reads this), resume_pdf_path.
-- **settings**: single row — schedule/search configuration plus legacy `llm_*` and the three task pairs:
+- **settings**: one row per user — schedule/search configuration plus legacy `llm_*` and the three task pairs:
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
-- **runs**: id, started_at, finished_at, jobs_found, jobs_scored, errors, apify_run_id, status.
+- **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
+  tailoring, inbox, assistant, and continuation state.
 
 ## Re-trigger mechanism for chunked scoring
 `/api/score-batch` re-invokes itself via a fire-and-forget `fetch` to its own URL

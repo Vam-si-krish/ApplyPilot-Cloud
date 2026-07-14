@@ -1,5 +1,10 @@
 # Phase 4 — run the résumé worker on the always-on server laptop + expose it to Netlify
 
+> **Legacy production runbook.** This Cloudflare/Supabase topology is retained for the
+> original `main` deployment. For `multi-user-fork`, use
+> [`backend/README.md`](../backend/README.md); do not apply these ports, secrets, services,
+> or tunnel instructions to the isolated fork.
+
 Goal: the deployed app (Netlify) renders PDFs by calling this worker, which runs on your always-on Mac and is
 reachable over a stable HTTPS URL via Cloudflare Tunnel. Do this **on the server laptop**.
 

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSettings } from '@/lib/db';
 import { maskKey } from '@/lib/credentials';
 import { SUPPORTED_PORTALS } from '@/lib/apify';
+import { hasManagedWorker } from '@/lib/workerConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,10 +12,16 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const s = await getSettings();
+    const workerManaged = hasManagedWorker();
     // The worker secret is write-only to the browser: return a masked preview, never
     // the raw value (the settings row is sent to the client). The PUT below ignores
     // the masked value echoed back, so an unchanged secret is never clobbered.
-    const safe = { ...s, resume_worker_secret: s.resume_worker_secret ? maskKey(s.resume_worker_secret) : null };
+    const safe = {
+      ...s,
+      resume_worker_url: workerManaged ? null : s.resume_worker_url,
+      resume_worker_secret: workerManaged ? null : (s.resume_worker_secret ? maskKey(s.resume_worker_secret) : null),
+      worker_managed: workerManaged,
+    };
     return NextResponse.json(safe);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -100,18 +107,19 @@ export async function PUT(req: Request) {
     patch.career_sites_max_jobs = Math.max(10, Math.min(5000, Math.round(Number(body.career_sites_max_jobs))));
   }
   if (typeof body.allow_delete_scores === 'boolean') patch.allow_delete_scores = body.allow_delete_scores;
-  if (typeof body.resume_worker_url === 'string') {
+  const workerManaged = hasManagedWorker();
+  if (!workerManaged && typeof body.resume_worker_url === 'string') {
     patch.resume_worker_url = body.resume_worker_url.trim();
   }
-  if (body.resume_worker_url === null) patch.resume_worker_url = null;
+  if (!workerManaged && body.resume_worker_url === null) patch.resume_worker_url = null;
   // Worker secret is write-only: only persist a real new value. A blank is "leave
   // unchanged", and the masked preview (contains •) echoed back by the GET is ignored
   // so saving unrelated settings never wipes the stored secret.
-  if (typeof body.resume_worker_secret === 'string') {
+  if (!workerManaged && typeof body.resume_worker_secret === 'string') {
     const v = body.resume_worker_secret.trim();
     if (v && !v.includes('•')) patch.resume_worker_secret = v;
   }
-  if (body.resume_worker_secret === null) patch.resume_worker_secret = null;
+  if (!workerManaged && body.resume_worker_secret === null) patch.resume_worker_secret = null;
 
   const { error } = await supabaseAdmin().from('settings').update(patch).eq('id', 1);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

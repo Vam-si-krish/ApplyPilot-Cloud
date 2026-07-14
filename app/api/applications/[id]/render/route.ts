@@ -5,23 +5,21 @@
  * the worker reads Supabase, renders, uploads to the `resumes` bucket, and updates
  * the row (status + pdf_path). Session-gated.
  *
- * Needs env: RESUME_WORKER_URL (e.g. the Cloudflare Tunnel URL, or http://localhost:8787
- * during local testing) and RESUME_WORKER_SECRET (matches the worker's WORKER_SECRET).
+ * Managed forks use deployment-owned RESUME_WORKER_URL/RESUME_WORKER_SECRET. Legacy
+ * single-owner deployments may use the Settings override through workerConfig.
  */
 import { NextResponse } from 'next/server';
 import { getSettings } from '@/lib/db';
 import { workerRequestHeaders } from '@/lib/workerAuth';
+import { resolveWorkerConfig } from '@/lib/workerConfig';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const settings = await getSettings().catch(() => null);
-  // The UI-configured value wins (so editing it in Settings takes effect without a
-  // redeploy); the env var is the fallback/bootstrap default.
-  const url = settings?.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL;
-  const secret = settings?.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET;
-  if (!url || !secret) {
+  const worker = resolveWorkerConfig(settings);
+  if (!worker) {
     return NextResponse.json(
       { error: 'Résumé worker not configured — set RESUME_WORKER_URL and RESUME_WORKER_SECRET.' },
       { status: 503 },
@@ -29,9 +27,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   }
 
   try {
-    const r = await fetch(`${url.replace(/\/$/, '')}/generate`, {
+    const r = await fetch(`${worker.url}/generate`, {
       method: 'POST',
-      headers: workerRequestHeaders(secret),
+      headers: workerRequestHeaders(worker.secret),
       body: JSON.stringify({ id: params.id }),
       // Worker render (auto-fit, several passes) can take a few seconds.
       signal: AbortSignal.timeout(55_000),

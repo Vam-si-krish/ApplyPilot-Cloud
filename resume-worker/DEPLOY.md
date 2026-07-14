@@ -1,5 +1,9 @@
 # Running & updating the résumé worker on the server laptop
 
+> **Legacy production runbook.** This document operates the original `com.applypilot.*`
+> services on `main`. For `multi-user-fork`, use
+> [`backend/README.md`](../backend/README.md) and only `com.jobpilotmulti.*` services.
+
 This is the runbook for the **always-on server laptop** that hosts the ApplyPilot-Cloud
 résumé worker (`resume-worker/`) — the Node + Puppeteer service the deployed app calls
 over a Cloudflare tunnel to **tailor résumés, render PDFs, and generate cover letters**.

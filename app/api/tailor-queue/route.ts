@@ -23,6 +23,7 @@ import { getSettings } from '@/lib/db';
 import { authorizedRouteUser } from '@/lib/routeUser';
 import { runAsUser } from '@/lib/userContext';
 import { workerRequestHeaders } from '@/lib/workerAuth';
+import { resolveWorkerConfig } from '@/lib/workerConfig';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -40,9 +41,8 @@ async function handle(req: Request) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 
-  const url = settings.resume_worker_url?.trim() || process.env.RESUME_WORKER_URL;
-  const secret = settings.resume_worker_secret?.trim() || process.env.RESUME_WORKER_SECRET;
-  if (!url || !secret) {
+  const worker = resolveWorkerConfig(settings);
+  if (!worker) {
     return NextResponse.json(
       { error: 'Résumé worker not configured — set RESUME_WORKER_URL and RESUME_WORKER_SECRET.' },
       { status: 503 },
@@ -50,9 +50,9 @@ async function handle(req: Request) {
   }
 
   try {
-    const r = await fetch(`${url.replace(/\/$/, '')}/tailor-queue`, {
+    const r = await fetch(`${worker.url}/tailor-queue`, {
       method: 'POST',
-      headers: workerRequestHeaders(secret),
+      headers: workerRequestHeaders(worker.secret),
       // A cron GET forwards scheduled:true so the worker applies the enabled/hour gate;
       // a manual POST omits it, so "Run queue now" drains immediately.
       body: JSON.stringify(isCron ? { scheduled: true } : {}),

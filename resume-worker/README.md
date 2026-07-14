@@ -1,8 +1,9 @@
-# ApplyPilot résumé worker (ADR 0024 · Phase 3)
+# ApplyPilot résumé worker
 
 Renders an application's **tailored résumé JSON** into a polished, **one-page, ATS-readable PDF**
-(Puppeteer + HTML/CSS, auto-fit-to-one-page) and uploads it to the Supabase `resumes` bucket. Runs on an
-always-on Mac; the Netlify app calls it over a Cloudflare Tunnel (Phase 4).
+(Puppeteer + HTML/CSS, auto-fit-to-one-page), runs subscription-backed LLM work, and uploads through the
+configured storage protocol. In `multi-user-fork` it runs at `127.0.0.1:8233` behind the independent
+gateway and Tailscale Funnel `/jobpilot/worker`; the Netlify app never accepts a user-selected endpoint.
 
 ## Why a separate service
 Puppeteer/Chromium (~150 MB, cold starts) and the multi-pass fit loop don't fit serverless limits. This is a
@@ -13,10 +14,13 @@ including optional Claude/ChatGPT subscription backends that cannot run in a ser
 ```bash
 cd resume-worker
 npm install                 # downloads a headless Chromium (one-time, ~150 MB)
-npm run sample              # renders sample-classic.pdf + sample-modern.pdf (no Supabase needed)
-cp .env.example .env        # then fill in WORKER_SECRET + SUPABASE_SERVICE_ROLE_KEY
-npm start                   # worker on :8787
+npm run sample              # renders sample-classic.pdf + sample-modern.pdf (no backend needed)
+npm test
 ```
+
+For the isolated fork, install and operate the worker through the
+[backend runbook](../backend/README.md). The standalone `.env` and port-8787 instructions
+in `SETUP.md`/`DEPLOY.md` describe the legacy production topology, not this fork.
 
 ## Endpoints
 - `GET /health` → `{ ok, browser }`
@@ -26,7 +30,8 @@ npm start                   # worker on :8787
 - `POST /score-jobs` → background subscription scoring for selected jobs
 - `POST /tailor` / `POST /tailor-queue` → tailor one application / drain the queue
 - `POST /generate` `{ "id": "<application uuid>" }` with header `Authorization: Bearer <WORKER_SECRET>`
-  → renders that application's `tailored_resume`, uploads `resumes/<id>.pdf`, sets the row `ready` + `pdf_path`.
+  and `x-jobpilot-user-id: <account uuid>` → resolves only that user's application,
+  renders it, uploads to the UUID-namespaced storage path, and marks the row ready.
 
 ## Auto-fit
 The whole document scales off one CSS var (`--scale`). `render.js` binary-searches the **largest** scale that
@@ -38,7 +43,9 @@ UI can suggest trimming — never a silent page 2.
 `templates.js` — `classic` (serif) and `modern` (sans, navy accent). Single-column, semantic `<h2>` sections,
 real selectable text, standard fonts, no icons/columns → ATS-parseable.
 
-## Deploy to the always-on server laptop (Phase 4)
-Copy this folder, `npm install`, set `.env`, run under a launchd plist (auto-restart on boot), and expose it
-with a named Cloudflare Tunnel (e.g. `worker.vamsikrish.com → localhost:8787`). Put `RESUME_WORKER_URL` +
-`RESUME_WORKER_SECRET` in the Netlify env. Same code as the dev laptop.
+## Multi-user isolation
+
+Every fork request carries a gateway-authenticated account UUID. Database/storage clients
+are scoped to it, Claude uses only `CLAUDE_CONFIG_DIR` under that UUID, and there is no
+cross-user credential fallback. Generated object paths are namespaced by the same UUID.
+The fork service is installed/restarted as `com.jobpilotmulti.worker` by `backend/scripts/`.

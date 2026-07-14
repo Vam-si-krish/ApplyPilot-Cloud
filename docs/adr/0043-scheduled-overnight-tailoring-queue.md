@@ -15,7 +15,7 @@ the user's own interactive Claude usage and (b) risks exhausting the window mid-
 failures). The user wants to spend that usage **while asleep** (e.g. 04:00), so the window has
 refreshed by morning and the résumés are ready.
 
-The existing manual path ("Generate selected", [app/(app)/applications/page.tsx](../../app/(app)/applications/page.tsx))
+The existing manual path ("Generate selected", [app/(app)/applications/page.tsx](<../../app/(app)/applications/page.tsx>))
 runs the pipeline **in the browser** — it POSTs `/generate` per app and polls each row for up
 to 3 minutes. That cannot run unattended at 4am with no browser open, and the per-resume work
 (30–90s tailoring) vastly exceeds any serverless function ceiling.

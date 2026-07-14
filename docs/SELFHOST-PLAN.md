@@ -1,5 +1,9 @@
 # Plan: replace Supabase cloud with the server laptop (self-hosted)
 
+> **Historical plan for the original deployment.** The accepted `multi-user-fork`
+> architecture is ADR 0072 plus [`backend/README.md`](../backend/README.md). Do not use
+> this document to configure the fork.
+
 **Date:** 2026-07-11 · **Status: accepted — phase 0 built & validated** (bundle
 in `selfhost/`, runbook in `selfhost/SETUP-SELFHOST.md`; phases 1–3 pending)
 

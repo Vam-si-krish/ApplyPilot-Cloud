@@ -2,16 +2,19 @@
 
 ## `multi-user-fork` roadmap (current user priority; ADR 0072)
 
-- [ ] **Phase 1: provision the isolated server backend.** Clone the branch into
+- [x] **Phase 1: provision the isolated server backend.** Clone the branch into
   `~/apps/jobpilot-multi`, run `backend/scripts/bootstrap.sh`, and pass the fresh-DB,
   local/public health, REST, storage, worker, recovery, and backup gates.
 - [ ] **Phase 1: deploy the separate Netlify site and complete an end-to-end smoke test.**
   Use only the fork credentials, custom domain, and empty data. Do not copy production env.
-- [ ] **Phase 2: write the identity/multi-tenancy ADR before implementation.** Decide the
+- [x] **Phase 2A: write the identity/multi-tenancy ADR before implementation.** Decide the
   account/session model and ownership enforcement, then cover every table, query, file,
   worker call, API key, onboarding flow, password reset, and rate/spend boundary.
-- [ ] **Phase 2: implement and verify multi-user isolation before enabling signup.** Add
-  cross-user denial tests and migrate singleton rows; Phase 1 remains owner-only until done.
+- [x] **Phase 2A: implement and verify fixed-account multi-user isolation.** Add
+  cross-user denial tests, migrate singleton rows, and keep public signup disabled.
+- [ ] **Phase 2B: complete public-account security gates.** Add self-service signup,
+  verified password recovery, session controls, credential encryption at rest, encrypted
+  off-host backup handling, and abuse/rate/spend controls before enabling public access.
 
 A living, do-it-one-by-one checklist from a full-codebase review (token efficiency,
 performance, correctness, UX). Work top-to-bottom unless priorities change.
@@ -22,14 +25,15 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
    - App/TS: `npm run typecheck` · `npm run test` · `npm run build`
    - Worker (`resume-worker/*`): `node --check <file>` (+ `node render-sample.js` for render/template changes)
 3. Tick the box here, and append a one-line note to the latest `docs/devlog/DAY-*.md`.
-4. Commit (conventional commit, *why* in the body). Branch off `main` first.
+4. Commit (conventional commit, *why* in the body). Fork development stays on
+   `multi-user-fork`; do not merge production backend configuration from `main`.
 
-## ⚠ Current repo state (read before starting)
-- The working tree has **uncommitted** changes: ADR 0030 (apply UX), ADR 0031 (one-page
-  tailoring + caching + patch output), and the contact-links fix (`resume-worker/templates.js`).
-  Decide whether to commit those first.
-- **Deploy gap:** app changes go live only on push → Netlify build. Worker changes
-  (links fix + ADR 0031 condense loop) need the **always-on worker to be restarted**.
+## Current release state (verified 2026-07-14)
+
+- The independent backend and fixed-account/RLS foundation are live on the server laptop.
+- The separate Netlify site and its end-to-end smoke test remain an explicit deployment gap.
+- Worker code changes go live only after the isolated `com.jobpilotmulti.*` worker restarts;
+  app changes go live only after a push and successful Netlify build.
 
 ---
 
@@ -44,7 +48,7 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 
 ## P1 — Correctness bug (user-visible)
 - [ ] **B. Canonicalize job URLs before dedup (fixes ">24h jobs reappear").**
-  - Why: dedup is `onConflict: 'url'` ([apify-webhook/route.ts:86](app/api/apify-webhook/route.ts#L86))
+  - Why: dedup is `onConflict: 'url'` ([apify-webhook/route.ts:86](../app/api/apify-webhook/route.ts#L86))
     and `jobs.url` is `unique`, but LinkedIn appends varying tracking params
     (`?refId=…&trackingId=…`). The same posting re-inserts as a NEW row with a fresh
     `discovered_at`, so it shows again in the last-24h view.
@@ -57,7 +61,7 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 
 ## P2 — High-value token / performance (cheap)
 - [x] **C. Prompt-cache the scoring résumé + rubric prefix.** *(ADR 0056/0066)*
-  - Why: `buildScoreMessages` ([scoring.ts:132](lib/scoring.ts#L132)) puts the stable
+  - Why: `buildScoreMessages` ([scoring.ts:132](../lib/scoring.ts#L132)) puts the stable
     résumé + `SCORE_PROMPT` first and the per-job posting second, but sends **no
     `cache_control`**. Across a batch of hundreds of jobs the prefix is re-billed every
     call on Anthropic. The caching primitive now exists (ADR 0031: `ContentPart`/`cache`).
@@ -69,7 +73,7 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
     is non-zero from the 2nd job onward.
 - [ ] **D. Stop `/api/jobs` from over-fetching `full_description` / `score_reasoning`.**
   - Why: the list query is `select('*')` for up to 200 rows
-    ([jobs/route.ts:30](app/api/jobs/route.ts#L30)), shipping multi-KB `full_description`
+    ([jobs/route.ts:30](../app/api/jobs/route.ts#L30)), shipping multi-KB `full_description`
     + `score_reasoning` the list never shows until a row is expanded → multi-MB payloads
     on every Jobs/Past load.
   - Fix: select only the columns the list/badges need; fetch the heavy detail fields
@@ -81,13 +85,13 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 ## P3 — Smaller wins
 - [ ] **E. Render the tailored job title (`basics.label`) on the PDF.**
   - Why: tailoring computes/stores `basics.label`, and the `.label` CSS exists in
-    [templates.js](resume-worker/templates.js), but the header only draws `.name` +
+    [templates.js](../resume-worker/templates.js), but the header only draws `.name` +
     `.contact` — the headline (e.g. "Senior Frontend Engineer") never appears.
   - Fix: add `<div class="label">${esc(b.label||'')}</div>` to the header (between name
     and contact) when `b.label` is present. Worker change → re-render sample + redeploy.
   - Verify: `node render-sample.js` shows the label; still one page.
 - [x] **F. Prompt-cache the assistant system prompt (full profile JSON each turn).** *(ADR 0069)*
-  - Why: `buildAssistantSystem` ([assistant.ts:88](lib/assistant.ts#L88)) embeds the whole
+  - Why: `buildAssistantSystem` ([assistant.ts:88](../lib/assistant.ts#L88)) embeds the whole
     profile JSON in the system prompt every turn — stable across the conversation.
   - Fix: mark the system block cacheable (once the assistant route uses the array-content
     path). Medium value; lower priority than C.
@@ -95,14 +99,14 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 
 ## P4 — UX / maintainability (subjective; confirm with user before doing)
 - [ ] **G. Reduce nav from 9 items to a clearer funnel.**
-  - Why: [AppShell.tsx:11](components/AppShell.tsx#L11) lists Dashboard, Jobs, Tailor &
+  - Why: [AppShell.tsx:11](../components/AppShell.tsx#L11) lists Dashboard, Jobs, Tailor &
     Apply, Past Jobs, Inbox, Tracker, Assistant, Profile, Settings. The core path is
     Jobs → Tailor & Apply; the rest are secondary.
   - Fix (proposal): group secondary items (e.g. Inbox + Tracker under one "Activity" area;
     fold Profile into Settings). Get user sign-off on grouping before implementing.
 - [ ] **H. Split the monolithic pages.**
-  - Why: [settings/page.tsx](app/(app)/settings/page.tsx) ≈ 1,165 lines,
-    [jobs/page.tsx](app/(app)/jobs/page.tsx) ≈ 1,034 lines — hard to evolve.
+  - Why: [settings/page.tsx](<../app/(app)/settings/page.tsx>) ≈ 1,621 lines,
+    [jobs/page.tsx](<../app/(app)/jobs/page.tsx>) ≈ 1,428 lines — hard to evolve.
   - Fix: extract per-section components (Settings especially). Not user-facing; do when
     touching those pages anyway.
 

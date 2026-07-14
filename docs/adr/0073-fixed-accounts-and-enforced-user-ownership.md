@@ -2,6 +2,10 @@
 
 **Status:** accepted · **Date:** 2026-07-14 · **Builds on:** ADR 0072
 
+> **Amended by ADR 0074:** after onboarding, a user may use either their own API keys or
+> their own UUID-isolated Claude subscription connection. The owner's subscription
+> remains restricted to bounded onboarding.
+
 ## Context
 
 The isolated Phase 1 backend is live. The next milestone is private use by three known
@@ -70,7 +74,7 @@ the logged-in user's own saved API keys and selected providers.
 3. The same job URL, provider, and Gmail ID can exist independently for all three users.
 4. PDF onboarding creates only the logged-in user's profile/settings/files and marks only
    that account complete.
-5. User-owned Apify and LLM keys drive normal work; onboarding alone may use the shared
-   subscription.
+5. User-owned Apify/LLM keys or the user's own UUID-isolated Claude connection drive
+   normal work; onboarding alone may use the owner's shared subscription.
 6. Fresh migration, backend/worker/app tests, typecheck, production build, live migration,
    public health, recovery, and backup all pass.

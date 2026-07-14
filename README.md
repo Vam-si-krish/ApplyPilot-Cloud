@@ -11,11 +11,10 @@ it fetches the last 24 hours of job postings (via Apify), scores each **1–10**
 fit against your resume (via an LLM), and shows a ranked, filterable shortlist.
 **It does not auto-apply** — the flow stops at *fetched → scored → shortlisted*.
 
-It is a cloud-native rewrite of the *fetch + score* half of
-[`ApplyPilot-Lite`](../ApplyPilot-Lite), replacing local Playwright scraping with the
-Apify API so the whole thing can run serverless. **Scoring behaviour is copied
-exactly** from ApplyPilot-Lite (same prompt, same parser, same model defaults) — see
-[How scoring mirrors ApplyPilot-Lite](#how-scoring-mirrors-applypilot-lite).
+It began as a cloud-native rewrite of the *fetch + score* half of `ApplyPilot-Lite`,
+replacing local Playwright scraping with the Apify API. Its scoring contract has since
+evolved into the weighted v2 rubric documented in
+[Current scoring](#current-scoring) and ADR 0022.
 
 ## Stack
 - **Next.js 14 (App Router)** on Netlify — React UI + API routes in one deploy
@@ -67,7 +66,8 @@ cp .env.example .env.local      # then fill in the values (see below)
 To use a Claude subscription instead of an Anthropic API key, open **Settings →
 Claude connection**, authenticate on Anthropic's website, paste the one-time
 authorization code, and select **Claude subscription (no API key)** for Tailoring.
-ApplyPilot never receives the user's Claude password or browser cookies.
+ApplyPilot never receives the user's Claude password or browser cookies. A successful
+connection automatically selects the subscription lane for tailoring.
 
 ### Commands
 ```bash
@@ -75,8 +75,11 @@ npm run dev          # dev server
 npm run build        # production build
 npm run typecheck    # tsc --noEmit
 npm run test         # vitest: scoring parser, provider detection, evals
-npm run lint         # next lint
+npm run docs:check   # required docs + local links + ADR numbering
 ```
+
+The current Next.js 14 setup has no working lint command; typecheck, tests, build, and
+`docs:check` are the required gates until linting is configured.
 
 ### Evals
 [`evals/cases/*.json`](evals/cases) hold labeled résumé+job cases with expected score
@@ -99,29 +102,26 @@ find a real misjudgement; it becomes a permanent regression check.
 Scheduling uses the committed Netlify functions in `netlify/functions/`. `CRON_SECRET`
 authenticates their calls into the app.
 
-## How scoring mirrors ApplyPilot-Lite
-The scorer is a faithful TypeScript port of
-`../ApplyPilot-Lite/src/applypilot/scoring/scorer.py`:
-- **`SCORE_PROMPT`** (the "expert Talent Acquisition Strategist" prompt with PHASE 1 content
-  validation, PHASE 2 alignment, the 0–10 rubric, and the strict
-  `SCORE / KEYWORDS / NOTE / REASONING` format) is copied verbatim into
-  [`lib/scoring.ts`](lib/scoring.ts).
-- The user message is built identically — résumé + job, **description truncated to 6000 chars**.
-- The LLM call uses **`temperature: 0.2`, `max_tokens: 512`**.
-- The response is parsed identically: line-prefixed fields, score clamped to **0–10**, where
-  **0 means "invalid content / not a real job description."** Any LLM error yields score 0
-  (visible), never a fabricated score.
+## Current scoring
+
+The current scorer in [`lib/scoring.ts`](lib/scoring.ts) uses a recruiter-style weighted
+rubric: must-have skills 60%, role relevance 25%, and experience/seniority 15%, with
+explicit blockers and a cap when a core hard requirement is genuinely missing. It sends
+up to 15,000 characters of cleaned job description, uses one model call per job at
+temperature 0.1 and a 1,000-token response limit, and returns company assessment in that
+same response. Provider or parse failure is stored visibly as score 0.
+
+The eval cases protect expected score bands and known regressions. Exact parity with the
+original Lite Python scorer was retired by ADR 0022.
 
 The LLM client ([`lib/llm.ts`](lib/llm.ts)) ports `llm.py`: provider auto-detection by env key
 (Gemini default), the OpenAI-compatible call path with the Gemini compat→native fallback, the
 Anthropic Messages shape, and 429/503 + timeout retry with exponential back-off.
 
-One intentional difference: ApplyPilot-Lite stored keywords folded into `score_reasoning`;
-Cloud keeps **`score_keywords` and `score_reasoning` as separate columns** (ADR — see
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
-
 ## Project docs
+- [`AGENTS.md`](AGENTS.md) — mandatory architecture/documentation rules for every change.
 - [`CLAUDE.md`](CLAUDE.md) — agent home base + the one invariant.
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — development lifecycle and definition of done.
 - [`docs/PRD.md`](docs/PRD.md) — what & why.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — pipeline, data flow, module boundaries.
 - [`docs/adr/`](docs/adr) — decisions with trade-offs.
