@@ -27,7 +27,7 @@ CHANGED=$(git diff --name-only "$LOCAL" HEAD)
 
 if grep -qE '^(backend/package|resume-worker/package)' <<< "$CHANGED"; then
   npm ci --prefix "$BACKEND" >> "$LOG" 2>&1
-  npm ci --prefix "$REPO/resume-worker" >> "$LOG" 2>&1
+  npm install --prefix "$REPO/resume-worker" >> "$LOG" 2>&1
 fi
 
 node "$BACKEND/migrate.mjs" >> "$LOG" 2>&1

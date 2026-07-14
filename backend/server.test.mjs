@@ -5,7 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import { startServer } from './server.mjs';
+
+const clientOptions = {
+  auth: { persistSession: false, autoRefreshToken: false },
+  realtime: { transport: ws },
+};
 
 test('Supabase REST client is authenticated and proxied to PostgREST', async (t) => {
   let received = null;
@@ -32,7 +38,7 @@ test('Supabase REST client is authenticated and proxied to PostgREST', async (t)
   const client = createClient(
     `http://127.0.0.1:${server.address().port}/jobpilot`,
     'test-service-key',
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    clientOptions,
   );
   const result = await client.from('profile').select('*').eq('id', 1);
   assert.equal(result.error, null);
@@ -84,7 +90,7 @@ test('storage upload and signed download stay private', async (t) => {
   const client = createClient(
     `http://127.0.0.1:${server.address().port}/jobpilot`,
     'test-service-key',
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    clientOptions,
   );
   const sdkUpload = await client.storage.from('resumes').upload('sdk.pdf', Buffer.from('sdk-pdf'), {
     contentType: 'application/pdf',

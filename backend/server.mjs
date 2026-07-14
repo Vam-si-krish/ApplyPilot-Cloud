@@ -164,7 +164,7 @@ export function createApp(options = {}) {
 
 export function startServer(options = {}) {
   const app = createApp(options);
-  const port = Number(options.port || process.env.PORT || 8231);
+  const port = Number(options.port ?? process.env.PORT ?? 8231);
   const server = http.createServer(app);
   server.listen(port, '127.0.0.1');
   return server;

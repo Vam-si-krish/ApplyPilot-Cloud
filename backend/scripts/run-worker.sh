@@ -8,6 +8,7 @@ set +a
 export BACKEND_URL="http://127.0.0.1:${PORT}"
 export BACKEND_SERVICE_KEY="$SERVICE_ROLE_KEY"
 export PORT="$WORKER_PORT"
+export HOST="127.0.0.1"
 export WORKER_SECRET
 cd "$REPO/resume-worker"
 exec node server.js

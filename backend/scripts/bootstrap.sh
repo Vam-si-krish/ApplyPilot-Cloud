@@ -53,7 +53,7 @@ where not exists (select 1 from pg_database where datname = :'db') \gexec
 SQL
 
 npm ci --prefix "$BACKEND"
-npm ci --prefix "$REPO/resume-worker"
+npm install --prefix "$REPO/resume-worker"
 node "$BACKEND/migrate.mjs"
 docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" up -d
 chmod +x "$BACKEND"/scripts/*.sh

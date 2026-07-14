@@ -63,6 +63,7 @@ const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 const PORT = process.env.PORT || 8787;
+const HOST = process.env.HOST;
 const SECRET = process.env.WORKER_SECRET || '';
 
 function authed(req) {
@@ -705,8 +706,8 @@ app.post('/llm', async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`résumé worker listening on :${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`résumé worker listening on ${HOST || '*'}:${PORT}`);
 });
 
 async function shutdown() {

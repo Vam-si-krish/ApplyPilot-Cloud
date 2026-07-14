@@ -56,6 +56,38 @@ After the new Netlify URL is known, set its independent env values from `backend
 update `CORS_ORIGINS`, and execute every ADR 0072 verification gate before declaring
 Phase 1 complete.
 
+## Server-laptop continuation
+
+Provisioning resumed on the server laptop later the same day. The isolated clone now runs
+from `~/apps/jobpilot-multi`, with the production ApplyPilot database, ports, containers,
+launchd labels, and Funnel root left untouched.
+
+- Created `jobpilot_multi` / `jobpilot_multi_app` and applied all 45 ordered migrations.
+- Started `jobpilotmulti-rest` on `127.0.0.1:8232`, the gateway on `127.0.0.1:8231`, and
+  the independent worker on `127.0.0.1:8233`.
+- Mounted `/jobpilot` in the existing Funnel and verified local and public health.
+- Verified an authenticated REST create/read/delete plus upload/signed-download round trip
+  through the public Funnel URL; unauthenticated REST returned 401.
+- Loaded all five `com.jobpilotmulti.*` jobs, terminated the gateway and worker, and
+  observed launchd restart both with healthy replacement processes.
+- Produced and integrity-checked a database and files backup.
+
+Live verification exposed three server-only gaps that the development Mac did not reveal:
+
+- bootstrap/autopull used `npm ci` for the lockfile-free worker package;
+- backend compatibility tests needed the same explicit WebSocket transport used by the
+  worker on Node 20, and their `port: 0` option incorrectly fell back to port 8231;
+- the fork worker listened on all interfaces instead of loopback.
+
+The scripts/tests now handle the server's Node 20 runtime, and the fork worker is forced to
+`127.0.0.1`. Backend tests, worker tests, app typecheck, 169 app tests (8 live-LLM evals
+skipped), and the 32-page production build all pass on the server laptop.
+
+The remaining Phase 1 release gate is the separate Netlify site: configure it with the
+independent server values, update `CORS_ORIGINS`, and complete a real UI action against the
+new database. Until then this remains an owner-only backend and must not be opened for
+multi-user signup.
+
 ## Process correction
 
 This slice initially violated the repository's `research → spec → plan → implement → verify
