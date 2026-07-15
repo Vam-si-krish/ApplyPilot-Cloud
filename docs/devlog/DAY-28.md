@@ -46,3 +46,21 @@
   active keys until the personal laptop runs `setup-key`. The test backup produced an
   11.2 MB database dump and 40.9 MB file archive at mode `0600`. Public gateway health and
   worker version both passed on `6539e64` after restart.
+
+## Fixed-account rename preparation
+
+- Added migration 0049 to rename only the fixed UUID ending `0002` from `pilot2` to
+  `surya` and UUID ending `0003` from `pilot3` to `samitha`; stable UUID ownership and
+  the `vamsi` owner snapshot remain unchanged.
+- Updated the environment example and auth fixtures for the new usernames. Actual
+  passwords remain solely in Netlify's secret `APP_USERS_JSON` and were not committed.
+- The focused auth regression passed (2/2), along with documentation validation (126
+  Markdown files and 82 ADRs), TypeScript, and the 33-page production build.
+- Installed the restricted personal-laptop key through the pinned Tailscale route and
+  bootstrapped the protected development environment. Linked Netlify CLI only to the
+  isolated `apply.vamsikrish.com` project and updated its secret `APP_USERS_JSON` for
+  production, deploy-preview, and branch-deploy contexts; the original
+  `applypilot.vamsikrish.com` project was not selected.
+- Protected-configuration checks confirmed `vamsi` is unchanged, the two new credentials
+  authenticate to UUIDs ending `0002`/`0003`, and the former pilot usernames are rejected.
+  The coordinated database/frontend rollout remains pending the deployment commit.

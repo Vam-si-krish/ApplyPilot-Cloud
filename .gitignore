@@ -37,3 +37,6 @@ next-env.d.ts
 /backend/data/
 /backend/logs/
 /backend/backups/
+
+# Local Netlify folder
+.netlify

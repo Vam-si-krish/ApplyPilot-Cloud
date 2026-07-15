@@ -3,8 +3,8 @@ import { authenticateUser, configuredUsers, createSessionToken, readSessionToken
 
 const USERS = JSON.stringify([
   { id: '00000000-0000-4000-8000-000000000001', username: 'vamsi', password: 'owner-password' },
-  { id: '00000000-0000-4000-8000-000000000002', username: 'pilot2', password: 'pilot-two-password' },
-  { id: '00000000-0000-4000-8000-000000000003', username: 'pilot3', password: 'pilot-three-password' },
+  { id: '00000000-0000-4000-8000-000000000002', username: 'surya', password: 'surya-test-password' },
+  { id: '00000000-0000-4000-8000-000000000003', username: 'samitha', password: 'samitha-test-password' },
 ]);
 
 afterEach(() => vi.unstubAllEnvs());
@@ -12,8 +12,9 @@ afterEach(() => vi.unstubAllEnvs());
 describe('fixed account auth', () => {
   it('authenticates the matching username/password without a shared password', () => {
     vi.stubEnv('APP_USERS_JSON', USERS);
-    expect(authenticateUser('PILOT2', 'pilot-two-password')?.id).toBe('00000000-0000-4000-8000-000000000002');
-    expect(authenticateUser('pilot2', 'owner-password')).toBeNull();
+    expect(authenticateUser('SURYA', 'surya-test-password')?.id).toBe('00000000-0000-4000-8000-000000000002');
+    expect(authenticateUser('surya', 'owner-password')).toBeNull();
+    expect(authenticateUser('SAMITHA', 'samitha-test-password')?.id).toBe('00000000-0000-4000-8000-000000000003');
     expect(configuredUsers()).toHaveLength(3);
   });
 
