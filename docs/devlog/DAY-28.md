@@ -1,0 +1,39 @@
+# DAY 28 — 2026-07-15 (Personal-laptop development and server control)
+
+## Architecture review
+
+- Confirmed the isolated server already has a clean branch checkout, a five-minute
+  fast-forward-only autopull, launchd restart/recovery services, public health/version
+  endpoints, an online private Tailscale identity, and macOS SSH listening on port 22.
+- No public GitHub SSH key or server `authorized_keys` entry existed. ADR 0088 chooses a
+  dedicated forced-command key over a general shell, public restart webhook, or placing
+  backend/app secrets in hosted CI.
+- GitHub remains the source handoff: a push triggers Netlify and autopull remains the
+  no-SSH fallback. The restricted path only accelerates/observes the existing deployment
+  process and cannot target the original `com.applypilot.*` services.
+
+## Implementation
+
+- Added `scripts/jobpilot-server` for one-time key/bootstrap setup plus deploy, sync,
+  status, targeted restart, bounded logs, and backup operations from the personal laptop.
+- Added the forced server command with exact allowlisting, input validation, no `eval`,
+  a 500-line log cap, fixed service/log targets, health verification, and a required SSH
+  session. The personal setup pins the server ED25519 host-key fingerprint and uses
+  `restrict` to disable shells, TTYs, forwarding, and arbitrary commands.
+- The encrypted `bootstrap` path retrieves the existing gitignored fork `.env.local`,
+  validates required variable names, writes it at mode `0600`, installs dependencies, and
+  runs connectivity checks without displaying secrets. The server copy was tightened
+  from mode `0644` to `0600` before enabling this command.
+- Updated the Architecture, PRD, development protocol, agent map, root README, and backend
+  runbook so personal-laptop development is the documented default.
+
+## Verification
+
+- Bash/zsh syntax checks and the public-only CLI status/doctor paths passed. Backend
+  regression tests verify the documented command surface and reject shell syntax,
+  over-limit logs, unknown commands, and multiline requests without evaluation.
+- Full app regression passed with 203 tests and 9 credentialed evals skipped; backend
+  passed 8/8; worker passed 20/20; TypeScript passed; the 33-page production build passed;
+  and documentation validation passed with 126 Markdown files and 82 ADRs.
+- Restricted SSH end-to-end deploy/restart/status, backup/log bounds, push, and public
+  rollout results are appended after the server receives the forced-command script.

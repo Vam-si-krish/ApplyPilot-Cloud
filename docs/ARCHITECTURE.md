@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0087
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0088
 
 ## Current deployment topology
 
@@ -47,6 +47,25 @@ Deployment isolation is enforced operationally:
 - public entry: Funnel path `/jobpilot` (the production Funnel root remains reserved);
 - files/secrets/backups: the fork checkout's `backend/` runtime directories and `.env`;
 - lifecycle: `com.jobpilotmulti.backend|worker|autopull|watchdog|backup`.
+
+Development and deployment use a separate operator path (ADR 0088):
+
+```text
+Personal laptop clone
+  ├─ git push multi-user-fork ──► GitHub ──► Netlify branch deploy
+  │                                  └─────► server autopull (≤5 min fallback)
+  └─ restricted Tailscale SSH key ─────────► forced remote-control allowlist
+                                              ├─ immediate fast-forward + migrate/restart
+                                              ├─ status / bounded logs / backup
+                                              └─ encrypted mode-0600 local-dev env handoff
+```
+
+The restricted key is pinned to the server's private tailnet hostname and ED25519 host
+fingerprint. Its `authorized_keys` entry uses `restrict` and a forced command; arbitrary
+shells, TTYs, forwarding, command evaluation, and production-service controls are outside
+the boundary. GitHub never receives backend/app secrets. The existing autopull remains the
+zero-touch recovery path when SSH is unavailable, and it continues to reject a dirty
+server checkout and non-fast-forward history.
 
 ADR 0087 permits one narrow exception to the empty-installation rule: at the owner's
 explicit request, a repeatable-read snapshot of the original owner rows and all physical

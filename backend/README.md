@@ -45,6 +45,52 @@ The bootstrap creates random credentials in `backend/.env`, creates only the new
 database/role, applies migrations, installs the isolated services, mounts the Funnel
 path, and verifies local and public health endpoints.
 
+## Personal-laptop development and operations
+
+ADR 0088 makes the server laptop an unattended runtime rather than the development
+machine. GitHub is the code handoff: every clean push to `multi-user-fork` triggers the
+Netlify branch deploy and is picked up by `com.jobpilotmulti.autopull` within five minutes.
+Autopull refuses a dirty server checkout, fast-forwards only, applies migrations, reconciles
+PostgREST, and restarts the isolated gateway/worker.
+
+For immediate deploys and bounded operations, both Macs must be signed into the same
+Tailscale network. In a personal-laptop clone:
+
+```bash
+git switch multi-user-fork
+./scripts/jobpilot-server setup-key
+./scripts/jobpilot-server bootstrap
+```
+
+`setup-key` verifies the server's pinned ED25519 host-key fingerprint, generates a
+dedicated key on the personal laptop, and asks for the server Mac password once to append
+it to `authorized_keys`. The entry uses OpenSSH `restrict` plus a forced command, so this
+key cannot get a shell, allocate a TTY, forward ports, run an arbitrary command, or access
+the production ApplyPilot services. `bootstrap` retrieves the existing gitignored
+`.env.local` only through that encrypted restricted session, writes it with mode `0600`,
+installs dependencies, and runs connectivity checks. Never sync that file or the private
+key through cloud storage.
+
+Daily commands from the personal laptop:
+
+```bash
+./scripts/jobpilot-server deploy                 # push, immediate server sync, wait for commit
+./scripts/jobpilot-server status                 # public + launchd/server health
+./scripts/jobpilot-server sync                   # fetch/deploy origin without another push
+./scripts/jobpilot-server restart worker         # all | backend | worker | rest
+./scripts/jobpilot-server logs worker 100         # backend | worker | autopull | watchdog
+./scripts/jobpilot-server backup                 # run the existing protected backup job
+```
+
+If restricted SSH is temporarily unavailable, a normal `git push origin multi-user-fork`
+still deploys: Netlify reacts to the push and server autopull catches it within five
+minutes. Public health and deployed worker commit remain readable at `$PUBLIC_URL/health`
+and `$PUBLIC_URL/worker/version`.
+
+To revoke a personal laptop, remove its line ending in `jobpilot-personal-control` from
+`~/.ssh/authorized_keys` on the server and delete `~/.ssh/jobpilot_server_ed25519*` on that
+personal laptop. Re-run `setup-key` to provision a replacement.
+
 ## Netlify variables
 
 Set these on the new Netlify site. Secrets are copied from the server laptop's

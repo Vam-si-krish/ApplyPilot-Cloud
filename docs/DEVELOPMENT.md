@@ -47,6 +47,24 @@ worker health checks, or backup/restore checks when those surfaces changed.
 `npm run lint` is not currently a gate because this repository has no committed
 ESLint configuration; do not accept the interactive setup prompt during automation.
 
+### Personal-laptop deploy loop
+
+After the one-time restricted-key/bootstrap steps in the
+[backend runbook](../backend/README.md#personal-laptop-development-and-operations), normal
+development does not require opening or screen-sharing the server laptop:
+
+```bash
+npm run test && npm test --prefix backend && npm test --prefix resume-worker
+npm run typecheck && npm run docs:check && npm run build
+git add <files> && git commit
+./scripts/jobpilot-server deploy
+```
+
+The deploy command requires a clean `multi-user-fork`, pushes it, requests the server's
+allowlisted fast-forward path, and waits for `/worker/version` to report the commit. The
+push is also the Netlify frontend handoff. Use `status`, bounded `logs`, or a targeted
+`restart` through the same CLI; do not edit the live server checkout.
+
 ## 4. Documentation impact review
 
 Every development session must explicitly consider each living document:

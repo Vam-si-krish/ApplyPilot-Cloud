@@ -1,0 +1,278 @@
+#!/bin/bash
+set -euo pipefail
+
+# Personal-laptop operator CLI for the isolated ApplyPilot server (ADR 0088).
+# It uses a dedicated forced-command SSH key over Tailscale; it never opens a shell.
+
+SERVER_HOST="${JOBPILOT_SERVER_HOST:-vamsis-macbook-pro.tail579e6c.ts.net}"
+SERVER_USER="${JOBPILOT_SERVER_USER:-vamsikrish}"
+SERVER_REPO="${JOBPILOT_SERVER_REPO:-/Users/vamsikrish/apps/jobpilot-multi}"
+PUBLIC_URL="${JOBPILOT_PUBLIC_URL:-https://vamsis-macbook-pro.tail579e6c.ts.net/jobpilot}"
+BRANCH="${JOBPILOT_BRANCH:-multi-user-fork}"
+KEY_FILE="${JOBPILOT_SERVER_KEY:-$HOME/.ssh/jobpilot_server_ed25519}"
+KNOWN_HOSTS="${JOBPILOT_SERVER_KNOWN_HOSTS:-$HOME/.ssh/jobpilot_server_known_hosts}"
+EXPECTED_HOST_KEY="${JOBPILOT_SERVER_HOST_KEY_SHA256:-SHA256:CxqtCt0GBHrytfJ6jRZrNtx8DCQMxWyQX76DJiCyTk4}"
+REMOTE_CONTROL="$SERVER_REPO/backend/scripts/remote-control.sh"
+TARGET="$SERVER_USER@$SERVER_HOST"
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/jobpilot-server <command>
+
+Personal-laptop setup:
+  setup-key              Create/install the restricted server-control key (one password prompt)
+  bootstrap [--force]    Download protected .env.local, install dependencies, and run doctor
+  doctor                 Check local tools, branch, SSH control, and public services
+
+Development/deployment:
+  deploy                 Require a clean multi-user-fork, push it, deploy now, and verify
+  sync                   Make the server pull/deploy the current origin branch immediately
+  status                 Show public health/version and detailed server status when SSH is set up
+  restart <target>       Restart all, backend, worker, or rest
+  logs <service> [lines] Show backend, worker, autopull, or watchdog logs (maximum 500)
+  backup                 Trigger the server's database/file backup job
+
+Environment overrides: JOBPILOT_SERVER_HOST, JOBPILOT_SERVER_USER,
+JOBPILOT_SERVER_REPO, JOBPILOT_PUBLIC_URL, JOBPILOT_BRANCH,
+JOBPILOT_SERVER_KEY, JOBPILOT_SERVER_KNOWN_HOSTS, JOBPILOT_SERVER_HOST_KEY_SHA256.
+EOF
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1" >&2; exit 1; }
+}
+
+ssh_args() {
+  SSH_ARGS=(
+    -i "$KEY_FILE"
+    -o IdentitiesOnly=yes
+    -o UserKnownHostsFile="$KNOWN_HOSTS"
+    -o StrictHostKeyChecking=yes
+    -o ConnectTimeout=10
+  )
+}
+
+remote() {
+  ssh_args
+  ssh "${SSH_ARGS[@]}" "$TARGET" "$@"
+}
+
+remote_ready() {
+  [[ -f "$KEY_FILE" && -f "$KNOWN_HOSTS" ]] || return 1
+  ssh_args
+  ssh "${SSH_ARGS[@]}" -o BatchMode=yes "$TARGET" help >/dev/null 2>&1
+}
+
+require_remote() {
+  remote_ready || {
+    echo "Restricted SSH is not ready. Run ./scripts/jobpilot-server setup-key first." >&2
+    exit 1
+  }
+}
+
+pin_host_key() {
+  need ssh-keyscan
+  need ssh-keygen
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  local temp actual
+  temp=$(mktemp)
+  trap 'rm -f "$temp"' RETURN
+  ssh-keyscan -T 10 -t ed25519 "$SERVER_HOST" > "$temp" 2>/dev/null || {
+    echo "Could not read the server SSH host key. Confirm both laptops are on Tailscale." >&2
+    exit 1
+  }
+  actual=$(ssh-keygen -lf "$temp" | awk 'NR == 1 {print $2}')
+  if [[ "$actual" != "$EXPECTED_HOST_KEY" ]]; then
+    echo "Server host-key mismatch: got $actual, expected $EXPECTED_HOST_KEY" >&2
+    echo "Stop and verify the server before changing the pinned fingerprint." >&2
+    exit 1
+  fi
+  install -m 600 "$temp" "$KNOWN_HOSTS"
+  trap - RETURN
+  rm -f "$temp"
+}
+
+setup_key() {
+  need ssh
+  need ssh-keygen
+  pin_host_key
+  if [[ ! -f "$KEY_FILE" ]]; then
+    ssh-keygen -t ed25519 -a 64 -f "$KEY_FILE" -C jobpilot-personal-control
+  fi
+  chmod 600 "$KEY_FILE"
+  chmod 644 "$KEY_FILE.pub"
+
+  local public_line authorized_line
+  public_line=$(cat "$KEY_FILE.pub")
+  [[ "$public_line" == ssh-ed25519\ * ]] || {
+    echo "Expected an Ed25519 public key at $KEY_FILE.pub" >&2
+    exit 1
+  }
+  authorized_line="restrict,command=\"$REMOTE_CONTROL\" $public_line"
+  ssh_args
+  printf '%s\n' "$authorized_line" | ssh "${SSH_ARGS[@]}" "$TARGET" \
+    'umask 077; mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"; touch "$HOME/.ssh/authorized_keys"; chmod 600 "$HOME/.ssh/authorized_keys"; IFS= read -r line; grep -Fqx "$line" "$HOME/.ssh/authorized_keys" || printf "%s\n" "$line" >> "$HOME/.ssh/authorized_keys"'
+
+  remote help >/dev/null
+  echo "Restricted server control is ready. No general shell or forwarding was granted."
+}
+
+fetch_dev_env() {
+  local force="${1:-}"
+  if [[ -f .env.local && "$force" != "--force" ]]; then
+    echo ".env.local already exists; use bootstrap --force to replace it." >&2
+    exit 1
+  fi
+  remote_ready || {
+    echo "Restricted SSH is not ready. Run ./scripts/jobpilot-server setup-key first." >&2
+    exit 1
+  }
+  local temp
+  temp=$(mktemp .env.local.XXXXXX)
+  trap 'rm -f "$temp"' RETURN
+  remote dev-env > "$temp"
+  for name in BACKEND_URL BACKEND_SERVICE_KEY RESUME_WORKER_URL RESUME_WORKER_SECRET APP_USERS_JSON AUTH_SECRET CRON_SECRET; do
+    grep -q "^${name}=" "$temp" || { echo "Server development environment is missing $name" >&2; exit 1; }
+  done
+  chmod 600 "$temp"
+  mv "$temp" .env.local
+  trap - RETURN
+  echo "Protected development environment written to .env.local (mode 600)."
+}
+
+public_status() {
+  echo "Gateway:"
+  curl -fsS --max-time 15 "$PUBLIC_URL/health"
+  echo
+  echo "Worker:"
+  curl -fsS --max-time 15 "$PUBLIC_URL/worker/version"
+  echo
+}
+
+wait_for_commit() {
+  local expected="$1" short attempt body
+  short=${expected:0:7}
+  echo "Waiting for server commit $short ..."
+  for attempt in $(seq 1 72); do
+    body=$(curl -fsS --max-time 10 "$PUBLIC_URL/worker/version" 2>/dev/null || true)
+    if [[ "$body" == *"\"commit\":\"$short\""* ]]; then
+      echo "$body"
+      echo "Server deployment verified at $short."
+      return 0
+    fi
+    sleep 5
+  done
+  echo "Server did not report $short within six minutes. Check status/logs." >&2
+  return 1
+}
+
+deploy() {
+  need git
+  local branch expected
+  branch=$(git branch --show-current)
+  [[ "$branch" == "$BRANCH" ]] || { echo "Refusing deploy from $branch; expected $BRANCH." >&2; exit 1; }
+  [[ -z "$(git status --porcelain)" ]] || { echo "Refusing deploy from a dirty checkout. Commit first." >&2; exit 1; }
+  git push origin "$BRANCH"
+  expected=$(git rev-parse HEAD)
+  if remote_ready; then
+    remote deploy "$expected"
+  else
+    echo "Restricted SSH is not configured; the five-minute server autopull remains active."
+  fi
+  wait_for_commit "$expected"
+  echo "The push also triggered the Netlify frontend deployment."
+}
+
+sync_server() {
+  need git
+  git fetch origin "$BRANCH"
+  local expected
+  expected=$(git rev-parse "origin/$BRANCH")
+  remote deploy "$expected"
+}
+
+doctor() {
+  local failed=0 command
+  for command in git node npm curl ssh ssh-keygen ssh-keyscan; do
+    if command -v "$command" >/dev/null 2>&1; then
+      echo "ok: $command"
+    else
+      echo "missing: $command"
+      failed=1
+    fi
+  done
+  if [[ -d .git ]]; then
+    echo "branch=$(git branch --show-current) commit=$(git rev-parse --short HEAD)"
+  else
+    echo "not inside the repository"
+    failed=1
+  fi
+  if remote_ready; then
+    echo "ok: restricted SSH control"
+    remote status
+  else
+    echo "not ready: restricted SSH control (run setup-key)"
+  fi
+  public_status || failed=1
+  return "$failed"
+}
+
+COMMAND="${1:-help}"
+case "$COMMAND" in
+  help|-h|--help)
+    usage
+    ;;
+  setup-key)
+    [[ $# -eq 1 ]] || { usage; exit 64; }
+    setup_key
+    ;;
+  bootstrap)
+    [[ $# -le 2 ]] || { usage; exit 64; }
+    [[ $# -eq 1 || "$2" == "--force" ]] || { usage; exit 64; }
+    fetch_dev_env "${2:-}"
+    npm ci
+    npm ci --prefix backend
+    npm install --prefix resume-worker
+    doctor
+    ;;
+  doctor)
+    [[ $# -eq 1 ]] || { usage; exit 64; }
+    doctor
+    ;;
+  deploy)
+    [[ $# -eq 1 ]] || { usage; exit 64; }
+    deploy
+    ;;
+  sync)
+    [[ $# -eq 1 ]] || { usage; exit 64; }
+    require_remote
+    sync_server
+    ;;
+  status)
+    [[ $# -eq 1 ]] || { usage; exit 64; }
+    public_status
+    if remote_ready; then remote status; else echo "Restricted SSH details unavailable; run setup-key."; fi
+    ;;
+  restart)
+    [[ $# -eq 2 && "$2" =~ ^(all|backend|worker|rest)$ ]] || { usage; exit 64; }
+    require_remote
+    remote restart "$2"
+    ;;
+  logs)
+    [[ $# -ge 2 && $# -le 3 && "$2" =~ ^(backend|worker|autopull|watchdog)$ ]] || { usage; exit 64; }
+    LINES="${3:-100}"
+    [[ "$LINES" =~ ^[1-9][0-9]{0,2}$ && "$LINES" -le 500 ]] || { echo "Lines must be 1-500." >&2; exit 64; }
+    require_remote
+    remote logs "$2" "$LINES"
+    ;;
+  backup)
+    [[ $# -eq 1 ]] || { usage; exit 64; }
+    require_remote
+    remote backup
+    ;;
+  *)
+    usage
+    exit 64
+    ;;
+esac

@@ -21,6 +21,10 @@ runs on the server laptop, without Supabase or another cloud database.
   logs, and backups.
 - Keep all backend service credentials server-side. A browser must never receive the
   database service key.
+- Keep the server laptop unattended: personal-laptop development hands off code through
+  the protected branch, with an optional Tailscale-only forced-command key for immediate
+  isolated-service operations. Do not expose a public deployment/restart webhook or place
+  server/app secrets in GitHub Actions (ADR 0088).
 
 ### Delivery phases
 

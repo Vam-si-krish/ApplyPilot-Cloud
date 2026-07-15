@@ -24,6 +24,12 @@ deployment-owned worker credentials stayed separate. The two products remain ind
 after that cutoff. The frontend deploys separately on Netlify; persistent services stay
 on the server laptop.
 
+Normal development happens from a personal laptop per ADR 0088. A clean push to
+`multi-user-fork` triggers Netlify and the server's five-minute autopull; the guarded
+`scripts/jobpilot-server` CLI can request an immediate sync, bounded restart/status/logs,
+backup, or protected local-dev environment over a pinned Tailscale SSH connection. Its
+dedicated key is forced to `backend/scripts/remote-control.sh` and never grants a shell.
+
 ## The rule that matters (scoring discipline)
 **Scoring is deliberate, never fabricated.** As of **ADR 0022** the scorer is a v2 weighted,
 must-have-aware, owner-neutral rubric (`SCORE_PROMPT` in `lib/scoring.ts`) — it intentionally **diverges** from the
@@ -63,6 +69,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `middleware.ts` | Gates routes and replaces caller identity headers from the signed session |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |
 | `backend/` | `multi-user-fork` server API, storage, migrations, launchd/autopull/watchdog/backup |
+| `scripts/jobpilot-server` | Personal-laptop bootstrap, deploy, status, restart, logs, and backup CLI |
 | `evals/cases/` | Labeled resume+job → expected-score regression cases |
 | `docs/` | PRD, ARCHITECTURE, ADRs, devlog (read before non-trivial changes) |
 

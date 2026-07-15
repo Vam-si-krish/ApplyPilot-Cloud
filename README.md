@@ -66,6 +66,23 @@ cp .env.example .env.local      # then fill in the values (see below)
 4. Upload a résumé PDF in onboarding, then add that account's Apify and LLM keys in
    **Settings**. Hit **Run now** on the Dashboard to kick a run.
 
+### Develop from the personal laptop
+
+The server laptop is designed to stay on and unattended. From a fresh personal-laptop
+clone of `multi-user-fork`, run:
+
+```bash
+./scripts/jobpilot-server setup-key   # one-time; enter the server Mac password once
+./scripts/jobpilot-server bootstrap   # protected .env.local + npm ci + connectivity checks
+npm run dev                           # local UI/API against the isolated server backend
+```
+
+The setup key is restricted to the allowlisted operator commands and cannot open a shell
+or forward ports. Normal deployment is `git commit` followed by
+`./scripts/jobpilot-server deploy`; it pushes the branch, triggers the server update
+immediately, waits for the deployed commit, and relies on Netlify's branch deploy for the
+frontend. See the [personal-laptop runbook](backend/README.md#personal-laptop-development-and-operations).
+
 ### Where each user updates AI context
 
 - **Candidate Profile → Résumé** is the source of truth for experience, titles, dates,
