@@ -209,7 +209,7 @@ doctor() {
       failed=1
     fi
   done
-  if [[ -d .git ]]; then
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "branch=$(git branch --show-current) commit=$(git rev-parse --short HEAD)"
   else
     echo "not inside the repository"

@@ -23,6 +23,7 @@ test('development provisioner uses only the ADR 0089 resource allocation', () =>
   ]) assert.match(script, new RegExp(expected));
   assert.match(script, /grant %I to %I/);
   assert.match(script, /revoke %I from %I/);
+  assert.match(script, /health_wait/);
   assert.doesNotMatch(script, /DB_NAME=jobpilot_multi\n/);
   assert.doesNotMatch(script, /APP_NAME=jobpilotmulti\n/);
 });

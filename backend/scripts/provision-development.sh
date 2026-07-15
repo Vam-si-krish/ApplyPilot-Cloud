@@ -10,6 +10,16 @@ DEV_BACKEND="$DEV_REPO/backend"
 DEV_URL="https://develop--willowy-dieffenbachia-21307c.netlify.app"
 PUBLIC_URL="https://vamsis-macbook-pro.tail579e6c.ts.net/jobpilot-dev"
 
+health_wait() {
+  local url="$1"
+  local attempt
+  for attempt in {1..30}; do
+    curl -fsS -m 8 "$url" && return 0
+    sleep 1
+  done
+  return 1
+}
+
 ORIGIN=$(git -C "$PRODUCTION_REPO" remote get-url origin)
 if [[ ! -d "$DEV_REPO/.git" ]]; then
   git clone --branch develop --single-branch "$ORIGIN" "$DEV_REPO"
@@ -100,7 +110,7 @@ docker compose --project-name "$APP_NAME" --project-directory "$DEV_BACKEND" --e
 chmod +x "$DEV_BACKEND"/scripts/*.sh
 "$DEV_BACKEND/scripts/install-launchd.sh"
 tailscale funnel --bg --set-path "/${APP_PATH}" "http://127.0.0.1:${PORT}"
-curl -fsS "http://127.0.0.1:${PORT}/health"
-curl -fsS "$PUBLIC_URL/health"
+health_wait "http://127.0.0.1:${PORT}/health"
+health_wait "$PUBLIC_URL/health"
 print
 print -- "development=ready commit=${ACTUAL[1,7]}"

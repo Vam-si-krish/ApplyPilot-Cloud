@@ -32,3 +32,11 @@
   cluster operator could create the development role but could not assign database
   ownership without role membership. The idempotent retry now grants that role only for
   database creation and immediately revokes it; the partial empty role is safely reused.
+- The retry applied all 49 migrations and installed the isolated container, five launchd
+  jobs, and Funnel path. Services became healthy moments after an eager one-shot final
+  probe; provisioning now waits boundedly for launchd/Funnel readiness. The local doctor
+  now recognizes Git worktrees whose `.git` metadata is a file.
+- Created and pushed `develop`, added a separate personal-laptop worktree, and bootstrapped
+  it from the development server's mode-0600 environment. Netlify retains
+  `multi-user-fork` as its production branch, allows only that branch plus `develop`, and
+  now has independent secret values scoped specifically to `branch:develop`.
