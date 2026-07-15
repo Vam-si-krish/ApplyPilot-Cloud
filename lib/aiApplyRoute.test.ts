@@ -28,7 +28,8 @@ describe('AI assignment persistence boundary', () => {
     expect(route).toContain("action === 'assign' || action === 'retry'");
     expect(route).toContain("action === 'submitted'");
     expect(route).not.toContain('body.confirmed');
-    expect(route).toContain('MAX_AI_APPLY_BATCH');
+    expect(route).not.toContain('MAX_AI_APPLY_BATCH');
+    expect(route).not.toContain("count: 'exact'");
     expect(route).toContain(".from('jobs')");
     expect(route).toContain('applied_at: updated.applied_at');
   });
@@ -48,6 +49,8 @@ describe('AI assignment persistence boundary', () => {
     expect(applicationsPage).toContain("updateAiApplication(a, 'block')");
     expect(applicationsPage).toContain("updateAiApplication(a, 'retry')");
     expect(applicationsPage).toContain('<AiApplyStatusBadge');
+    expect(applicationsPage).toContain('Needs review');
+    expect(applicationsPage).not.toContain('MAX_AI_APPLY_BATCH');
     expect(applicationsPage).not.toContain('Ready for review');
   });
 });

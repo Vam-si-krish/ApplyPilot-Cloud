@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-07-15
 - Amends: ADR 0093 supervised external-application handoff
+- Amended by: ADR 0095 all linked jobs with known-fact AI fallback
 
 ## Context
 

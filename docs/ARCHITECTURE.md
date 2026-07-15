@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0094
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0095
 
 ## Current deployment topology
 
@@ -173,11 +173,11 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   The list consumes only the RLS-scoped application→job join; it does not infer or mutate
   source metadata.
 - `lib/aiApply.ts`, `app/api/applications/[id]/ai-assignment`, and the same Tailor &
-  Apply page — own the external-application navigation lifecycle. The pure library
-  validates readiness and transitions and builds the bounded extension-autofill handoff;
-  the dedicated route performs RLS-scoped writes and permits submission only from an
+  Apply page — own the job-application navigation lifecycle. The pure library validates
+  linked-job readiness and transitions and builds the twenty-row autofill/AI fallback
+  handoff; the dedicated route performs RLS-scoped writes and permits submission only from an
   active/legacy-ready row. The ordinary application PATCH route cannot mutate these
-  fields (ADRs 0093–0094).
+  fields (ADRs 0093–0095).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;
@@ -326,12 +326,12 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
 
 ```text
 Tailor & Apply Queue
-  → readiness: explicit External Apply + valid non-LinkedIn URL + ready tailored PDF
-  → Assign to AI (maximum five active rows)
-  → copy bounded Chrome navigation prompt
-  → Start & open posting + download that row's tailored files
-       → installed extension fills; AI waits/invokes autofill and clicks Next
-       ├─ unfilled requirement/CAPTCHA/login/site error → Blocked + Set Aside → continue
+  → readiness: unapplied + valid HTTP(S) application/job link
+  → Assign to AI (uncapped queue; next twenty rows per copied prompt)
+  → Start & open posting + use tailored files when available
+       → installed extension fills first
+       → AI completes missed fields from saved profile/answer/résumé/cover facts
+       ├─ answer unavailable → Needs review + Set Aside; leave tab open → next new tab
        └─ final page → AI clicks Submit → visible site success
                                       → mark Submitted/applied → continue
 ```
@@ -339,10 +339,10 @@ Tailor & Apply Queue
 Phase 1 is an orchestration and audit boundary, not a native browser-control service. No
 browser credentials, page contents, answers, extension state, or AI sessions cross into
 PostgreSQL. The app stores only queue timestamps/status and a concise blocker reason.
-The user-invoked Chrome run authorizes the bounded batch: the installed extension alone
-owns values, the AI only navigates and submits, problem tabs remain open, and visible
-site success is required before recording Applied. LinkedIn/Easy Apply is rejected by
-readiness rather than inferred from URL alone (ADR 0094).
+The user-invoked Chrome run authorizes the listed batch. The extension fills first and AI
+may fill only missed fields supported by saved candidate information. Unknown-answer
+tabs remain open in Needs review, and visible site success is required before recording
+Applied. Apply type and host do not affect eligibility (ADR 0095).
 
 ## Résumé custom-section flow
 

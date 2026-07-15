@@ -73,13 +73,13 @@ dedicated column. It remains available from the fit-score tooltip, while complet
 reasoning stays in the expanded job details. On desktop, role type, apply type, company
 assessment, duplicate locations, ATS match, skill match, and opened state each retain a
 stable column, and row actions retain fixed icon slots (ADR 0092).
-Tailor & Apply also provides AI Apply Navigator Phase 1. A user may assign no more than
-five prepared, explicitly External Apply jobs to a separate AI queue and start a bounded
-Chrome handoff. The installed extension exclusively owns form values; the AI waits for
-or invokes autofill, navigates Next/Continue pages, submits without a per-job review
-pause, records visible success, and moves blockers into Set Aside before continuing.
-LinkedIn/Easy Apply, CAPTCHA bypass, AI-authored form answers, silent browser launch, and
-recording submission without visible success remain outside this phase (ADRs 0093–0094).
+Tailor & Apply also provides AI Apply Navigator Phase 1. Every unapplied job with a valid
+web link may enter the AI queue regardless of Easy Apply/External type or document
+readiness. The extension fills first; AI completes missed fields from Candidate Profile,
+saved application answers, résumé, or cover letter, navigates and submits, then records
+visible success. If the answer is not available, the job becomes Needs review, its tab
+stays open, and AI continues with the next job in a new tab. Assignment is uncapped; one
+copied browser run includes the next twenty rows (ADRs 0093–0095).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
@@ -131,9 +131,9 @@ on the user's machine. Replacing local scraping with the **Apify API** turns the
 into two HTTP calls (fetch + score), so it can be **fully serverless** and self-running.
 
 **Historical non-goal:** the original baseline had no auto-apply and stopped at
-*fetched → scored → shortlisted*. ADRs 0093–0094 amend that baseline with a bounded,
-user-invoked external-application navigation run. The app still does not fill forms or
-silently launch a native browser executor.
+*fetched → scored → shortlisted*. ADRs 0093–0095 amend that baseline with a user-invoked
+application navigation run across all linked jobs. The app still does not silently
+launch a native browser executor or invent candidate information it does not have.
 
 ## Users
 One person (the owner). The app exposes the user's resume and personal data, so it

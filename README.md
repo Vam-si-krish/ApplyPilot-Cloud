@@ -11,10 +11,10 @@
 A private multi-user web app that **runs itself daily in the cloud**:
 it fetches the last 24 hours of job postings (via Apify), scores each **1–10** for
 fit against your resume (via an LLM), and shows a ranked, filterable shortlist.
-Tailor & Apply includes a bounded AI navigation queue for prepared external applications.
-An installed extension exclusively fills the form; a user-invoked Chrome agent can run
-up to five jobs by clicking Next and Submit, verifying visible success, and leaving
-blocked tabs aside without a per-job confirmation pause (ADRs 0093 and 0094).
+Tailor & Apply includes an AI navigation queue for every unapplied job with a usable
+link. An installed extension fills first; a user-invoked Chrome agent completes missed
+fields from saved candidate facts, clicks Next and Submit, verifies visible success, and
+leaves unknown-answer tabs in Needs review while continuing (ADRs 0093–0095).
 
 It began as a cloud-native rewrite of the *fetch + score* half of `ApplyPilot-Lite`,
 replacing local Playwright scraping with the Apify API. Its scoring contract has since

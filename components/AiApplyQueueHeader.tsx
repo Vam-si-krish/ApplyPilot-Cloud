@@ -46,17 +46,17 @@ export default function AiApplyQueueHeader({ applications }: { applications: App
             </span>
           </div>
           <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-slate-muted">
-            Copy the bounded @Chrome handoff once. The AI navigates while your installed extension owns every form answer:
-            autofill, Next, repeat, Submit, and continue. A problem moves to Set Aside without stopping the batch.
+            Copy the @Chrome handoff once. Your extension fills first; AI completes any missed fields from your saved
+            ApplyPilot information, navigates, submits, and continues to the next job in a new tab.
           </p>
           <p className="mt-1 text-[11px] text-amber-400/90">
-            External applications only in Phase 1. If autofill cannot finish a required page, the AI leaves that tab open and moves on.
+            All unapplied jobs with a usable link are eligible. Unknown answers move the job to Needs review without stopping the queue.
           </p>
         </div>
         <button
           onClick={copyPrompt}
           disabled={active.length === 0}
-          title="Copy the autofill-navigation prompt for the first five assigned applications"
+          title="Copy the navigation prompt for the next twenty assigned applications"
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] font-medium text-sky transition-all hover:bg-sky/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {copied ? <ShieldCheck size={14} /> : <Copy size={14} />}

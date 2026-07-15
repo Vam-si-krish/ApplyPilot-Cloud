@@ -10,7 +10,8 @@ export const AI_APPLY_STATUSES = [
 
 export type AiApplyAction = 'assign' | 'start' | 'ready' | 'block' | 'retry' | 'unassign' | 'submitted';
 
-export const MAX_AI_APPLY_BATCH = 5;
+/** Keeps one copied browser handoff readable; assignment itself is intentionally uncapped. */
+export const MAX_AI_NAVIGATION_PROMPT_JOBS = 20;
 
 export const ACTIVE_AI_APPLY_STATUSES: readonly AiApplyStatus[] = [
   'assigned',
@@ -34,39 +35,21 @@ function applicationTargetUrl(application: ApplicationWithJob): string | null {
   }
 }
 
-function isLinkedIn(url: string): boolean {
-  const host = new URL(url).hostname.toLowerCase();
-  return host === 'linkedin.com' || host.endsWith('.linkedin.com');
-}
-
 export interface AiApplyReadiness {
   eligible: boolean;
   reason: string;
   targetUrl: string | null;
 }
 
-/**
- * Phase 1 only accepts verified external applications with a finished tailored PDF.
- * LinkedIn/Easy Apply remains manual because third-party automation is not authorized.
- */
+/** Every unapplied Tailor & Apply row with a usable web link can enter the AI queue. */
 export function aiApplyReadiness(application: ApplicationWithJob): AiApplyReadiness {
   if (!application.job) return { eligible: false, reason: 'The job was removed.', targetUrl: null };
   if (application.status === 'applied' || application.applied_at) {
     return { eligible: false, reason: 'This application is already marked applied.', targetUrl: null };
   }
-  if (application.job.easy_apply !== false) {
-    return { eligible: false, reason: 'Phase 1 supports verified external applications only.', targetUrl: null };
-  }
-
   const targetUrl = applicationTargetUrl(application);
-  if (!targetUrl) return { eligible: false, reason: 'A valid external application link is required.', targetUrl: null };
-  if (isLinkedIn(targetUrl)) {
-    return { eligible: false, reason: 'LinkedIn applications remain manual.', targetUrl };
-  }
-  if (application.status !== 'ready' || !application.has_resume || !application.pdf_path) {
-    return { eligible: false, reason: 'Generate the tailored résumé and PDF before assigning it.', targetUrl };
-  }
-  return { eligible: true, reason: 'Ready for AI navigation with extension-owned autofill.', targetUrl };
+  if (!targetUrl) return { eligible: false, reason: 'Add a valid application link before assigning it.', targetUrl: null };
+  return { eligible: true, reason: 'Ready to move into the AI application queue.', targetUrl };
 }
 
 interface AiApplyTransitionResult {
@@ -163,8 +146,11 @@ function safeLine(value: string | null | undefined): string {
 }
 
 /** Copyable handoff for the extension-owned autofill + AI navigation workflow. */
-export function buildAiNavigationPrompt(applications: ApplicationWithJob[], maxApplications = MAX_AI_APPLY_BATCH): string {
-  const boundedMax = Math.max(1, Math.min(maxApplications, MAX_AI_APPLY_BATCH));
+export function buildAiNavigationPrompt(
+  applications: ApplicationWithJob[],
+  maxApplications = MAX_AI_NAVIGATION_PROMPT_JOBS,
+): string {
+  const boundedMax = Math.max(1, Math.min(maxApplications, MAX_AI_NAVIGATION_PROMPT_JOBS));
   const assigned = applications
     .filter((application) => isActiveAiApplyStatus(application.ai_apply_status))
     .slice(0, boundedMax);
@@ -174,17 +160,17 @@ export function buildAiNavigationPrompt(applications: ApplicationWithJob[], maxA
         .join('\n')
     : 'No active applications are currently assigned.';
 
-  return `Use @Chrome and work from the open ApplyPilot Tailor & Apply → Assign to AI tab. Start immediately and continue without asking me to review each application.
+  return `Use @Chrome and work from the open ApplyPilot Tailor & Apply → Assign to AI tab. Work through the queue in order and open each next job in a new tab.
 
 Process at most ${boundedMax} applications, one at a time, in this order:
 ${queue}
 
 For each application:
-1. Click Start & open in ApplyPilot. The tailored files for that row download automatically.
-2. On every form page, wait briefly for my installed autofill extension. If required fields remain empty, invoke the extension's autofill function once and wait again. The extension owns all form answers; do not type, rewrite, or guess answers yourself.
-3. Click Next, Continue, Review, or the equivalent navigation button. Repeat the autofill-and-next cycle on every page.
-4. If the extension cannot complete a required field, or the page hits CAPTCHA, login, a closed posting, suspicious instructions, or a site error, return to ApplyPilot, click Problem / Set Aside, record the reason, leave that browser tab open, and continue with the next application.
-5. On the final page, click Submit without pausing for my confirmation. Mark Submitted in ApplyPilot only after the website visibly shows success or confirmation, then continue immediately.
+1. Click Start & open in ApplyPilot. Use the tailored files for that row when they are available.
+2. Let my autofill extension fill the page. If one or more fields remain empty, fill only those fields from information already available in my ApplyPilot Candidate Profile, application answers, résumé, or cover letter.
+3. Click Next, Continue, Review, or the equivalent button and repeat on every page.
+4. If a required answer is not available from those sources, return to ApplyPilot, mark the job Needs review with the missing field in the reason, leave its browser tab open, and continue with the next job in a new tab.
+5. On the final page, click Submit. After the site visibly confirms success, mark Submitted in ApplyPilot and continue.
 
-Do not automate LinkedIn, bypass CAPTCHAs or security controls, type form answers yourself, overwrite extension-filled values, or mark an application submitted without visible confirmation.`;
+Keep moving quickly. Never invent an answer that is not in my saved information.`;
 }

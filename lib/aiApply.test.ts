@@ -47,19 +47,18 @@ function application(overrides: Partial<ApplicationWithJob> = {}): ApplicationWi
 }
 
 describe('AI navigation with extension-owned autofill', () => {
-  it('accepts only ready external applications with a tailored PDF', () => {
+  it('accepts every unapplied linked job regardless of apply type or document readiness', () => {
     expect(aiApplyReadiness(application())).toMatchObject({ eligible: true });
-    expect(
-      aiApplyReadiness(
-        application({ job: { ...application().job!, easy_apply: true } }),
-      ).reason,
-    ).toContain('external');
+    expect(aiApplyReadiness(application({ job: { ...application().job!, easy_apply: true } }))).toMatchObject({ eligible: true });
     expect(
       aiApplyReadiness(
         application({ job: { ...application().job!, application_url: 'https://www.linkedin.com/jobs/view/1' } }),
-      ).reason,
-    ).toContain('LinkedIn');
-    expect(aiApplyReadiness(application({ pdf_path: null })).reason).toContain('PDF');
+      ),
+    ).toMatchObject({ eligible: true });
+    expect(aiApplyReadiness(application({ status: 'queued', has_resume: false, pdf_path: null }))).toMatchObject({ eligible: true });
+    expect(
+      aiApplyReadiness(application({ job: { ...application().job!, application_url: null, url: '' } })).reason,
+    ).toContain('valid application link');
     expect(aiApplyReadiness(application({ status: 'applied', applied_at: '2026-07-15T01:00:00.000Z' })).reason).toContain('already');
   });
 
@@ -96,17 +95,19 @@ describe('AI navigation with extension-owned autofill', () => {
     const prompt = buildAiNavigationPrompt([
       assigned,
       application({ id: 'unassigned', ai_apply_status: null }),
-      ...Array.from({ length: 8 }, (_, index) =>
+      ...Array.from({ length: 25 }, (_, index) =>
         application({ id: `extra-${index}`, ai_apply_status: 'assigned' }),
       ),
     ]);
 
     expect(prompt).toContain('Software Engineer — Example (ApplyPilot ID application-1)');
     expect(prompt).not.toContain('unassigned');
-    expect(prompt).not.toContain('extra-4');
-    expect(prompt).toContain("extension owns all form answers");
-    expect(prompt).toContain('click Submit without pausing for my confirmation');
-    expect(prompt).toContain('do not type, rewrite, or guess answers yourself');
-    expect(prompt).toContain('Do not automate LinkedIn');
+    expect(prompt).toContain('extra-18');
+    expect(prompt).not.toContain('extra-19');
+    expect(prompt).toContain('Process at most 20 applications');
+    expect(prompt).toContain('fill only those fields from information already available');
+    expect(prompt).toContain('mark the job Needs review');
+    expect(prompt).toContain('continue with the next job in a new tab');
+    expect(prompt).toContain('Never invent an answer');
   });
 });

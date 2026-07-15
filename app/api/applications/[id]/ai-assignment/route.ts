@@ -1,18 +1,16 @@
 /**
  * PATCH /api/applications/[id]/ai-assignment
  *
- * Guarded lifecycle for the AI Apply Navigator queue (ADRs 0093–0094). The ordinary
+ * Guarded lifecycle for the AI Apply Navigator queue (ADRs 0093–0095). The ordinary
  * application PATCH route cannot mutate these fields, keeping browser-workflow state
  * separate from tailoring state and records submission only after visible site success.
  */
 import { NextResponse } from 'next/server';
 import {
-  ACTIVE_AI_APPLY_STATUSES,
   aiApplyReadiness,
   resolveAiApplyTransition,
   type AiApplyAction,
   AI_APPLY_STATUSES,
-  MAX_AI_APPLY_BATCH,
 } from '@/lib/aiApply';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { AiApplyStatus, ApplicationWithJob } from '@/lib/types';
@@ -55,15 +53,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const readiness = aiApplyReadiness(application);
     if (!readiness.eligible) {
       return NextResponse.json({ error: readiness.reason }, { status: 409 });
-    }
-
-    const { count, error: countError } = await supabaseAdmin()
-      .from('applications')
-      .select('id', { count: 'exact', head: true })
-      .in('ai_apply_status', [...ACTIVE_AI_APPLY_STATUSES]);
-    if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
-    if ((count ?? 0) >= MAX_AI_APPLY_BATCH) {
-      return NextResponse.json({ error: `The AI queue is limited to ${MAX_AI_APPLY_BATCH} active applications.` }, { status: 409 });
     }
   }
 

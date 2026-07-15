@@ -5,7 +5,7 @@ const META: Record<AiApplyStatus, { label: string; className: string }> = {
   assigned: { label: 'AI assigned', className: 'border-sky/30 bg-sky/10 text-sky' },
   in_progress: { label: 'AI working', className: 'border-violet-500/30 bg-violet-500/10 text-violet-300' },
   ready_to_submit: { label: 'Finish submit', className: 'border-amber-500/35 bg-amber-500/10 text-amber-400' },
-  blocked: { label: 'AI blocked', className: 'border-rose/30 bg-rose/10 text-rose' },
+  blocked: { label: 'Needs review', className: 'border-rose/30 bg-rose/10 text-rose' },
   submitted: { label: 'AI submitted', className: 'border-emerald/30 bg-emerald/10 text-emerald' },
 };
 

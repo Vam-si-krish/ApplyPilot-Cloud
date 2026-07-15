@@ -16,14 +16,14 @@
 - [ ] **Phase 2B: complete public-account security gates.** Add self-service signup,
   verified password recovery, session controls, credential encryption at rest, encrypted
   off-host backup handling, and abuse/rate/spend controls before enabling public access.
-- [x] **AI Apply Navigator Phase 1: extension-autofill handoff.** Add the five-row External
-  Apply queue, lifecycle API, blocker-to-Set-Aside flow, exact-file download, and bounded
-  Chrome prompt. The extension owns values; AI navigates and submits without per-job
-  confirmation, then records visible success (ADRs 0093–0094).
+- [x] **AI Apply Navigator Phase 1: all linked jobs + known-fact fallback.** Add the
+  uncapped assignment queue, twenty-row Chrome handoff, Needs-review flow, exact-file
+  use when available, extension-first autofill, and AI fallback for missed fields backed
+  by saved candidate facts (ADRs 0093–0095).
 - [ ] **AI Apply Navigator Phase 2: native evaluated execution.** Prototype one-click
   browser-run invocation only after defining supported-site allowlists, extension control,
   prompt-injection resistance, login/CAPTCHA behavior, audit output, and success detection.
-  Never include LinkedIn without explicit platform authorization.
+  Keep unknown-answer and visible-success evidence explicit.
 
 A living, do-it-one-by-one checklist from a full-codebase review (token efficiency,
 performance, correctness, UX). Work top-to-bottom unless priorities change.

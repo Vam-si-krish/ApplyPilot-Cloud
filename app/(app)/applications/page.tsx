@@ -22,7 +22,6 @@ import {
 import {
   aiApplyReadiness,
   isActiveAiApplyStatus,
-  MAX_AI_APPLY_BATCH,
   type AiApplyAction,
 } from '@/lib/aiApply';
 
@@ -242,7 +241,7 @@ export default function ApplicationsPage() {
         assign: 'Assigned to AI. Open the Assign to AI tab when you are ready.',
         start: 'Application started. The tailored files are downloading now.',
         ready: 'Ready to finish submission.',
-        block: 'Problem recorded and moved to Set Aside. Continue with the next application.',
+        block: 'Marked Needs review and moved to Set Aside. Continue with the next application.',
         retry: 'Returned to the AI navigation queue.',
         unassign: 'Removed from the AI queue and returned to the working Queue.',
         submitted: 'Visible submission success recorded as applied.',
@@ -351,27 +350,18 @@ export default function ApplicationsPage() {
 
   async function assignSelectedToAi() {
     if (bulkBusy) return;
-    const remaining = MAX_AI_APPLY_BATCH - apps.filter((a) => isActiveAiApplyStatus(a.ai_apply_status)).length;
     const candidates = [...selected]
       .map((id) => apps.find((a) => a.id === id))
-      .filter((a): a is ApplicationWithJob => !!a && aiApplyReadiness(a).eligible && a.ai_apply_status == null)
-      .slice(0, Math.max(0, remaining));
+      .filter((a): a is ApplicationWithJob => !!a && aiApplyReadiness(a).eligible && a.ai_apply_status == null);
     if (candidates.length === 0) {
-      setMsg(remaining <= 0 ? `The AI queue already has ${MAX_AI_APPLY_BATCH} active applications.` : 'Select ready external applications with a tailored PDF.');
+      setMsg('Select unapplied jobs that have a valid application link.');
       return;
     }
     setBulkBusy(true);
     setMsg(null);
-    let assigned = 0;
-    let failed = 0;
-    for (const application of candidates) {
-      try {
-        await sendAiAction(application.id, 'assign');
-        assigned += 1;
-      } catch {
-        failed += 1;
-      }
-    }
+    const results = await Promise.allSettled(candidates.map((application) => sendAiAction(application.id, 'assign')));
+    const assigned = results.filter((result) => result.status === 'fulfilled').length;
+    const failed = results.length - assigned;
     setSelected(new Set());
     await load(true);
     setBulkBusy(false);
@@ -384,7 +374,7 @@ export default function ApplicationsPage() {
       .map((id) => apps.find((a) => a.id === id))
       .filter((a): a is ApplicationWithJob => !!a && isActiveAiApplyStatus(a.ai_apply_status));
     if (bulkBusy || active.length === 0) return;
-    const reason = window.prompt('What problem affected these applications? They will move to Set Aside.')?.trim();
+    const reason = window.prompt('What information is missing or needs review? These jobs will move to Set Aside.')?.trim();
     if (!reason) return;
     setBulkBusy(true);
     const results = await Promise.allSettled(active.map((a) => sendAiAction(a.id, 'block', reason)));
@@ -392,7 +382,7 @@ export default function ApplicationsPage() {
     setSelected(new Set());
     await load(true);
     setBulkBusy(false);
-    setMsg(`Set aside ${moved} AI application${moved === 1 ? '' : 's'} with the blocker reason.`);
+    setMsg(`Marked ${moved} AI application${moved === 1 ? '' : 's'} as Needs review.`);
     setTimeout(() => setMsg(null), 6000);
   }
 
@@ -910,7 +900,7 @@ export default function ApplicationsPage() {
             onClick={() => { setView(t.id); setSelected(new Set()); }}
             title={
               t.id === 'ai'
-                ? 'Prepared external applications for AI navigation with extension-owned autofill.'
+                ? 'Jobs assigned for autofill, AI completion, navigation, and submission.'
                 : t.id === 'parked'
                   ? 'Applications you moved out of the way (e.g. Easy Apply, or ones you couldn’t finish) — everything is kept; move them back anytime'
                   : undefined
@@ -1117,7 +1107,7 @@ export default function ApplicationsPage() {
               <>
                 <p className="text-[13px] text-slate-text mb-1">Nothing assigned to AI yet.</p>
                 <p className="text-[12px] text-slate-muted max-w-lg mx-auto">
-                  In Queue, select a prepared External Apply row with a tailored PDF, then choose <span className="text-violet-300">Assign to AI</span>. Easy Apply and LinkedIn remain manual in Phase 1.
+                  In Queue, select any unapplied job with an application link, then choose <span className="text-violet-300">Assign to AI</span>.
                 </p>
               </>
             ) : inParked && parkedCount === 0 ? (
@@ -1186,11 +1176,11 @@ export default function ApplicationsPage() {
               </button>
               <button
                 onClick={assignSelectedToAi}
-                disabled={bulkBusy || selectedAiEligible === 0 || aiCount >= MAX_AI_APPLY_BATCH}
-                title="Assign selected ready External Apply applications to the AI navigation queue"
+                disabled={bulkBusy || selectedAiEligible === 0}
+                title="Assign every selected unapplied job with a valid link to the AI queue"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
               >
-                <Bot size={13} /> Assign to AI{selectedAiEligible > 0 ? ` (${Math.min(selectedAiEligible, Math.max(0, MAX_AI_APPLY_BATCH - aiCount))})` : ''}
+                <Bot size={13} /> Assign to AI{selectedAiEligible > 0 ? ` (${selectedAiEligible})` : ''}
               </button>
             </>
           )}
@@ -1200,7 +1190,7 @@ export default function ApplicationsPage() {
               disabled={bulkBusy || selected.size === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-40 rounded-lg transition-all"
             >
-              <CircleX size={13} /> Problem / Set Aside{selected.size ? ` (${selected.size})` : ''}
+              <CircleX size={13} /> Needs review{selected.size ? ` (${selected.size})` : ''}
             </button>
           )}
           {!inAi && (
@@ -1306,7 +1296,7 @@ export default function ApplicationsPage() {
                       )}
                       {a.ai_apply_status === 'blocked' && a.ai_block_reason && (
                         <span className="max-w-sm truncate text-[10px] text-amber-400" title={a.ai_block_reason}>
-                          Problem: {a.ai_block_reason}
+                          Needs review: {a.ai_block_reason}
                         </span>
                       )}
                     </div>
@@ -1399,7 +1389,7 @@ export default function ApplicationsPage() {
                   {view === 'list' && a.ai_apply_status == null && (
                     <button
                       onClick={() => updateAiApplication(a, 'assign')}
-                      disabled={bulkBusy || !aiReadiness.eligible || aiCount >= MAX_AI_APPLY_BATCH}
+                      disabled={bulkBusy || !aiReadiness.eligible}
                       title={aiReadiness.reason}
                       className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-35 rounded-lg transition-all shrink-0"
                     >
@@ -1421,7 +1411,7 @@ export default function ApplicationsPage() {
                               if (a.cover_letter_pdf_path) await downloadCoverPdf(a.id);
                             })();
                           }}
-                          title="Start this application, open the external form, and download its prepared files"
+                          title="Start this application, open its form, and download any prepared files"
                           className="inline-flex w-[132px] items-center justify-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-[11px] font-medium text-violet-300 hover:bg-violet-500/20"
                         >
                           <Play size={12} /> Start &amp; open
@@ -1437,7 +1427,7 @@ export default function ApplicationsPage() {
                           <CheckCircle2 size={12} /> Submitted
                         </button>
                       )}
-                      <button onClick={() => updateAiApplication(a, 'block')} disabled={bulkBusy} title="Record a problem, leave its browser tab open, and move to the next application" className="p-1 rounded-md text-slate-muted hover:text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 shrink-0">
+                      <button onClick={() => updateAiApplication(a, 'block')} disabled={bulkBusy} title="Mark Needs review, leave this browser tab open, and continue with the next job" className="p-1 rounded-md text-slate-muted hover:text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 shrink-0">
                         <CircleX size={15} />
                       </button>
                       <button onClick={() => updateAiApplication(a, 'unassign')} disabled={bulkBusy} title="Remove from AI and return to Queue" className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 disabled:opacity-40 shrink-0">
@@ -1446,7 +1436,7 @@ export default function ApplicationsPage() {
                     </div>
                   )}
                   {inParked && a.ai_apply_status === 'blocked' && (
-                    <button onClick={() => updateAiApplication(a, 'retry')} disabled={bulkBusy || aiCount >= MAX_AI_APPLY_BATCH} title="Retry this application in the AI navigation queue" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-300 border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg shrink-0">
+                    <button onClick={() => updateAiApplication(a, 'retry')} disabled={bulkBusy || !aiReadiness.eligible} title={aiReadiness.eligible ? 'Retry this application in the AI navigation queue' : aiReadiness.reason} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-300 border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg shrink-0">
                       <RotateCcw size={12} /> Retry AI
                     </button>
                   )}
