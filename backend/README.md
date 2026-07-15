@@ -91,6 +91,15 @@ To revoke a personal laptop, remove its line ending in `jobpilot-personal-contro
 `~/.ssh/authorized_keys` on the server and delete `~/.ssh/jobpilot_server_ed25519*` on that
 personal laptop. Re-run `setup-key` to provision a replacement.
 
+## Isolated development environment
+
+ADR 0089 reserves `develop` for integration testing. Its resources are
+`jobpilot_multi_dev`, `jobpilot_multi_dev_app`, ports `8241`–`8243`, `/jobpilot-dev`,
+`jobpilotdev-rest`, a separate file/backup tree, and `com.jobpilotdev.*`. It starts empty
+and must never receive a production snapshot. Use a separate local worktree and
+`scripts/jobpilot-dev-server` for bootstrap, status, deploy, restart, logs, and backup.
+Production continues to use `scripts/jobpilot-server`.
+
 ## Netlify variables
 
 Set these on the new Netlify site. Secrets are copied from the server laptop's

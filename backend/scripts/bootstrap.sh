@@ -55,7 +55,7 @@ SQL
 npm ci --prefix "$BACKEND"
 npm install --prefix "$REPO/resume-worker"
 node "$BACKEND/migrate.mjs"
-docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" up -d
+docker compose --project-name "$APP_NAME" --project-directory "$BACKEND" --env-file "$BACKEND/.env" up -d
 chmod +x "$BACKEND"/scripts/*.sh
 "$BACKEND/scripts/install-launchd.sh"
 tailscale funnel --bg --set-path "/${APP_PATH}" "http://127.0.0.1:${PORT}"

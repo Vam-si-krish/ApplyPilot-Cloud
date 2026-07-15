@@ -6,10 +6,11 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PA
 # authorized_keys entry uses `restrict,command=".../remote-control.sh"`, so SSH supplies
 # the requested operation only through SSH_ORIGINAL_COMMAND. Never eval that value.
 
-BACKEND="$(cd "$(dirname "$0")/.." && pwd)"
-REPO="$(cd "$BACKEND/.." && pwd)"
-LOG="$BACKEND/logs/remote-control.log"
-mkdir -p "$BACKEND/logs"
+CONTROL_BACKEND="$(cd "$(dirname "$0")/.." && pwd)"
+PRODUCTION_REPO="$(cd "$CONTROL_BACKEND/.." && pwd)"
+DEVELOPMENT_REPO="${JOBPILOT_DEVELOPMENT_REPO:-/Users/vamsikrish/apps/jobpilot-multi-dev}"
+LOG="$CONTROL_BACKEND/logs/remote-control.log"
+mkdir -p "$CONTROL_BACKEND/logs"
 umask 077
 
 fail() {
@@ -38,12 +39,14 @@ show_help() {
   cat <<'EOF'
 Allowed commands:
   help
-  status
-  deploy <7-40 character git commit>
-  restart all|backend|worker|rest
-  logs backend|worker|autopull|watchdog <1-500 lines>
-  backup
-  dev-env
+  production|development help
+  production|development status
+  production|development deploy <7-40 character git commit>
+  production|development restart all|backend|worker|rest
+  production|development logs backend|worker|autopull|watchdog <1-500 lines>
+  production|development backup
+  production|development dev-env
+  provision-development <7-40 character git commit>
 EOF
 }
 
@@ -54,22 +57,45 @@ fi
 REQUEST="${SSH_ORIGINAL_COMMAND:-help}"
 [[ "$REQUEST" != *$'\n'* && "$REQUEST" != *$'\r'* ]] || fail "multi-line commands are not allowed"
 
+if [[ "$REQUEST" =~ '^(production|development) (.+)$' ]]; then
+  ENVIRONMENT="$match[1]"
+  REQUEST="$match[2]"
+elif [[ "$REQUEST" == "help" || "$REQUEST" =~ '^provision-development [0-9a-f]{7,40}$' ]]; then
+  ENVIRONMENT="production"
+else
+  fail "an explicit production or development target is required"
+fi
+
+if [[ "$ENVIRONMENT" == "production" ]]; then
+  REPO="$PRODUCTION_REPO"
+else
+  REPO="$DEVELOPMENT_REPO"
+fi
+BACKEND="$REPO/backend"
+
 case "$REQUEST" in
   help)
     show_help
     ;;
 
+  provision-development\ *)
+    EXPECTED="${REQUEST#provision-development }"
+    [[ "$EXPECTED" =~ '^[0-9a-f]{7,40}$' ]] || fail "invalid development commit"
+    log "provision-development $EXPECTED"
+    /bin/zsh -lc 'exec "$1" "$2"' jobpilot-provision "$CONTROL_BACKEND/scripts/provision-development.sh" "$EXPECTED"
+    ;;
+
   status)
     log "status"
     cd "$REPO"
+    set -a; source "$BACKEND/.env"; set +a
     print -- "commit=$(git rev-parse --short HEAD)"
     if [[ -n "$(git status --porcelain)" ]]; then
       print -- "checkout=dirty"
     else
       print -- "checkout=clean"
     fi
-    launchctl list | grep -E 'com\.jobpilotmulti\.(backend|worker|autopull|watchdog|backup)' || true
-    set -a; source "$BACKEND/.env"; set +a
+    launchctl list | grep -E "com\.${APP_NAME}\.(backend|worker|autopull|watchdog|backup)" || true
     health_wait "http://127.0.0.1:${PORT}/health"
     health_wait "http://127.0.0.1:${WORKER_PORT}/version"
     ;;
@@ -109,13 +135,13 @@ case "$REQUEST" in
       log "restart $TARGET"
       set -a; source "$BACKEND/.env"; set +a
       if [[ "$TARGET" == "all" || "$TARGET" == "rest" ]]; then
-        docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" restart rest
+        docker compose --project-name "$APP_NAME" --project-directory "$BACKEND" --env-file "$BACKEND/.env" restart rest
       fi
       if [[ "$TARGET" == "all" || "$TARGET" == "backend" ]]; then
-        launchctl kickstart -k "gui/$(id -u)/com.jobpilotmulti.backend"
+        launchctl kickstart -k "gui/$(id -u)/com.${APP_NAME}.backend"
       fi
       if [[ "$TARGET" == "all" || "$TARGET" == "worker" ]]; then
-        launchctl kickstart -k "gui/$(id -u)/com.jobpilotmulti.worker"
+        launchctl kickstart -k "gui/$(id -u)/com.${APP_NAME}.worker"
       fi
       if [[ "$TARGET" == "all" || "$TARGET" == "backend" || "$TARGET" == "rest" ]]; then
         health_wait "http://127.0.0.1:${PORT}/health"

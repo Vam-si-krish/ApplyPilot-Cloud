@@ -60,6 +60,19 @@ git add <files> && git commit
 ./scripts/jobpilot-server deploy
 ```
 
+Feature work uses a separate `develop` worktree and isolated backend:
+
+```bash
+git -C <production-clone> worktree add ../ApplyPilot-Cloud-dev develop
+cd ../ApplyPilot-Cloud-dev
+./scripts/jobpilot-dev-server bootstrap
+./scripts/jobpilot-dev-server deploy
+```
+
+After development end-to-end checks pass, merge `develop` into `multi-user-fork`, rerun
+the gates, and deploy with `scripts/jobpilot-server`. Never copy development data into
+production or point a feature branch at production secrets.
+
 The deploy command requires a clean `multi-user-fork`, pushes it, requests the server's
 allowlisted fast-forward path, and waits for `/worker/version` to report the commit. The
 push is also the Netlify frontend handoff. Use `status`, bounded `logs`, or a targeted

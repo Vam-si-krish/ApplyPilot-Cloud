@@ -1,7 +1,9 @@
+name: ${APP_NAME:-jobpilotmulti}
+
 services:
   rest:
     image: postgrest/postgrest:v14.15
-    container_name: jobpilotmulti-rest
+    container_name: ${APP_NAME:-jobpilotmulti}-rest
     restart: unless-stopped
     environment:
       PGRST_DB_URI: ${POSTGREST_DATABASE_URL}

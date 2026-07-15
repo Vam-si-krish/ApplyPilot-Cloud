@@ -30,6 +30,11 @@ Normal development happens from a personal laptop per ADR 0088. A clean push to
 backup, or protected local-dev environment over a pinned Tailscale SSH connection. Its
 dedicated key is forced to `backend/scripts/remote-control.sh` and never grants a shell.
 
+ADR 0089 makes `multi-user-fork` the production branch and `develop` the integration
+branch. Development has its own database, ports `8241`–`8243`, `/jobpilot-dev` Funnel
+path, files, secrets, backups, and `com.jobpilotdev.*` services. Use a separate local
+worktree and `scripts/jobpilot-dev-server`; never test against the production backend.
+
 ## The rule that matters (scoring discipline)
 **Scoring is deliberate, never fabricated.** As of **ADR 0022** the scorer is a v2 weighted,
 must-have-aware, owner-neutral rubric (`SCORE_PROMPT` in `lib/scoring.ts`) — it intentionally **diverges** from the

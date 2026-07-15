@@ -25,6 +25,10 @@ runs on the server laptop, without Supabase or another cloud database.
   the protected branch, with an optional Tailscale-only forced-command key for immediate
   isolated-service operations. Do not expose a public deployment/restart webhook or place
   server/app secrets in GitHub Actions (ADR 0088).
+- Treat `multi-user-fork` as production and `develop` as the pre-production integration
+  branch. Development must use its own empty database, role, services, files, secrets,
+  backups, and public path; local test success alone does not authorize production
+  deployment (ADR 0089).
 
 ### Delivery phases
 

@@ -45,6 +45,12 @@ function timeout (ADR 0004).
   Claude/ChatGPT subscription available to connect.
 
 ## Local development
+
+`multi-user-fork` is production. Feature integration happens on `develop` in a separate
+local worktree backed by the isolated `/jobpilot-dev` stack (ADR 0089). Use
+`scripts/jobpilot-dev-server` there; merge verified work into `multi-user-fork` and use
+`scripts/jobpilot-server` only for production.
+
 ```bash
 npm install
 cp .env.example .env.local      # then fill in the values (see below)

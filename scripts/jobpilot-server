@@ -9,6 +9,7 @@ SERVER_USER="${JOBPILOT_SERVER_USER:-vamsikrish}"
 SERVER_REPO="${JOBPILOT_SERVER_REPO:-/Users/vamsikrish/apps/jobpilot-multi}"
 PUBLIC_URL="${JOBPILOT_PUBLIC_URL:-https://vamsis-macbook-pro.tail579e6c.ts.net/jobpilot}"
 BRANCH="${JOBPILOT_BRANCH:-multi-user-fork}"
+REMOTE_ENV="${JOBPILOT_REMOTE_ENV:-production}"
 KEY_FILE="${JOBPILOT_SERVER_KEY:-$HOME/.ssh/jobpilot_server_ed25519}"
 KNOWN_HOSTS="${JOBPILOT_SERVER_KNOWN_HOSTS:-$HOME/.ssh/jobpilot_server_known_hosts}"
 EXPECTED_HOST_KEY="${JOBPILOT_SERVER_HOST_KEY_SHA256:-SHA256:CxqtCt0GBHrytfJ6jRZrNtx8DCQMxWyQX76DJiCyTk4}"
@@ -25,16 +26,18 @@ Personal-laptop setup:
   doctor                 Check local tools, branch, SSH control, and public services
 
 Development/deployment:
-  deploy                 Require a clean multi-user-fork, push it, deploy now, and verify
+  deploy                 Require the configured clean branch, push it, deploy now, and verify
   sync                   Make the server pull/deploy the current origin branch immediately
   status                 Show public health/version and detailed server status when SSH is set up
   restart <target>       Restart all, backend, worker, or rest
   logs <service> [lines] Show backend, worker, autopull, or watchdog logs (maximum 500)
   backup                 Trigger the server's database/file backup job
+  provision-development <commit>  Create/reconcile the isolated development stack
 
 Environment overrides: JOBPILOT_SERVER_HOST, JOBPILOT_SERVER_USER,
 JOBPILOT_SERVER_REPO, JOBPILOT_PUBLIC_URL, JOBPILOT_BRANCH,
-JOBPILOT_SERVER_KEY, JOBPILOT_SERVER_KNOWN_HOSTS, JOBPILOT_SERVER_HOST_KEY_SHA256.
+JOBPILOT_REMOTE_ENV, JOBPILOT_SERVER_KEY, JOBPILOT_SERVER_KNOWN_HOSTS,
+JOBPILOT_SERVER_HOST_KEY_SHA256.
 EOF
 }
 
@@ -52,15 +55,19 @@ ssh_args() {
   )
 }
 
-remote() {
+remote_raw() {
   ssh_args
   ssh "${SSH_ARGS[@]}" "$TARGET" "$@"
+}
+
+remote() {
+  remote_raw "$REMOTE_ENV" "$@"
 }
 
 remote_ready() {
   [[ -f "$KEY_FILE" && -f "$KNOWN_HOSTS" ]] || return 1
   ssh_args
-  ssh "${SSH_ARGS[@]}" -o BatchMode=yes "$TARGET" help >/dev/null 2>&1
+  ssh "${SSH_ARGS[@]}" -o BatchMode=yes "$TARGET" "$REMOTE_ENV" help >/dev/null 2>&1
 }
 
 require_remote() {
@@ -270,6 +277,11 @@ case "$COMMAND" in
     [[ $# -eq 1 ]] || { usage; exit 64; }
     require_remote
     remote backup
+    ;;
+  provision-development)
+    [[ $# -eq 2 && "$REMOTE_ENV" == "production" && "$2" =~ ^[0-9a-f]{7,40}$ ]] || { usage; exit 64; }
+    require_remote
+    remote_raw provision-development "$2"
     ;;
   *)
     usage

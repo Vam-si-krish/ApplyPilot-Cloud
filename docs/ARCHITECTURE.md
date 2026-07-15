@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0088
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0089
 
 ## Current deployment topology
 
@@ -10,6 +10,7 @@ The application code has two deliberately separate deployment identities:
 |---|---|---|---|
 | ApplyPilot production (`main`) | Next.js on Netlify | Existing self-hosted Supabase-compatible stack + worker on the server laptop | Existing owner data; reserved infrastructure |
 | New product (`multi-user-fork`) | Separate Netlify site/custom domain | `backend/` gateway + PostgREST + separate worker on the server laptop | Independent `jobpilot_multi` database and `backend/data/`; `vamsi` contains the ADR 0087 cutoff snapshot, with no runtime source access |
+| Development (`develop`) | Stable Netlify branch deploy | Separate gateway + PostgREST + worker on ports 8241–8243 | Empty `jobpilot_multi_dev` database and development-only files/secrets; no production snapshot |
 
 The rest of this document describes the application pipeline shared by both identities.
 Where it says “Supabase,” the fork uses the compatibility boundary described below; no
@@ -66,6 +67,14 @@ shells, TTYs, forwarding, command evaluation, and production-service controls ar
 the boundary. GitHub never receives backend/app secrets. The existing autopull remains the
 zero-touch recovery path when SSH is unavailable, and it continues to reject a dirty
 server checkout and non-fast-forward history.
+
+ADR 0089 adds an isolated integration runtime at
+`/Users/vamsikrish/apps/jobpilot-multi-dev`: `jobpilotdev`,
+`jobpilot_multi_dev_app`/`jobpilot_multi_dev`, ports `8241`–`8243`, Funnel path
+`/jobpilot-dev`, and `com.jobpilotdev.*`. Runtime scripts derive labels, locks, and
+container names from protected instance configuration. Netlify's `develop` branch uses
+branch-specific secrets and does not run scheduled functions automatically. Production
+and development never copy or synchronize rows, files, or user credentials.
 
 ADR 0087 permits one narrow exception to the empty-installation rule: at the owner's
 explicit request, a repeatable-read snapshot of the original owner rows and all physical

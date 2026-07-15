@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+export JOBPILOT_SERVER_REPO="${JOBPILOT_SERVER_REPO:-/Users/vamsikrish/apps/jobpilot-multi-dev}"
+export JOBPILOT_PUBLIC_URL="${JOBPILOT_PUBLIC_URL:-https://vamsis-macbook-pro.tail579e6c.ts.net/jobpilot-dev}"
+export JOBPILOT_BRANCH="${JOBPILOT_BRANCH:-develop}"
+export JOBPILOT_REMOTE_ENV=development
+exec "$HERE/jobpilot-server" "$@"
