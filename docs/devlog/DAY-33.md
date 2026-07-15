@@ -27,5 +27,9 @@
 - Full gates pass: 218 application tests with 9 credentialed evals skipped, 16 backend
   tests, 20 worker tests, TypeScript, documentation validation across 137 Markdown files
   and 87 ADRs, and the production-mode Next.js build.
-- Isolated development deployment and migration smoke results are recorded after the
-  server applies commit 0050; no production service or branch is part of that deployment.
+- Isolated development deployment completed at application commit `589f9bc`: the dev
+  gateway and worker were healthy, the server checkout was clean, and a direct
+  user-scoped REST smoke check could read all migration-0050 lifecycle columns.
+- The push triggered the development Netlify build. Per the owner handoff, final visual
+  confirmation waits for that normal deployment rather than polling it. No production
+  service, database, or branch was changed.
