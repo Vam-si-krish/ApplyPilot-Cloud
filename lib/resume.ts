@@ -242,8 +242,69 @@ export function resumeToText(doc: ResumeDoc): string {
 
 /**
  * Pull the first JSON object out of an LLM response — tolerates ```json fences and
- * surrounding prose by scanning for balanced braces. Returns null if none parses.
+ * surrounding prose by scanning for balanced braces. Some models emit literal paragraph
+ * breaks inside a quoted JSON string even when asked for escaped `\n` sequences. Repair
+ * only those illegal control characters; do not guess at any other malformed syntax.
+ * Returns null if none parses.
  */
+function escapeJsonControlCharsInsideStrings(input: string): string {
+  let output = '';
+  let inString = false;
+  let escaped = false;
+
+  for (const ch of input) {
+    if (!inString) {
+      output += ch;
+      if (ch === '"') inString = true;
+      continue;
+    }
+    if (escaped) {
+      output += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      output += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      output += ch;
+      inString = false;
+      continue;
+    }
+
+    const code = ch.charCodeAt(0);
+    if (code < 0x20) {
+      const escapedControl =
+        ch === '\b' ? '\\b' :
+        ch === '\f' ? '\\f' :
+        ch === '\n' ? '\\n' :
+        ch === '\r' ? '\\r' :
+        ch === '\t' ? '\\t' :
+        `\\u${code.toString(16).padStart(4, '0')}`;
+      output += escapedControl;
+      continue;
+    }
+    output += ch;
+  }
+  return output;
+}
+
+function parseJsonWithControlCharRepair(candidate: string): unknown {
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const repaired = escapeJsonControlCharsInsideStrings(candidate);
+    if (repaired === candidate) return null;
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function extractJsonObject(text: string): unknown {
   if (!text) return null;
   // Fast path: a fenced ```json block.
@@ -268,11 +329,9 @@ export function extractJsonObject(text: string): unknown {
       else if (ch === '}') {
         depth--;
         if (depth === 0) {
-          try {
-            return JSON.parse(c.slice(start, i + 1));
-          } catch {
-            break; // try the next candidate
-          }
+          const parsed = parseJsonWithControlCharRepair(c.slice(start, i + 1));
+          if (parsed != null) return parsed;
+          break; // try the next candidate
         }
       }
     }

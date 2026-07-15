@@ -357,6 +357,69 @@ export function normalizeResume(input) {
   };
 }
 
+/**
+ * Models occasionally put literal paragraph breaks inside a quoted JSON value. Escape
+ * only those illegal control characters before one guarded re-parse; never guess at
+ * missing quotes, commas, fields, or other malformed syntax.
+ */
+function escapeJsonControlCharsInsideStrings(input) {
+  let output = '';
+  let inString = false;
+  let escaped = false;
+
+  for (const ch of input) {
+    if (!inString) {
+      output += ch;
+      if (ch === '"') inString = true;
+      continue;
+    }
+    if (escaped) {
+      output += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      output += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      output += ch;
+      inString = false;
+      continue;
+    }
+
+    const code = ch.charCodeAt(0);
+    if (code < 0x20) {
+      const escapedControl =
+        ch === '\b' ? '\\b' :
+        ch === '\f' ? '\\f' :
+        ch === '\n' ? '\\n' :
+        ch === '\r' ? '\\r' :
+        ch === '\t' ? '\\t' :
+        `\\u${code.toString(16).padStart(4, '0')}`;
+      output += escapedControl;
+      continue;
+    }
+    output += ch;
+  }
+  return output;
+}
+
+function parseJsonWithControlCharRepair(candidate) {
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const repaired = escapeJsonControlCharsInsideStrings(candidate);
+    if (repaired === candidate) return null;
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      return null;
+    }
+  }
+}
+
 /** Pull the first balanced JSON object out of an LLM response. Returns null if none parses. */
 export function extractJsonObject(text) {
   if (!text) return null;
@@ -381,11 +444,9 @@ export function extractJsonObject(text) {
       else if (ch === '}') {
         depth--;
         if (depth === 0) {
-          try {
-            return JSON.parse(c.slice(start, i + 1));
-          } catch {
-            break;
-          }
+          const parsed = parseJsonWithControlCharRepair(c.slice(start, i + 1));
+          if (parsed != null) return parsed;
+          break;
         }
       }
     }
@@ -438,7 +499,7 @@ DISCLOSURE — include a top-level "_changes" array. Keep it SHORT (token budget
 COVER LETTER — also write a matching cover letter in the "cover_letter" field (same truthfulness rules: use ONLY real experience from the base résumé, never invent employers, titles, dates, metrics, or skills). Style:
 - Exactly 3 short paragraphs, ~250-320 words total. Plain, specific, confident, in the candidate's voice. Same no-AI-tell and no-em-dash rules as above (use a comma, never "—").
 - Paragraph 1: name the role and company, and a one-line hook on why you fit. Paragraph 2: 2-3 concrete, relevant accomplishments/skills from the résumé that match the job. Paragraph 3: a brief close and a call to talk.
-- The field's value MUST begin with "Dear Hiring Manager," end with "Sincerely," on its own line then the candidate's full name, and contain NOTHING else (no subject, no address block, no date, no commentary).
+- The field's value MUST begin with "Dear Hiring Manager," end with "Sincerely," on its own line then the candidate's full name, and contain NOTHING else (no subject, no address block, no date, no commentary). Encode every line break inside this JSON string as \\n; NEVER place a literal line break inside a quoted JSON value.
 
 Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work", "projects", and "customSections" in the SAME ORDER and SAME COUNT as the base, and keep every custom section's "items" in the same order/count. Copy alignment names/titles from the base purely so the bullets stay attached to the right entry:
 {
@@ -447,7 +508,7 @@ Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep 
   "skills": [ { "name": "", "keywords": ["", ""] } ],
   "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
   "customSections": [ { "title": "<section title, copied from base>", "items": [ { "name": "<item name, copied from base>", "highlights": [] } ] } ],
-  "cover_letter": "Dear Hiring Manager,\n\n<3 paragraphs>\n\nSincerely,\n<candidate full name>",
+  "cover_letter": "Dear Hiring Manager,\\n\\n<3 paragraphs>\\n\\nSincerely,\\n<candidate full name>",
   "_changes": ["Reframed your summary and bullets around the role's cloud/CI focus and added Kubernetes — a strong fit given your Docker experience.", "Embellished: described leading a 5-engineer migration (you contributed but did not lead it)"]
 }
 Do NOT output identity, contact, profiles, dates, locations, education, or custom-section factual fields in the résumé fields — they are filled from the base. Never output more highlights for any entry than its budget allows.`;

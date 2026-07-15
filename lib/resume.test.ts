@@ -110,6 +110,17 @@ describe('extractJsonObject — pull JSON out of an LLM response', () => {
     expect(extractJsonObject('prefix {"s":"a {nested} brace"} suffix')).toEqual({ s: 'a {nested} brace' });
   });
 
+  it('repairs literal control characters inside otherwise-valid JSON strings', () => {
+    const response = '{"cover_letter":"Dear Hiring Manager,\n\nFirst paragraph.\tSecond paragraph.\n\nSincerely,\nTaylor"}';
+    expect(extractJsonObject(response)).toEqual({
+      cover_letter: 'Dear Hiring Manager,\n\nFirst paragraph.\tSecond paragraph.\n\nSincerely,\nTaylor',
+    });
+  });
+
+  it('does not guess at malformed JSON beyond quoted-string control characters', () => {
+    expect(extractJsonObject('{"cover_letter": unquoted}')).toBeNull();
+  });
+
   it('returns null when nothing parses', () => {
     expect(extractJsonObject('no json here')).toBeNull();
     expect(extractJsonObject('')).toBeNull();

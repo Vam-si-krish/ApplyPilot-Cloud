@@ -57,6 +57,10 @@ Additional Experience, Certifications, Leadership, Publications, and Awards. Tho
 sections use the same white document hierarchy and participate in scoring, tailoring,
 review, and the downloaded PDF without crossing the user's existing row/file boundary
 (ADR 0085).
+Tailoring accepts a model response only through the protected structured parser. A
+literal paragraph break inside an otherwise-valid quoted JSON value is repaired without
+making the user rerun a paid generation; other malformed structure still fails visibly
+instead of being guessed (ADR 0086).
 
 **Phase 2B — public-account readiness (next):** replace fixed credentials with account
 creation, verified recovery, session controls, and operational account lifecycle. Encrypt
@@ -114,6 +118,9 @@ must never be publicly readable — a single shared password gates everything (A
    résumé fields and user-defined sections. Custom sections remain editable in a tailored
    copy, are included in AI/local scoring context, preserve user-entered facts during AI
    rewriting, and render as semantic single-column sections in the one-page PDF.
+6. **Complete valid tailoring work without manual retries:** harmless raw paragraph breaks
+   inside a model's otherwise-valid JSON string are recovered deterministically. The app
+   never invents missing JSON structure or bypasses Base-résumé fact anchoring.
 
 ## Success criteria
 - Labeled résumé/job evals remain within their expected score bands and every real

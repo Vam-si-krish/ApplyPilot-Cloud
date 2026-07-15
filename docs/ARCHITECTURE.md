@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0085
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0086
 
 ## Current deployment topology
 
@@ -140,7 +140,8 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
 - `app/api/*` — thin HTTP handlers; validate input, call lib, write DB.
 - `resume-worker/tailor.js`, `templates.js`, `render.js`, `supabase.js` — the hand-kept
   worker copy of résumé normalization/tailoring plus PDF and scoring serialization. Any
-  résumé-shape change must update both the app and worker sides and bump `/version` features.
+  résumé-shape or model-response boundary change must update both the app and worker sides
+  and bump `/version` features.
 
 Settings information architecture is a presentation-only boundary (ADR 0082).
 `app/(app)/settings/page.tsx` groups the existing fields into five goal-oriented views and
@@ -267,6 +268,18 @@ rewrite only their existing highlights; headings, entry names/descriptions, date
 locations, and URLs are restored from the base. The condense loop and deterministic
 one-page backstop include custom-entry bullets, so adding a section cannot bypass the
 existing length guarantee. See ADR 0085.
+
+## Tailoring model-response boundary
+
+The worker asks for one balanced JSON object containing a résumé patch plus an optional
+cover letter. The prompt demonstrates paragraph breaks as escaped `\n` sequences. Both
+the app and worker parse valid JSON first; if that fails, they make one deterministic
+repair pass that escapes only raw JSON control characters found inside quoted strings.
+Missing quotes, commas, fields, truncated objects, and other malformed syntax are not
+guessed. The normalized patch still passes through `mergeTailored`, which restores
+verified Base-résumé facts and enforces bullet/section caps. This prevents a harmless
+cover-letter line-break formatting error from discarding an otherwise usable résumé
+without adding another paid model call or weakening the trust boundary (ADR 0086).
 
 ## Re-trigger mechanism for chunked scoring
 `/api/score-batch` re-invokes itself via a fire-and-forget `fetch` to its own URL
