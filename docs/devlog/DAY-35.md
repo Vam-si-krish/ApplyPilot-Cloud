@@ -27,5 +27,6 @@
 - Full gates pass: 218 application tests with 9 credentialed evals skipped, 16 backend
   tests, 20 worker tests, TypeScript, documentation validation across 141 Markdown files
   and 89 ADRs, and the production-mode Next.js build.
-- The isolated development deployment is recorded after the server verifies the feature
-  commit. Production remains untouched.
+- The isolated development server verified application commit `429d90d` with a healthy
+  gateway/worker and clean checkout. Its push triggered the normal development Netlify
+  build; it was not polled, per the owner handoff. Production remains untouched.
