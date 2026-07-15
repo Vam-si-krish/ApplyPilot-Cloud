@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0081
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0082
 
 ## Current deployment topology
 
@@ -131,6 +131,13 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   callback targets are rejected before starting a billable Apify run (ADR 0077).
 - `lib/supabase.ts` — protocol clients for the gateway/PostgREST compatibility boundary.
 - `app/api/*` — thin HTTP handlers; validate input, call lib, write DB.
+
+Settings information architecture is a presentation-only boundary (ADR 0082).
+`app/(app)/settings/page.tsx` groups the existing fields into five goal-oriented views and
+uses a URL hash for navigation; it does not create a second persistence model. Candidate
+facts and prompt guidance remain exclusively under Candidate Profile. API keys, OAuth
+connections, settings rows, RLS, and worker credentials retain their existing owners and
+save semantics.
 
 ## Scoring (current v2 contract)
 

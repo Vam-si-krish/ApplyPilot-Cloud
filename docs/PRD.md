@@ -43,6 +43,9 @@ copies work-authorization facts only when the PDF states them explicitly (ADR 00
 Candidate Profile is the single ongoing edit surface for the Base résumé, eligibility,
 recurring application answers, avoidance preferences, and constrained scoring/tailoring
 guidance (ADR 0081).
+Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
+Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
+navigation and plain-language effects/cost explanations (ADR 0082).
 
 **Phase 2B — public-account readiness (next):** replace fixed credentials with account
 creation, verified recovery, session controls, and operational account lifecycle. Encrypt

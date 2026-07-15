@@ -74,7 +74,7 @@ export async function buildClientForTask(settings: Settings, task: LlmTask): Pro
   if (!isApiKeyProvider(provider)) return undefined;
   const key = await getActiveApiKey(provider);
   if (!key && process.env.BACKEND_URL) {
-    throw new Error(`No active ${provider} API key — add your own key under Settings → AI tokens.`);
+    throw new Error(`No active ${provider} API key — add your own key under Settings → Connections & Keys.`);
   }
   return key ? makeClient(provider, model, key) : undefined;
 }

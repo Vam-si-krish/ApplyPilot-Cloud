@@ -81,15 +81,20 @@ generated files are not automatically rewritten after an edit; delete/re-run a s
 regenerate the application document when you want the new context applied.
 
 To use a Claude subscription instead of an Anthropic API key, open **Settings →
-Claude connection**, authenticate on Anthropic's website, paste the one-time
+AI & Models → Claude connection**, authenticate on Anthropic's website, paste the one-time
 authorization code, and select **Claude subscription (no API key)** for Tailoring.
 ApplyPilot never receives the user's Claude password or browser cookies. A successful
 connection automatically selects the subscription lane for tailoring.
 
-To use a ChatGPT subscription without an OpenAI API key, open **Settings → ChatGPT
-connection**, start the login, and enter the displayed one-time code on OpenAI's official
+To use a ChatGPT subscription without an OpenAI API key, open **Settings → AI & Models →
+ChatGPT connection**, start the login, and enter the displayed one-time code on OpenAI's official
 device page. ApplyPilot stores the completed Codex login only under that account's UUID;
 it never receives the ChatGPT password. A successful connection selects ChatGPT for tailoring.
+
+Settings is organized by goal: **Job Search**, **Automation**, **AI & Models**,
+**Connections & Keys**, and **Advanced**. On phones, use the category selector at the top.
+Candidate résumé facts, application answers, and scoring/tailoring guidance remain under
+Candidate Profile rather than being duplicated in Settings.
 
 ### Commands
 ```bash

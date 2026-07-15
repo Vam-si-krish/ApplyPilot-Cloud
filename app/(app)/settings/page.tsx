@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle, AlertCircle, Trash2, Plus, X, Mail, Check, ExternalLink, LogOut } from 'lucide-react';
+import {
+  Save, CheckCircle, AlertCircle, Trash2, Plus, X, Mail, Check, ExternalLink, LogOut,
+  Search, Clock3, Sparkles, KeyRound, SlidersHorizontal, ArrowRight,
+} from 'lucide-react';
 import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/types';
 
 const PROVIDERS = [
@@ -90,8 +93,49 @@ const SKILL_SUGGESTIONS = [
   'React', 'TypeScript', 'JavaScript', 'Node.js', 'Next.js', 'Python', 'SQL', 'AWS', 'GraphQL', 'Docker',
 ];
 
+type SettingsCategory = 'search' | 'automation' | 'ai' | 'integrations' | 'advanced';
+
+const SETTINGS_CATEGORIES: {
+  id: SettingsCategory;
+  title: string;
+  short: string;
+  description: string;
+}[] = [
+  {
+    id: 'search',
+    title: 'Job Search',
+    short: 'Roles, sources & filters',
+    description: 'Choose what to search, where to search, how many jobs to fetch, and which jobs are worth an AI score.',
+  },
+  {
+    id: 'automation',
+    title: 'Automation',
+    short: 'Daily runs & tailoring',
+    description: 'Control unattended job discovery and the overnight résumé-tailoring queue.',
+  },
+  {
+    id: 'ai',
+    title: 'AI & Models',
+    short: 'Subscriptions & task models',
+    description: 'Connect Claude or ChatGPT and choose which provider handles chat, tailoring, and scoring.',
+  },
+  {
+    id: 'integrations',
+    title: 'Connections & Keys',
+    short: 'API keys & Gmail',
+    description: 'Manage private provider credentials, key rotation, and the read-only Gmail inbox connection.',
+  },
+  {
+    id: 'advanced',
+    title: 'Advanced',
+    short: 'Safety & infrastructure',
+    description: 'Access destructive score controls and legacy worker configuration. Most users can leave these unchanged.',
+  },
+];
+
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('search');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -100,6 +144,8 @@ export default function SettingsPage() {
   const [workerSecret, setWorkerSecret] = useState('');
 
   useEffect(() => {
+    const fromHash = window.location.hash.replace(/^#/, '') as SettingsCategory;
+    if (SETTINGS_CATEGORIES.some((category) => category.id === fromHash)) setActiveCategory(fromHash);
     fetch('/api/settings')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setS(d))
@@ -108,6 +154,12 @@ export default function SettingsPage() {
 
   function patch(p: Partial<Settings>) {
     setS((prev) => (prev ? { ...prev, ...p } : prev));
+  }
+
+  function selectCategory(category: SettingsCategory) {
+    setActiveCategory(category);
+    window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#${category}`);
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   // Auto-rotate is persisted immediately (like the per-key active toggle), not via
@@ -182,12 +234,14 @@ export default function SettingsPage() {
     );
   }
 
+  const category = SETTINGS_CATEGORIES.find((item) => item.id === activeCategory) ?? SETTINGS_CATEGORIES[0];
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 animate-slide-up max-w-3xl">
+    <div className="max-w-6xl p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="page-title text-2xl">Settings</h1>
-          <p className="page-sub">Schedule, search criteria, and providers</p>
+          <p className="page-sub">Choose a category to find and understand the setting you need.</p>
         </div>
         {saved && (
           <div className="flex items-center gap-1.5 rounded-lg border border-emerald/25 bg-emerald/10 px-3 py-1.5 text-[13px] text-emerald animate-fade-in">
@@ -203,12 +257,66 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <nav aria-label="Settings categories" className="mb-7">
+        <div className="sm:hidden">
+          <label htmlFor="settings-category" className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-slate-muted">Settings category</label>
+          <select
+            id="settings-category"
+            value={activeCategory}
+            onChange={(event) => selectCategory(event.target.value as SettingsCategory)}
+            className="w-full rounded-lg border border-ink bg-card px-3 py-2.5 text-[13px] text-slate-text outline-none focus:border-sky/50 focus:ring-1 focus:ring-sky/25"
+          >
+            {SETTINGS_CATEGORIES.map((item) => <option key={item.id} value={item.id}>{item.title} — {item.short}</option>)}
+          </select>
+        </div>
+        <div className="hidden gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-5">
+          {SETTINGS_CATEGORIES.map((item) => {
+            const selected = item.id === activeCategory;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={selected ? 'page' : undefined}
+                onClick={() => selectCategory(item.id)}
+                className={`min-w-[190px] rounded-xl border p-3 text-left transition-all sm:min-w-0 ${
+                  selected
+                    ? 'border-sky/40 bg-sky/10 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]'
+                    : 'border-ink bg-card hover:border-sky/25 hover:bg-raised'
+                }`}
+              >
+                <span className={`mb-2 flex h-8 w-8 items-center justify-center rounded-lg ${selected ? 'bg-sky/15 text-sky' : 'bg-raised text-slate-muted'}`}>
+                  <SettingsCategoryIcon category={item.id} />
+                </span>
+                <span className={`block text-[13px] font-medium ${selected ? 'text-sky' : 'text-slate-text'}`}>{item.title}</span>
+                <span className="mt-0.5 block text-[10px] leading-relaxed text-slate-muted">{item.short}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <div className="max-w-4xl">
+        <div className="mb-5">
+          <p className="font-display text-lg font-semibold text-slate-text">{category.title}</p>
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-muted">{category.description}</p>
+          <p className="mt-2 text-[11px] text-slate-dim">
+            {activeCategory === 'integrations' ? (
+              <>API-key, rotation, and Gmail actions in this category save immediately.</>
+            ) : (
+              <>Changes in this category take effect after <span className="text-slate-muted">Save settings</span>. Subscription connection actions save immediately.</>
+            )}
+          </p>
+        </div>
+
       {/* Schedule */}
+      {activeCategory === 'automation' && (
       <Section title="Daily Schedule">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Run time (HH:MM)" value={s.schedule_time} onChange={(v) => patch({ schedule_time: v })} placeholder="06:00" />
+        <p className="mb-4 text-[12px] leading-relaxed text-slate-muted">
+          Automated discovery is launched by the deployment&apos;s Netlify schedule. The switch below decides whether this account participates when that schedule runs.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Timezone</label>
+            <label className="block text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Your timezone</label>
             <select
               value={s.timezone || 'America/New_York'}
               onChange={(e) => patch({ timezone: e.target.value })}
@@ -222,6 +330,7 @@ export default function SettingsPage() {
                 <option value={s.timezone}>{s.timezone}</option>
               )}
             </select>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-muted">Used to interpret the overnight tailoring time and display account-local dates. It does not change Netlify&apos;s deployment timer.</p>
           </div>
         </div>
         <div className="mt-5 flex items-center gap-2">
@@ -235,8 +344,7 @@ export default function SettingsPage() {
           <label htmlFor="auto_scrape_enabled" className="text-[13px] text-slate-text">Enable automated daily runs</label>
         </div>
         <p className="text-slate-muted text-[11px] mt-3">
-          Vercel Cron triggers <span className="font-mono text-sky">/api/run</span> on a UTC schedule. Update{' '}
-          <span className="font-mono text-sky">vercel.json</span> to match this time in UTC (see the README). Unchecking the box above will pause automated scrapes.
+          When enabled, the scheduled run fetches jobs for this account using the saved Job Search settings. Turning it off pauses scheduled discovery without affecting the manual <span className="text-sky">Run now</span> button.
         </p>
 
         <div className="mt-6 pt-5 border-t border-ink">
@@ -252,17 +360,18 @@ export default function SettingsPage() {
               Auto-tailor the Tailor &amp; Apply queue overnight
             </label>
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Tailor time (HH:MM)"
               value={s.auto_tailor_time ?? '04:00'}
               onChange={(v) => patch({ auto_tailor_time: v })}
               placeholder="04:00"
+              hint="Local time, interpreted using Your timezone above. The worker checks hourly, so use a whole-hour value such as 04:00."
             />
           </div>
           <p className="text-slate-muted text-[11px] mt-3">
             At this time (in the timezone above), every résumé you&apos;ve queued in{' '}
-            <span className="text-sky">Tailor &amp; Apply</span> is tailored, scored, and rendered to a PDF on the worker — so
+            <span className="text-sky">Tailor &amp; Apply</span> is tailored and rendered to a PDF on the worker — so
             the heavy AI usage is spent overnight and the résumés are ready by morning. Runs one at a time; failed rows are
             marked and skipped. Leave off to tailor manually with “Generate selected”.
           </p>
@@ -273,8 +382,10 @@ export default function SettingsPage() {
           </p>
         </div>
       </Section>
+      )}
 
       {/* Search */}
+      {activeCategory === 'search' && (
       <Section title="Search Criteria">
         <p className="text-slate-muted text-[12px] mb-4">
           Build a library of roles and locations once — they stay here. Each run searches only the ones you
@@ -351,13 +462,14 @@ export default function SettingsPage() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-          <Field label="Hours old (lookback)" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} />
-          <Field label="Results per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} />
+          <Field label="Job age lookback" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} hint="How many hours back each source should search. 24 means jobs posted in roughly the last day." />
+          <Field label="Results per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} hint="Requested result count for each selected role. Sources may return fewer." />
           <Field
-            label="Max jobs / run (0 = ∞)"
+            label="Total run cap"
             value={String(s.max_jobs_per_run ?? 0)}
             onChange={(v) => patch({ max_jobs_per_run: Math.max(0, Number(v) || 0) })}
             placeholder="0"
+            hint="Hard ceiling across the run. Use 0 for no app-level cap; provider billing limits still apply."
           />
         </div>
 
@@ -379,8 +491,20 @@ export default function SettingsPage() {
           </p>
         </div>
       </Section>
+      )}
 
       {/* AI Models — three independent lanes (ADR 0025/0069) */}
+      {activeCategory === 'ai' && (
+      <>
+      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-sky/20 bg-sky/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[13px] font-medium text-slate-text">Looking for prompts or candidate answers?</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-muted">Résumé facts, sponsorship and clearance answers, job-avoidance preferences, and scoring/tailoring guidance live in Candidate Profile so there is only one source of truth.</p>
+        </div>
+        <a href="/profile" className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-sky hover:underline">
+          Open Candidate Profile <ArrowRight size={13} />
+        </a>
+      </div>
       <ClaudeConnectionSection onConnected={enableClaudeTailoring} />
       <ChatGPTConnectionSection onConnected={enableChatGPTTailoring} />
 
@@ -388,13 +512,13 @@ export default function SettingsPage() {
         <p className="text-slate-muted text-[12px] mb-4">
           Choose a provider and model independently for <span className="text-sky">AI Chat</span>,{' '}
           <span className="text-sky">Tailoring</span>, and <span className="text-sky">Everything else</span>. Direct API providers
-          use that provider&apos;s <span className="text-emerald">active key</span> below; subscription providers use the worker login
+          use that provider&apos;s <span className="text-emerald">active key</span> under Connections &amp; Keys; subscription providers use the worker login
           and never silently fall back to a paid key.
         </p>
         <p className="text-slate-muted text-[12px] mb-4">
           <span className="text-emerald">Claude subscription</span> uses your private connection above;{' '}
           <span className="text-emerald">ChatGPT subscription</span> uses the Codex SDK login. Both require the{' '}
-          <span className="font-mono">worker</span> below to be online. Plan limits still
+          <span className="font-mono">worker</span> to be online. Plan limits still
           apply. Scoring is high volume, so choose the smaller model when you route Everything else through a subscription.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -424,14 +548,17 @@ export default function SettingsPage() {
           />
         </div>
       </Section>
+      </>
+      )}
 
       {/* Pre-scoring filter */}
+      {activeCategory === 'search' && (
       <Section title="Pre-scoring Filter">
         <p className="text-slate-muted text-[12px] mb-4">
           Before spending an LLM call on each job, a local <span className="text-slate-text">ATS-style match</span> rates your
           résumé against the posting the way an applicant tracking system would — skills the job asks for (must-haves and
           title mentions weigh more), job-title alignment, and remaining keyword coverage, with penalties for
-          years-of-experience gaps and clearance-restricted roles. Jobs below the threshold are marked{' '}
+          large experience or advanced-degree gaps. Candidate-specific sponsorship and clearance choices are handled later by AI scoring. Jobs below the threshold are marked{' '}
           <span className="text-amber-400">Filtered</span> and skipped, saving tokens. Turn it off to score every job.
         </p>
         <div className="flex items-start gap-3 bg-raised border border-ink rounded-lg px-3.5 py-3 mb-4">
@@ -448,7 +575,7 @@ export default function SettingsPage() {
             <p className="text-[11px] text-slate-muted mt-0.5">Only jobs at or above the match threshold get an LLM score.</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Match threshold (%)</p>
             <div className="flex items-center gap-3">
@@ -472,12 +599,14 @@ export default function SettingsPage() {
           visible under the <span className="text-amber-400">Filtered</span> tab on the Jobs page.
         </p>
       </Section>
+      )}
 
       {/* Company assessment now rides the scoring call itself (ADR 0065) — every scored
           job gets a company tier + tech stack in the same pass, so there's no separate
           auto-assess toggle or on-demand button to configure here. */}
 
       {/* Delete-scores danger gate (ADR 0048) */}
+      {activeCategory === 'advanced' && (
       <Section title="Delete scores">
         <p className="text-slate-muted text-[12px] mb-4">
           When on, the <span className="text-sky">Jobs</span> tab shows extra bulk actions on selected jobs to
@@ -505,14 +634,20 @@ export default function SettingsPage() {
           </div>
         </div>
       </Section>
+      )}
 
       {/* API Keys vault */}
+      {activeCategory === 'integrations' && (
+      <>
       <ApiKeysSection autoRotate={s.auto_rotate_keys ?? false} onAutoRotate={setAutoRotate} />
 
       {/* Gmail inbox connection */}
       <GmailSection />
+      </>
+      )}
 
       {/* Portals */}
+      {activeCategory === 'search' && (
       <Section title="Job Portals">
         <p className="text-slate-muted text-[12px] mb-4">
           Select which job boards to search. Each uses a separate Apify actor and runs in parallel.
@@ -527,7 +662,7 @@ export default function SettingsPage() {
             const portals = s.job_portals ?? ['linkedin'];
             const checked = portals.includes(key);
             return (
-              <label key={key} className="flex items-center gap-3 cursor-pointer group">
+              <label key={key} className="group flex cursor-pointer items-start gap-3 sm:items-center">
                 <input
                   type="checkbox"
                   checked={checked}
@@ -539,8 +674,8 @@ export default function SettingsPage() {
                   }}
                   className="w-4 h-4 rounded accent-sky"
                 />
-                <span className="text-[13px] text-slate-text font-medium w-24">{label}</span>
-                <span className="text-[11px] text-slate-muted font-mono">{actor}</span>
+                <span className="w-24 shrink-0 text-[13px] font-medium text-slate-text">{label}</span>
+                <span className="break-words font-mono text-[11px] text-slate-muted">{actor}</span>
               </label>
             );
           })}
@@ -550,7 +685,7 @@ export default function SettingsPage() {
         {(s.job_portals ?? ['linkedin']).includes('linkedin') && (
           <div className="pt-4 border-t border-ink">
             <p className="text-[11px] text-slate-muted mb-3 font-medium uppercase tracking-wider">LinkedIn Actor Variant</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <select
                   value={ACTORS.find((a) => a.id === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
@@ -566,6 +701,7 @@ export default function SettingsPage() {
                 value={s.apify_actor_id}
                 onChange={(v) => patch({ apify_actor_id: v.replace(/\//g, '~') })}
                 placeholder="cheap_scraper~linkedin-job-scraper"
+                hint="Apify actor identifier. Keep the recommended actor unless you have verified another actor's input and pricing."
               />
             </div>
 
@@ -604,12 +740,13 @@ export default function SettingsPage() {
         {(s.job_portals ?? ['linkedin']).includes('career_sites') && (
           <div className="pt-4 border-t border-ink">
             <p className="text-[11px] text-slate-muted mb-3 font-medium uppercase tracking-wider">Career Sites (ATS-direct)</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field
                 label="Max jobs / run (spend dial)"
                 value={String(s.career_sites_max_jobs ?? 150)}
                 onChange={(v) => patch({ career_sites_max_jobs: Math.max(10, Math.min(5000, Number(v) || 150)) })}
                 placeholder="150"
+                hint="Maximum career-site results purchased in one run. Lower values reduce Apify spend."
               />
             </div>
             <p className="text-[11px] text-amber-400 mt-2">
@@ -621,14 +758,17 @@ export default function SettingsPage() {
         )}
 
         <p className="text-slate-muted text-[11px] mt-4">
-          The Apify token comes from the active <span className="text-sky">Apify</span> key in the API Keys section above
-          (falling back to <span className="font-mono text-sky">APIFY_TOKEN</span>). Indeed and Glassdoor actor IDs are
+          The Apify token comes from the active <span className="text-sky">Apify</span> key under Connections &amp; Keys.
+          This managed multi-user deployment does not use another account&apos;s or a deployment-level fallback key. Indeed and Glassdoor actor IDs are
           defaults — verify on <span className="font-mono text-sky">console.apify.com</span> before first use.
         </p>
       </Section>
+      )}
 
       {/* Legacy single-owner deployments can edit their tunnel. In the multi-user
           fork this trusted endpoint is deployment-managed and intentionally hidden. */}
+      {activeCategory === 'advanced' && (
+      <>
       {!s.worker_managed && <Section title="Résumé Worker">
         <p className="text-slate-muted text-[12px] mb-4">
           The URL and shared secret for your local Puppeteer worker (résumé tailoring + PDF rendering).
@@ -642,6 +782,7 @@ export default function SettingsPage() {
             value={s.resume_worker_url ?? ''}
             onChange={(v) => patch({ resume_worker_url: v })}
             placeholder="https://mission-julia-direction-omissions.trycloudflare.com"
+            hint="Legacy deployment only: the HTTPS endpoint used for long-running AI work and PDF rendering."
           />
           <div>
             <Field
@@ -650,6 +791,7 @@ export default function SettingsPage() {
               value={workerSecret}
               onChange={setWorkerSecret}
               placeholder={s.resume_worker_secret ? 'Saved — type a new value to replace it' : 'Set the shared worker secret'}
+              hint="Must exactly match WORKER_SECRET on the résumé worker. Leave blank to keep the saved value."
             />
             <p className="text-slate-muted text-[11px] mt-1.5">
               {s.resume_worker_secret
@@ -659,6 +801,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </Section>}
+      {s.worker_managed && (
+        <Section title="Managed Worker">
+          <p className="text-[12px] leading-relaxed text-slate-muted">The résumé and subscription worker is managed by this deployment. Its URL and shared secret are intentionally hidden and cannot be changed by an account user.</p>
+        </Section>
+      )}
+      </>
+      )}
 
       <div className="sticky bottom-0 -mx-2 flex items-center gap-3 bg-void/85 px-2 py-3 backdrop-blur">
         <SaveBtn onClick={save} loading={saving} />
@@ -667,6 +816,7 @@ export default function SettingsPage() {
             <CheckCircle size={14} /> Saved
           </span>
         )}
+      </div>
       </div>
     </div>
   );
@@ -1066,8 +1216,9 @@ function ApiKeysSection({ autoRotate, onAutoRotate }: { autoRotate: boolean; onA
     <Section title="API Keys">
       <p className="text-slate-muted text-[12px] mb-4">
         Store one or more keys per provider (e.g. several Apify accounts) and pick which one is{' '}
-        <span className="text-emerald">active</span>. The active key is used for daily runs and scoring; environment
-        variables are only a fallback when a provider has no key here. Keys are shown masked — re-enter to replace.
+        <span className="text-emerald">active</span>. Apify keys fetch jobs; AI-provider keys are used only when that
+        provider is selected under AI &amp; Models. This managed multi-user deployment has no shared key fallback.
+        Keys are shown masked — delete and re-add a key to replace its value.
       </p>
 
       {/* Auto-rotate toggle (ADR 0007) */}
@@ -1175,7 +1326,7 @@ function ProviderKeys({
           ))}
         </div>
       ) : (
-        !loading && <p className="text-[12px] text-slate-muted">No keys stored — using env fallback if set.</p>
+        !loading && <p className="text-[12px] text-slate-muted">No keys stored for this account.</p>
       )}
 
       {open && (
@@ -1590,15 +1741,23 @@ function TaskModel({
   );
 }
 
+function SettingsCategoryIcon({ category }: { category: SettingsCategory }) {
+  if (category === 'search') return <Search size={16} />;
+  if (category === 'automation') return <Clock3 size={16} />;
+  if (category === 'ai') return <Sparkles size={16} />;
+  if (category === 'integrations') return <KeyRound size={16} />;
+  return <SlidersHorizontal size={16} />;
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="card p-5 mb-5">
+    <section className="card p-5 mb-5">
       <div className="mb-4 flex items-center gap-2">
         <span className="h-3.5 w-1 rounded-full bg-gradient-to-b from-sky to-iris" />
-        <p className="font-display text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-muted">{title}</p>
+        <h2 className="font-display text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-muted">{title}</h2>
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -1608,12 +1767,14 @@ function Field({
   onChange,
   placeholder,
   type = 'text',
+  hint,
 }: {
   label: string;
   value: unknown;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  hint?: string;
 }) {
   return (
     <div>
@@ -1625,6 +1786,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text placeholder:text-slate-muted transition-colors"
       />
+      {hint && <p className="mt-1.5 text-[10px] leading-relaxed text-slate-muted">{hint}</p>}
     </div>
   );
 }
@@ -1763,7 +1925,7 @@ function LibraryPicker({
 function SaveBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button onClick={onClick} disabled={loading} className="btn-primary px-5 py-2.5">
-      <Save size={14} /> {loading ? 'Saving…' : 'Save Changes'}
+      <Save size={14} /> {loading ? 'Saving…' : 'Save settings'}
     </button>
   );
 }

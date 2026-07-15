@@ -85,7 +85,7 @@ then restart the worker (`./install-service.sh` reloads it). Verify auth: `claud
 subscription. **Do not** set `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` in this worker's env — they override
 the subscription and bill the API.
 
-In the app: **Settings → AI Models** → set AI Chat, Tailoring, and/or Everything else to **"Claude
+In the app: **Settings → AI & Models** → set AI Chat, Tailoring, and/or Everything else to **"Claude
 subscription (no API key)"**. Note the plan's monthly Agent-SDK credit cap (Pro $20 · Max5× $100 ·
 Max20× $200), then standard API rates — so high-volume scoring is often better left on a cheap model.
 
@@ -113,7 +113,7 @@ The worker can also run any AI lane through OpenAI's official Codex SDK using th
 entitlement. The SDK and its pinned CLI are installed by `npm install`; authenticate it once on this Mac:
 
 > `multi-user-fork` users do not run these shared-login commands. Each user opens
-> **Settings → ChatGPT connection** and completes the official device-code flow; the fork
+> **Settings → AI & Models → ChatGPT connection** and completes the official device-code flow; the fork
 > stores that login under `backend/data/chatgpt-users/<uuid>/` (ADR 0081). The commands
 > below are only for the legacy single-owner deployment.
 
@@ -131,7 +131,7 @@ CHATGPT_CODEX_HOME=/Users/<you>/.applypilot-codex
 launchctl kickstart -k gui/$(id -u)/com.applypilot.resume-worker
 ```
 
-In **Settings → AI Models**, choose **ChatGPT subscription (no API key)** independently for AI Chat,
+In **Settings → AI & Models**, choose **ChatGPT subscription (no API key)** independently for AI Chat,
 Tailoring, or Everything else. `gpt-5.4` is the conservative default; a smaller model is better for
 high-volume scoring. The model dropdown keeps a Custom option because Codex model access can vary by plan.
 

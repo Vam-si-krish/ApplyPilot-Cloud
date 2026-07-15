@@ -180,7 +180,7 @@ export function makeChatGPTClient(model, label = 'codex', userId = null) {
           ? `Codex SDK timed out after ${timeoutMs}ms (model=${resolvedModel}, task=${label})`
           : `Codex SDK error (model=${resolvedModel}, task=${label}): ${error instanceof Error ? error.message : String(error)}`;
         const authHint = userId
-          ? ' Reconnect this user under Settings → ChatGPT connection.'
+          ? ' Reconnect this user under Settings → AI & Models → ChatGPT connection.'
           : ` Authenticate the worker with \`CODEX_HOME=${codexHome} codex login\` and verify with \`codex login status\`.`;
         console.error(`[codex ${rid}] FAIL ${base}`);
         throw new Error(`${base}.${authHint}`);

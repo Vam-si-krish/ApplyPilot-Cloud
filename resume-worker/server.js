@@ -84,7 +84,7 @@ async function resolveTaskClient(provider, model, label = 'task') {
     // Preserve the shared one-time onboarding lane and the owner's legacy local
     // login. All ordinary work for other accounts requires their own connection.
     if (userId === ownerId || sharedOnboarding) return { client: makeAgentClient(model, label) };
-    return { error: 'Connect your Claude subscription under Settings → Claude connection.' };
+    return { error: 'Connect your Claude subscription under Settings → AI & Models → Claude connection.' };
   }
   if (provider === CHATGPT_SUBSCRIPTION_PROVIDER) {
     const connection = userId ? await chatgptConnectionStatus(userId) : { connected: false };
@@ -93,13 +93,13 @@ async function resolveTaskClient(provider, model, label = 'task') {
     }
     // Preserve the bounded shared onboarding lane and the owner's legacy login.
     if (userId === ownerId || sharedOnboarding) return { client: makeChatGPTClient(model, label) };
-    return { error: 'Connect your ChatGPT subscription under Settings → ChatGPT connection.' };
+    return { error: 'Connect your ChatGPT subscription under Settings → AI & Models → ChatGPT connection.' };
   }
   if (!LLM_PROVIDERS.has(provider)) {
     return { error: `Provider "${provider || '(unset)'}" is not a supported LLM provider.` };
   }
   const key = await getActiveApiKey(provider);
-  if (!key) return { error: `No active ${provider} API key — add one under Settings → AI tokens.` };
+  if (!key) return { error: `No active ${provider} API key — add one under Settings → Connections & Keys.` };
   return { client: makeClient(provider, model, key) };
 }
 
