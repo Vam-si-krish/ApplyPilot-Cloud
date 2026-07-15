@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bot, Copy, ShieldCheck } from 'lucide-react';
+import { Bot, Copy, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import { buildAiNavigationPrompt, isActiveAiApplyStatus } from '@/lib/aiApply';
 import type { ApplicationWithJob } from '@/lib/types';
 
@@ -23,6 +23,9 @@ async function copyText(text: string): Promise<void> {
 
 export default function AiApplyQueueHeader({ applications }: { applications: ApplicationWithJob[] }) {
   const [copied, setCopied] = useState(false);
+  const [pluginSetup, setPluginSetup] = useState<'idle' | 'loading' | 'copied'>('idle');
+  const [pluginError, setPluginError] = useState('');
+  const [pluginExpiresAt, setPluginExpiresAt] = useState('');
   const active = applications.filter((application) => isActiveAiApplyStatus(application.ai_apply_status));
   const working = active.filter((application) => application.ai_apply_status === 'in_progress').length;
 
@@ -30,6 +33,31 @@ export default function AiApplyQueueHeader({ applications }: { applications: App
     await copyText(buildAiNavigationPrompt(active));
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  }
+
+  async function copyPluginSetup() {
+    setPluginSetup('loading');
+    setPluginError('');
+    try {
+      const response = await fetch('/api/ai-agent/runs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label: 'Codex MCP' }),
+      });
+      const body = await response.json() as { token?: string; expiresAt?: string; error?: string };
+      if (!response.ok || !body.token) throw new Error(body.error || 'Could not create plugin access.');
+      const setup = [
+        `export APPLYPILOT_URL=${JSON.stringify(window.location.origin)}`,
+        `export APPLYPILOT_AI_TOKEN=${JSON.stringify(body.token)}`,
+      ].join('\n');
+      await copyText(setup);
+      setPluginExpiresAt(body.expiresAt || '');
+      setPluginSetup('copied');
+      setTimeout(() => setPluginSetup('idle'), 5000);
+    } catch (cause) {
+      setPluginError(cause instanceof Error ? cause.message : String(cause));
+      setPluginSetup('idle');
+    }
   }
 
   return (
@@ -46,22 +74,40 @@ export default function AiApplyQueueHeader({ applications }: { applications: App
             </span>
           </div>
           <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-slate-muted">
-            Copy the @Chrome handoff once. Your extension fills first; AI completes any missed fields from your saved
-            ApplyPilot information, navigates, submits, and continues to the next job in a new tab.
+            The ApplyPilot plugin reads this live queue. Your extension fills first; AI completes any missed fields from
+            your saved information, navigates, submits, and continues to the next job in a new tab.
           </p>
           <p className="mt-1 text-[11px] text-amber-400/90">
             All unapplied jobs with a usable link are eligible. Unknown answers move the job to Needs review without stopping the queue.
           </p>
         </div>
-        <button
-          onClick={copyPrompt}
-          disabled={active.length === 0}
-          title="Copy the navigation prompt for the next twenty assigned applications"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] font-medium text-sky transition-all hover:bg-sky/20 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {copied ? <ShieldCheck size={14} /> : <Copy size={14} />}
-          {copied ? 'Prompt copied' : 'Copy AI batch prompt'}
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              onClick={copyPluginSetup}
+              disabled={pluginSetup === 'loading'}
+              title="Create a revocable two-hour MCP run and copy its local setup"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-[12px] font-medium text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-wait disabled:opacity-50"
+            >
+              {pluginSetup === 'loading' ? <Loader2 size={14} className="animate-spin" />
+                : pluginSetup === 'copied' ? <ShieldCheck size={14} /> : <KeyRound size={14} />}
+              {pluginSetup === 'loading' ? 'Creating…' : pluginSetup === 'copied' ? 'MCP setup copied' : 'Connect ApplyPilot plugin'}
+            </button>
+            <button
+              onClick={copyPrompt}
+              disabled={active.length === 0}
+              title="Fallback: copy the navigation prompt for the next twenty assigned applications"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] font-medium text-sky transition-all hover:bg-sky/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {copied ? <ShieldCheck size={14} /> : <Copy size={14} />}
+              {copied ? 'Prompt copied' : 'Copy fallback prompt'}
+            </button>
+          </div>
+          {pluginSetup === 'copied' && (
+            <span className="text-[10px] text-emerald">Paste into the terminal that starts Codex · expires {pluginExpiresAt ? new Date(pluginExpiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'in 2 hours'}</span>
+          )}
+          {pluginError && <span className="max-w-md text-right text-[10px] text-red-400">{pluginError}</span>}
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "applypilot": {
+      "command": "node",
+      "args": ["./scripts/applypilot-mcp.mjs"],
+      "cwd": ".",
+      "env_vars": ["APPLYPILOT_URL", "APPLYPILOT_AI_TOKEN"]
+    }
+  }
+}

@@ -20,10 +20,16 @@
   uncapped assignment queue, twenty-row Chrome handoff, Needs-review flow, exact-file
   use when available, extension-first autofill, and AI fallback for missed fields backed
   by saved candidate facts (ADRs 0093–0095).
-- [ ] **AI Apply Navigator Phase 2: native evaluated execution.** Prototype one-click
-  browser-run invocation only after defining supported-site allowlists, extension control,
-  prompt-injection resistance, login/CAPTCHA behavior, audit output, and success detection.
-  Keep unknown-answer and visible-success evidence explicit.
+- [x] **AI Apply Navigator Phase 2 foundation: ApplyPilot plugin + MCP.** Bundle the
+  queue workflow as a repo-local Codex plugin with five narrow MCP tools, revocable
+  two-hour UUID-scoped runs, extension-first Chrome instructions, and a copied-prompt
+  fallback (ADR 0096). This is implemented on `develop` for review, not yet installed or
+  deployed.
+- [ ] **AI Apply Navigator Phase 2 hardening: durable native invocation.** Replace the
+  temporary environment-token setup with OAuth/device authorization, add run leases and
+  per-step audit evidence, evaluate success detection and prompt-injection handling, and
+  package/install the reviewed plugin. Keep unknown-answer and visible-success evidence
+  explicit; see `docs/APPLYPILOT-PLUGIN-PLAN.md`.
 
 A living, do-it-one-by-one checklist from a full-codebase review (token efficiency,
 performance, correctness, UX). Work top-to-bottom unless priorities change.
@@ -40,6 +46,10 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 ## Current release state (verified 2026-07-15)
 
 - The independent backend and fixed-account/RLS foundation are live on the server laptop.
+- The development `vamsi` account contains the owner-authorized ADR 0097 test transfer:
+  Candidate Profile/Base résumé plus twelve recent real unapplied applications and 24
+  verified PDF objects. This is a one-time private test fixture, not synchronization;
+  Pilot 2/Pilot 3 and production were untouched.
 - UUID-isolated Claude and ChatGPT subscription connections plus the centralized Candidate
   Profile controls are implemented; credential encryption remains a Phase 2B gate.
 - The owner-authorized ADR 0087 snapshot is present under `vamsi` and verified through

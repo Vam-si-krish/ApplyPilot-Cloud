@@ -6,6 +6,7 @@ const route = readFileSync(
   fileURLToPath(new URL('../app/api/applications/[id]/ai-assignment/route.ts', import.meta.url)),
   'utf8',
 );
+const serverMutation = readFileSync(fileURLToPath(new URL('./aiApplyServer.ts', import.meta.url)), 'utf8');
 const db = readFileSync(fileURLToPath(new URL('./db.ts', import.meta.url)), 'utf8');
 const migration = readFileSync(
   fileURLToPath(new URL('../supabase/migrations/0050_application_ai_assignment.sql', import.meta.url)),
@@ -25,13 +26,14 @@ describe('AI assignment persistence boundary', () => {
 
   it('uses a dedicated guarded route and syncs a verified submission to the job', () => {
     expect(route).toContain("const ACTIONS: AiApplyAction[]");
-    expect(route).toContain("action === 'assign' || action === 'retry'");
-    expect(route).toContain("action === 'submitted'");
+    expect(route).toContain('mutateAiApplication');
+    expect(serverMutation).toContain("action === 'assign' || action === 'retry'");
+    expect(serverMutation).toContain("action === 'submitted'");
     expect(route).not.toContain('body.confirmed');
     expect(route).not.toContain('MAX_AI_APPLY_BATCH');
     expect(route).not.toContain("count: 'exact'");
-    expect(route).toContain(".from('jobs')");
-    expect(route).toContain('applied_at: updated.applied_at');
+    expect(serverMutation).toContain(".from('jobs')");
+    expect(serverMutation).toContain('applied_at: updated.applied_at');
   });
 
   it('constrains lifecycle values and indexes them inside the existing RLS-owned table', () => {

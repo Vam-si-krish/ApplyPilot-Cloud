@@ -8,6 +8,7 @@ import { readSessionToken, SESSION_COOKIE } from '@/lib/auth';
 //    session and re-checks internally.
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];
 const SELF_AUTH_PATHS = ['/api/run', '/api/apify-webhook', '/api/score-batch', '/api/assess-batch', '/api/tailor-queue', '/api/gmail/sync', '/api/gmail/fetch', '/api/gmail/classify-batch'];
+const SELF_AUTH_PREFIXES = ['/api/ai-agent/mcp/'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -24,7 +25,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  if (SELF_AUTH_PATHS.includes(pathname)) return NextResponse.next();
+  if (SELF_AUTH_PATHS.includes(pathname) || SELF_AUTH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
 
   // Unauthenticated: 401 for API, redirect to /login for pages.
   if (pathname.startsWith('/api/')) {

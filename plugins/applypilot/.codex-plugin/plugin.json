@@ -1,0 +1,22 @@
+{
+  "name": "applypilot",
+  "version": "0.1.0",
+  "description": "Apply assigned jobs through Chrome using user-scoped ApplyPilot queue and profile tools.",
+  "author": {
+    "name": "ApplyPilot"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ApplyPilot",
+    "shortDescription": "Work through your assigned application queue",
+    "longDescription": "Connects Codex to a short-lived, user-scoped ApplyPilot run so it can read assigned jobs, retrieve grounded candidate facts when autofill misses a field, and record application outcomes.",
+    "developerName": "ApplyPilot",
+    "category": "Productivity",
+    "capabilities": ["Read assigned jobs", "Read grounded candidate facts", "Update AI Apply status"],
+    "defaultPrompt": [
+      "Apply to my assigned ApplyPilot jobs.",
+      "Continue my ApplyPilot application queue."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

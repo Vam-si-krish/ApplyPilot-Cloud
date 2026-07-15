@@ -73,13 +73,17 @@ dedicated column. It remains available from the fit-score tooltip, while complet
 reasoning stays in the expanded job details. On desktop, role type, apply type, company
 assessment, duplicate locations, ATS match, skill match, and opened state each retain a
 stable column, and row actions retain fixed icon slots (ADR 0092).
-Tailor & Apply also provides AI Apply Navigator Phase 1. Every unapplied job with a valid
+Tailor & Apply also provides AI Apply Navigator. Every unapplied job with a valid
 web link may enter the AI queue regardless of Easy Apply/External type or document
 readiness. The extension fills first; AI completes missed fields from Candidate Profile,
 saved application answers, résumé, or cover letter, navigates and submits, then records
 visible success. If the answer is not available, the job becomes Needs review, its tab
-stays open, and AI continues with the next job in a new tab. Assignment is uncapped; one
-copied browser run includes the next twenty rows (ADRs 0093–0095).
+stays open, and AI continues with the next job in a new tab. Assignment is uncapped.
+The preferred development path is now a bundled ApplyPilot Codex plugin: five MCP tools
+read the live assigned queue, retrieve one active row's grounded context only when
+needed, and record lifecycle outcomes. Access is a revocable, user-bound two-hour run;
+the existing next-twenty copied prompt remains a fallback during rollout (ADRs
+0093–0096).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

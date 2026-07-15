@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0095
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0097
 
 ## Current deployment topology
 
@@ -78,7 +78,13 @@ and development do not synchronize rows, files, or credentials. ADR 0091 permits
 explicit owner-requested exception: a guarded script may copy only the `vamsi` API-key
 vault rows into development and add clearly marked synthetic fixtures. It cannot copy
 résumés, history, OAuth/subscription sessions, files, fixed-login secrets, or backend
-service credentials, and it creates no ongoing data path.
+service credentials, and it creates no ongoing data path. ADR 0097 adds a second explicit
+one-time exception for plugin testing: after backing up both environments, a guarded
+API-to-API script copied the `vamsi` Candidate Profile/Base résumé and twelve recent
+unapplied linked applications with their available files into development. Production
+was read-only, files were hash-verified under `imports/production/`, operational
+opened/applied/AI state was reset, and no Pilot 2/Pilot 3, settings, credentials, mail,
+OAuth/subscription, or run data crossed the boundary.
 
 ADR 0087 permits one narrow exception to the empty-installation rule: at the owner's
 explicit request, a repeatable-read snapshot of the original owner rows and all physical
@@ -178,6 +184,14 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   handoff; the dedicated route performs RLS-scoped writes and permits submission only from an
   active/legacy-ready row. The ordinary application PATCH route cannot mutate these
   fields (ADRs 0093–0095).
+- `lib/aiAgentAuth.ts`, `lib/aiApplyServer.ts`, `app/api/ai-agent/*`, and
+  `plugins/applypilot/` — own the Codex plugin boundary. A signed-in browser can mint a
+  purpose-bound two-hour run token backed by a revocable, forced-RLS `ai_agent_runs`
+  row. Bearer-authenticated MCP routes recover that token's UUID and create an explicit
+  `supabaseAdmin(userId)` gateway client; they expose only active queue listing, one-row
+  grounded context, and start/Needs-review/submitted transitions. The local stdio MCP
+  process never receives a backend service key, database credential, app cookie, or
+  another user's identity (ADR 0096).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;
@@ -321,28 +335,36 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   parks the row with a bounded reason; retry returns it to the active queue. This state
   is independent of résumé-generation status and inherits the applications table's
   forced RLS boundary.
+- **ai_agent_runs**: revocable authorization records for local ApplyPilot MCP sessions.
+  The raw bearer token is not stored; signed purpose/user/run claims expire after two
+  hours and are accepted only while the matching forced-RLS row remains unrevoked.
 
 ## Extension-autofill application navigation
 
 ```text
 Tailor & Apply Queue
   → readiness: unapplied + valid HTTP(S) application/job link
-  → Assign to AI (uncapped queue; next twenty rows per copied prompt)
+  → Assign to AI (uncapped queue)
+  → Connect ApplyPilot plugin (signed-in session mints revocable two-hour run)
+  → plugin list_assigned_jobs reads the live UUID-scoped queue
   → Start & open posting + use tailored files when available
        → installed extension fills first
-       → AI completes missed fields from saved profile/answer/résumé/cover facts
+       → only on a missed field: plugin reads this row's saved candidate context
+       → AI completes the missed field from saved profile/answer/résumé/cover facts
        ├─ answer unavailable → Needs review + Set Aside; leave tab open → next new tab
        └─ final page → AI clicks Submit → visible site success
-                                      → mark Submitted/applied → continue
+                                      → plugin marks Submitted/applied → continue
 ```
 
-Phase 1 is an orchestration and audit boundary, not a native browser-control service. No
-browser credentials, page contents, answers, extension state, or AI sessions cross into
-PostgreSQL. The app stores only queue timestamps/status and a concise blocker reason.
-The user-invoked Chrome run authorizes the listed batch. The extension fills first and AI
-may fill only missed fields supported by saved candidate information. Unknown-answer
-tabs remain open in Needs review, and visible site success is required before recording
-Applied. Apply type and host do not affect eligibility (ADR 0095).
+The plugin is an orchestration and least-privilege data boundary, not a remote
+browser-control service. `@Chrome` continues to use the user's existing browser session
+and extension; browser credentials, page contents, and extension state do not enter
+PostgreSQL. The app stores the queue lifecycle, concise blocker reason, and revocable run
+record. Candidate context is fetched only for an active row and only when autofill misses
+a field. Unknown-answer tabs remain open in Needs review, and visible site success is
+required before recording Applied. The existing twenty-row copied prompt remains a
+temporary fallback while plugin installation and later OAuth/device authorization are
+evaluated (ADRs 0095–0096).
 
 ## Résumé custom-section flow
 
