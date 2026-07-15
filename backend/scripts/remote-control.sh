@@ -93,7 +93,10 @@ case "$REQUEST" in
     if [[ "$REQUEST" =~ '^deploy ([0-9a-f]{7,40})$' ]]; then
       EXPECTED="$match[1]"
       log "deploy $EXPECTED"
-      "$BACKEND/scripts/autopull.sh"
+      # Match launchd's login-shell environment so the server-managed Node/npm
+      # installation is available. Reconcile even when an earlier deploy fast-forwarded
+      # the checkout but failed before migrations or service restarts completed.
+      /bin/zsh -lc 'exec "$1" --reconcile' jobpilot-autopull "$BACKEND/scripts/autopull.sh"
       cd "$REPO"
       ACTUAL=$(git rev-parse HEAD)
       [[ "$ACTUAL" == "$EXPECTED"* ]] || fail "server is at ${ACTUAL[1,7]}, expected $EXPECTED"

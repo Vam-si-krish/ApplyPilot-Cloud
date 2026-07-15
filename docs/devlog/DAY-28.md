@@ -64,3 +64,15 @@
 - Protected-configuration checks confirmed `vamsi` is unchanged, the two new credentials
   authenticate to UUIDs ending `0002`/`0003`, and the former pilot usernames are rejected.
   The coordinated database/frontend rollout remains pending the deployment commit.
+
+## Restricted-deploy reconciliation fix
+
+- The first account-rename deploy fast-forwarded the server checkout to `03481e3` but
+  stopped before migration 0049 because the forced-command environment could not locate
+  the server's login-shell Node installation. The database was checked explicitly and
+  still contained the old pilot names; no successful migration was assumed.
+- Added an explicit bounded `--reconcile` mode to autopull and made restricted deploys
+  invoke it through a login shell. A repeated deploy can now finish migrations and
+  service reconciliation even when an earlier attempt updated Git before failing.
+- Zsh syntax checks and all 9 backend regressions passed, including coverage that the
+  forced deploy path uses login-shell reconciliation.

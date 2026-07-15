@@ -1,5 +1,12 @@
 #!/bin/zsh
 set -euo pipefail
+RECONCILE=0
+if [[ $# -gt 1 || ($# -eq 1 && "$1" != "--reconcile") ]]; then
+  echo "Usage: $0 [--reconcile]" >&2
+  exit 64
+fi
+if [[ "${1:-}" == "--reconcile" ]]; then RECONCILE=1; fi
+
 BACKEND="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$BACKEND/.." && pwd)"
 LOG="$BACKEND/logs/autopull.log"
@@ -19,11 +26,15 @@ fi
 git fetch origin "$BRANCH" --quiet
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse "origin/$BRANCH")
-if [[ "$LOCAL" == "$REMOTE" ]]; then exit 0; fi
-
-log "updating $LOCAL -> $REMOTE"
-git merge --ff-only "origin/$BRANCH" --quiet
-CHANGED=$(git diff --name-only "$LOCAL" HEAD)
+if [[ "$LOCAL" == "$REMOTE" ]]; then
+  [[ "$RECONCILE" == 1 ]] || exit 0
+  CHANGED=""
+  log "reconciling $LOCAL"
+else
+  log "updating $LOCAL -> $REMOTE"
+  git merge --ff-only "origin/$BRANCH" --quiet
+  CHANGED=$(git diff --name-only "$LOCAL" HEAD)
+fi
 
 if grep -qE '^(backend/package|resume-worker/package)' <<< "$CHANGED"; then
   npm ci --prefix "$BACKEND" >> "$LOG" 2>&1
@@ -37,4 +48,4 @@ docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" up -d >
 docker compose --project-directory "$BACKEND" --env-file "$BACKEND/.env" restart rest >> "$LOG" 2>&1
 launchctl kickstart -k "gui/$(id -u)/com.jobpilotmulti.backend" >> "$LOG" 2>&1 || true
 launchctl kickstart -k "gui/$(id -u)/com.jobpilotmulti.worker" >> "$LOG" 2>&1 || true
-log "updated to $(git rev-parse --short HEAD)"
+log "reconciled at $(git rev-parse --short HEAD)"

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -32,4 +33,12 @@ test('remote control rejects shell syntax and unapproved commands without evalua
     assert.equal(result.status, 64, command);
     assert.match(result.stderr, /refused/i);
   }
+});
+
+test('deploy uses login-shell reconciliation after a partial checkout update', () => {
+  const remoteControl = readFileSync(script, 'utf8');
+  const autopull = readFileSync(join(backend, 'scripts', 'autopull.sh'), 'utf8');
+  assert.match(remoteControl, /\/bin\/zsh -lc .*--reconcile/);
+  assert.match(autopull, /RECONCILE/);
+  assert.match(autopull, /reconciling/);
 });
