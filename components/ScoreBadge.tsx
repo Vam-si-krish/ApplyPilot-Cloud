@@ -1,8 +1,14 @@
 /** Score chip. Color reads by quality: ≥7 strong (green), 5–6 moderate (amber), <5 weak (red). */
-export default function ScoreBadge({ score }: { score: number | null }) {
+export default function ScoreBadge({ score, tooltip }: { score: number | null; tooltip?: string }) {
+  const accessibleLabel = tooltip ?? (score == null ? 'AI fit score — not scored yet' : `AI fit score ${score} out of 10`);
   if (score == null) {
     return (
-      <div className="w-8 h-8 rounded-[10px] bg-raised/60 border border-ink flex items-center justify-center text-slate-dim text-[11px] font-mono">
+      <div
+        title={accessibleLabel}
+        aria-label={accessibleLabel}
+        role="img"
+        className="w-8 h-8 rounded-[10px] bg-raised/60 border border-ink flex items-center justify-center text-slate-dim text-[11px] font-mono"
+      >
         –
       </div>
     );
@@ -14,7 +20,12 @@ export default function ScoreBadge({ score }: { score: number | null }) {
         ? 'text-amber border-amber/30 bg-gradient-to-br from-amber/15 to-amber/5'
         : 'text-rose border-rose/30 bg-gradient-to-br from-rose/15 to-rose/5';
   return (
-    <div className={`w-8 h-8 rounded-[10px] border flex items-center justify-center text-[12px] font-mono font-semibold ${color}`}>
+    <div
+      title={accessibleLabel}
+      aria-label={accessibleLabel}
+      role="img"
+      className={`w-8 h-8 rounded-[10px] border flex items-center justify-center text-[12px] font-mono font-semibold ${color}`}
+    >
       {score}
     </div>
   );

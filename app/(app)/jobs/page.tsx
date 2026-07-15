@@ -11,6 +11,7 @@ import MatchBadge from '@/components/MatchBadge';
 import JobsLegend from '@/components/JobsLegend';
 import ScoringPanel from '@/components/ScoringPanel';
 import { useProgress } from '@/components/ProgressContext';
+import { fitScoreTooltip } from '@/lib/jobPresentation';
 import type { Job } from '@/lib/types';
 
 const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
@@ -1244,8 +1245,8 @@ export default function JobsPage() {
                     >
                       {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </button>
-                    <ScoreBadge score={job.fit_score} />
-                    <div className="flex-1 min-w-0">
+                    <ScoreBadge score={job.fit_score} tooltip={fitScoreTooltip(job.fit_score, job.score_note)} />
+                    <div className="flex-1 min-w-0" title={`${job.title} — ${job.company} · ${job.location || 'Unknown'}`}>
                       <p className="text-slate-text text-[13px] font-medium truncate">{job.title}</p>
                       <p className="text-slate-muted text-[11px] truncate">
                         {job.company} · {job.location || 'Unknown'}
@@ -1254,131 +1255,139 @@ export default function JobsPage() {
                       </p>
                     </div>
 
-                    {/* Contract / role-type badge (ADR 0022) — flagged, not demoted */}
-                    {job.employment_type === 'contract' && (
-                      <span title="Contract / staffing role — review separately" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">
-                        Contract
-                      </span>
-                    )}
-                    {job.employment_type === 'internship' && (
-                      <span title="Internship" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-raised border border-ink text-slate-muted rounded-md">
-                        Intern
-                      </span>
-                    )}
+                    {/* Stable desktop metadata columns: a missing value leaves its own
+                        column empty instead of shifting every badge that follows it. */}
+                    <div className="hidden xl:grid grid-cols-[4.5rem_5.5rem_5.5rem_7.5rem_3.75rem_3.75rem_4.25rem] items-center gap-2 shrink-0">
+                      <div className="flex min-w-0 items-center">
+                        {job.employment_type === 'contract' && (
+                          <span title="Contract / staffing role — review separately" className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">
+                            Contract
+                          </span>
+                        )}
+                        {job.employment_type === 'internship' && (
+                          <span title="Internship" className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-raised border border-ink text-slate-muted rounded-md">
+                            Intern
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Apply type badge */}
-                    {job.easy_apply === true && (
-                      <span title="One-click apply on LinkedIn" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded-md">
-                        Easy Apply
-                      </span>
-                    )}
-                    {job.easy_apply === false && (
-                      <span title="Apply on the company / external site" className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-md">
-                        External
-                      </span>
-                    )}
+                      <div className="flex min-w-0 items-center">
+                        {job.easy_apply === true && (
+                          <span title="One-click apply on LinkedIn" className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-emerald/10 border border-emerald/25 text-emerald rounded-md">
+                            Easy Apply
+                          </span>
+                        )}
+                        {job.easy_apply === false && (
+                          <span title="Apply on the company / external site" className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-md">
+                            External
+                          </span>
+                        )}
+                      </div>
 
-                    {/* AI company-tier badge */}
-                    {job.company_tier && (
-                      <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
-                    )}
+                      <div className="flex min-w-0 items-center">
+                        {job.company_tier && (
+                          <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0" />
+                        )}
+                      </div>
 
-                    {/* Tech stack (ADR 0065) lives in the expanded details pane, not the row —
-                        chips per row were too noisy alongside the tier / ATS / skill badges. */}
+                      {/* Multi-location duplicate group (ADR 0057). */}
+                      <div className="flex min-w-0 items-center">
+                        {(job.siblings?.length ?? 0) > 0 && (() => {
+                          const appliedAnywhere = !!job.applied_at || job.siblings!.some((s) => s.applied_at);
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpanded(expanded === job.id ? null : job.id);
+                              }}
+                              title={
+                                (appliedAnywhere ? 'ALREADY APPLIED to one of these — ' : '') +
+                                `same posting in ${job.siblings!.length} other location${job.siblings!.length === 1 ? '' : 's'}: ${job.siblings!.map((s) => s.location || '—').slice(0, 6).join(' · ')}${job.siblings!.length > 6 ? ' · …' : ''} — click to list them`
+                              }
+                              className={`w-full min-w-0 inline-flex items-center justify-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors cursor-pointer ${
+                                appliedAnywhere
+                                  ? 'bg-emerald/10 border-emerald/25 text-emerald hover:bg-emerald/20'
+                                  : 'bg-sky/10 border-sky/25 text-sky hover:bg-sky/20'
+                              }`}
+                            >
+                              <MapPin size={10} className="shrink-0" />
+                              <span className="truncate">+{job.siblings!.length} location{job.siblings!.length === 1 ? '' : 's'}{appliedAnywhere ? ' ✓' : ''}</span>
+                            </button>
+                          );
+                        })()}
+                      </div>
 
-                    {/* Multi-location duplicate group (ADR 0057): this row is the canonical;
-                        the same requisition exists in N other locations. Clicking expands the
-                        row, where each location is an openable link. Turns green when ANY
-                        variant was applied to — the apply-once-per-requisition guard. */}
-                    {(job.siblings?.length ?? 0) > 0 && (() => {
-                      const appliedAnywhere = !!job.applied_at || job.siblings!.some((s) => s.applied_at);
-                      return (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpanded(expanded === job.id ? null : job.id);
-                          }}
-                          title={
-                            (appliedAnywhere ? 'ALREADY APPLIED to one of these — ' : '') +
-                            `same posting in ${job.siblings!.length} other location${job.siblings!.length === 1 ? '' : 's'}: ${job.siblings!.map((s) => s.location || '—').slice(0, 6).join(' · ')}${job.siblings!.length > 6 ? ' · …' : ''} — click to list them`
-                          }
-                          className={`shrink-0 hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors cursor-pointer ${
-                            appliedAnywhere
-                              ? 'bg-emerald/10 border-emerald/25 text-emerald hover:bg-emerald/20'
-                              : 'bg-sky/10 border-sky/25 text-sky hover:bg-sky/20'
-                          }`}
-                        >
-                          <MapPin size={10} /> +{job.siblings!.length} location{job.siblings!.length === 1 ? '' : 's'}
-                          {appliedAnywhere ? ' ✓' : ''}
-                        </button>
-                      );
-                    })()}
+                      <div className="flex min-w-0 items-center">
+                        {job.prefilter_score != null && (
+                          <MatchBadge score={job.prefilter_score} breakdown={job.prefilter_breakdown} className="shrink-0" />
+                        )}
+                      </div>
 
-                    {/* Local ATS match badge (ADR 0053) — the first-filter signal */}
-                    {job.prefilter_score != null && (
-                      <MatchBadge score={job.prefilter_score} breakdown={job.prefilter_breakdown} className="shrink-0 hidden sm:inline-flex" />
-                    )}
+                      <div className="flex min-w-0 items-center">
+                        {job.skill_match_score != null && (
+                          <SkillMatchBadge score={job.skill_match_score} matched={job.matched_skills} className="shrink-0" />
+                        )}
+                      </div>
 
-                    {/* Skill-match badge (resumeKeywords) */}
-                    {job.skill_match_score != null && (
-                      <SkillMatchBadge score={job.skill_match_score} matched={job.matched_skills} className="shrink-0 hidden sm:inline-flex" />
-                    )}
+                      <div className="flex min-w-0 items-center">
+                        {job.clicked_at && !job.applied_at && (
+                          <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">
+                            Opened
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                    {/* Opened (clicked but not yet applied) badge */}
-                    {job.clicked_at && !job.applied_at && (
-                      <span className="shrink-0 hidden sm:inline px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/25 text-violet-300 rounded-md">
-                        Opened
-                      </span>
-                    )}
-
-                    {job.score_note && (
-                      <p className="hidden lg:block max-w-xs truncate text-slate-muted text-[11px] italic">{job.score_note}</p>
-                    )}
-                    {/* Mark applied — the popup-free way to record an apply (also un-marks). */}
-                    <button
-                      onClick={() =>
-                        job.applied_at
-                          ? window.confirm('Un-mark this job as applied?') && patch(job.id, { applied_at: null })
-                          : markApplied(job)
-                      }
-                      title={job.applied_at ? `Applied ${new Date(job.applied_at).toLocaleDateString()} — click to un-mark` : 'Mark applied'}
-                      className={`p-1 rounded-md transition-colors ${job.applied_at ? 'text-emerald bg-emerald/10' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
-                    >
-                      <CheckCircle2 size={15} />
-                    </button>
-                    <button
-                      onClick={() => patch(job.id, { is_shortlisted: !job.is_shortlisted })}
-                      title="Shortlist"
-                      className={`p-1 rounded-md transition-colors ${job.is_shortlisted ? 'text-emerald' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
-                    >
-                      <Star size={15} fill={job.is_shortlisted ? 'currentColor' : 'none'} />
-                    </button>
-                    <a
-                      href={job.application_url || job.url || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => markOpened(job)}
-                      title="Open posting (will ask if you applied)"
-                      className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors"
-                    >
-                      <ExternalLink size={15} />
-                    </a>
-                    {job.status !== 'archived' && (
+                    {/* Fixed action rail keeps every icon in the same position, including
+                        the reserved archive slot on rows that are already archived. */}
+                    <div className="flex w-[9.25rem] shrink-0 items-center justify-end gap-2">
                       <button
-                        onClick={() => patch(job.id, { status: 'archived' })}
-                        title="Archive"
+                        onClick={() =>
+                          job.applied_at
+                            ? window.confirm('Un-mark this job as applied?') && patch(job.id, { applied_at: null })
+                            : markApplied(job)
+                        }
+                        title={job.applied_at ? `Applied ${new Date(job.applied_at).toLocaleDateString()} — click to un-mark` : 'Mark applied'}
+                        className={`p-1 rounded-md transition-colors ${job.applied_at ? 'text-emerald bg-emerald/10' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
+                      >
+                        <CheckCircle2 size={15} />
+                      </button>
+                      <button
+                        onClick={() => patch(job.id, { is_shortlisted: !job.is_shortlisted })}
+                        title="Shortlist"
+                        className={`p-1 rounded-md transition-colors ${job.is_shortlisted ? 'text-emerald' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
+                      >
+                        <Star size={15} fill={job.is_shortlisted ? 'currentColor' : 'none'} />
+                      </button>
+                      <a
+                        href={job.application_url || job.url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => markOpened(job)}
+                        title="Open posting (will ask if you applied)"
+                        className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors"
+                      >
+                        <ExternalLink size={15} />
+                      </a>
+                      {job.status !== 'archived' ? (
+                        <button
+                          onClick={() => patch(job.id, { status: 'archived' })}
+                          title="Archive"
+                          className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
+                        >
+                          <Archive size={15} />
+                        </button>
+                      ) : (
+                        <span aria-hidden="true" className="h-[23px] w-[23px] shrink-0" />
+                      )}
+                      <button
+                        onClick={() => deleteJob(job.id)}
+                        title="Delete permanently"
                         className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
                       >
-                        <Archive size={15} />
+                        <Trash2 size={15} />
                       </button>
-                    )}
-                    <button
-                      onClick={() => deleteJob(job.id)}
-                      title="Delete permanently"
-                      className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    </div>
                   </div>
 
                   {open && <JobDetails job={job} onPatch={patch} />}

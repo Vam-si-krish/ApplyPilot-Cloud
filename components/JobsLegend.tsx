@@ -32,7 +32,7 @@ export default function JobsLegend() {
         <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2.5 border-t border-ink-subtle">
           <Item>
             <ScoreBadge score={9} />
-            <Text title="Fit score (1–10)">AI match to your résumé. Green ≥8 strong · amber 6–7 decent · red &lt;6 weak · “–” not scored yet.</Text>
+            <Text title="Fit score (1–10)">AI match to your résumé. Green ≥8 strong · amber 6–7 decent · red &lt;6 weak · “–” not scored yet. Hover the score for its short explanation; expand the row for full reasoning.</Text>
           </Item>
           <Item>
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md border bg-emerald/10 border-emerald/25 text-emerald whitespace-nowrap">

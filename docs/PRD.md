@@ -68,6 +68,11 @@ remains the final one-page layout authority (ADR 0084).
 Tailor & Apply carries each job's Easy Apply or External Apply type into its row and
 filters, and every completed local ATS recheck shows the method-identical Base-to-tailored
 comparison even when the score is unchanged (ADR 0090).
+Jobs keeps collapsed rows scan-friendly: the repeated AI fit note does not occupy a
+dedicated column. It remains available from the fit-score tooltip, while complete scoring
+reasoning stays in the expanded job details. On desktop, role type, apply type, company
+assessment, duplicate locations, ATS match, skill match, and opened state each retain a
+stable column, and row actions retain fixed icon slots (ADR 0092).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0091
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0092
 
 ## Current deployment topology
 
@@ -172,6 +172,12 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   Tailor & Apply application-type filter/badges and complete Base-to-tailored ATS display.
   The list consumes only the RLS-scoped application→job join; it does not infer or mutate
   source metadata.
+- `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
+  keep the Jobs list's fit explanation presentation bounded. The short persisted
+  `score_note` is exposed through the score tooltip rather than a repeated row column;
+  the expanded details remain the owner of complete `score_reasoning` display. Desktop
+  metadata uses stable semantic columns with empty cells for missing values, followed by
+  a fixed-width action rail, so one absent badge cannot shift unrelated controls.
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
