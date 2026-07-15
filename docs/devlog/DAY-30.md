@@ -26,4 +26,7 @@
   passed 13/13 and the résumé worker passed 20/20. TypeScript passed.
 - The 33-page production build passed, and documentation validation passed with 131
   Markdown files and 84 ADRs.
-- Live development deployment and public smoke verification remain pending.
+- The isolated development server deployed commit `7198716`; gateway, worker, and the
+  application→job `easy_apply` projection passed publicly. Netlify rejected that commit
+  only because its `develop` context still lacks the documented Builds-scoped
+  `SECRETS_SCAN_OMIT_KEYS=DEPLOYMENT_ENV`; hosted UI verification remains pending.

@@ -100,6 +100,21 @@ and must never receive a production snapshot. Use a separate local worktree and
 `scripts/jobpilot-dev-server` for bootstrap, status, deploy, restart, logs, and backup.
 Production continues to use `scripts/jobpilot-server`.
 
+### Optional owner-authorized development seed
+
+ADR 0091 permits a deliberate, one-shot seed for the `vamsi` development account. It
+adds five clearly marked synthetic jobs/applications covering Easy Apply, External Apply,
+unknown source metadata, queue states, and Base-to-tailored ATS comparisons. With the
+explicit `--copy-owner-keys` flag it also copies only `vamsi` API-vault rows from the fork
+production backend, preserving active/cooldown state without printing secrets.
+
+Run `scripts/seed-development.mjs` with `DEV_BACKEND_URL` /
+`DEV_BACKEND_SERVICE_KEY`. To import keys, also provide `PROD_BACKEND_URL` /
+`PROD_BACKEND_SERVICE_KEY` and `--copy-owner-keys`. The script refuses targets other than
+`/jobpilot-dev`, refuses a key source other than `/jobpilot`, rejects non-owner rows, and
+will not overwrite unrelated development keys. This is not part of bootstrap or deploy;
+rerun it only with explicit owner authorization.
+
 ## Development Netlify branch
 
 On the existing Netlify site, enable a branch deploy for `develop` and set these as

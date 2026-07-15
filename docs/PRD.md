@@ -29,6 +29,10 @@ runs on the server laptop, without Supabase or another cloud database.
   branch. Development must use its own empty database, role, services, files, secrets,
   backups, and public path; local test success alone does not authorize production
   deployment (ADR 0089).
+- ADR 0091 is the only development credential-copy exception: at the owner's explicit
+  request, a guarded one-shot script may copy only that owner's `api_keys` rows and add
+  synthetic fixtures. It does not copy profile/history/files/OAuth/login/backend secrets
+  and does not synchronize later changes.
 
 ### Delivery phases
 

@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0090
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0091
 
 ## Current deployment topology
 
@@ -74,7 +74,11 @@ ADR 0089 adds an isolated integration runtime at
 `/jobpilot-dev`, and `com.jobpilotdev.*`. Runtime scripts derive labels, locks, and
 container names from protected instance configuration. Netlify's `develop` branch uses
 branch-specific secrets and does not run scheduled functions automatically. Production
-and development never copy or synchronize rows, files, or user credentials.
+and development do not synchronize rows, files, or credentials. ADR 0091 permits one
+explicit owner-requested exception: a guarded script may copy only the `vamsi` API-key
+vault rows into development and add clearly marked synthetic fixtures. It cannot copy
+résumés, history, OAuth/subscription sessions, files, fixed-login secrets, or backend
+service credentials, and it creates no ongoing data path.
 
 ADR 0087 permits one narrow exception to the empty-installation rule: at the owner's
 explicit request, a repeatable-read snapshot of the original owner rows and all physical
