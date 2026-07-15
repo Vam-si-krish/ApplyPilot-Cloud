@@ -35,4 +35,6 @@
 - Full app regression passed with 202 tests and 9 credentialed evals skipped; backend
   isolation/storage tests passed 2/2; TypeScript passed; the 33-page production build
   passed; and documentation validation passed with 121 Markdown files and 80 ADRs.
-- Push, worker restart, and local/public version probes are recorded below after rollout.
+- Pushed fix commit `3b54cc9`, fast-forwarded the clean server checkout, and restarted
+  `com.jobpilotmulti.worker` under a new PID. Local and public gateway health both passed;
+  both `/version` endpoints reported `3b54cc9` with `tailor-json-control-repair`.
