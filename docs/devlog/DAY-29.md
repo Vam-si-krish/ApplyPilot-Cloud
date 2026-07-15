@@ -25,3 +25,10 @@
 - The app passed 203 tests with 9 credentialed evals skipped, TypeScript passed, the
   33-page production build passed, and documentation validation passed with 128 Markdown
   files and 83 ADRs.
+
+## Provisioning correction
+
+- The first bounded provision stopped before database/service creation because the shared
+  cluster operator could create the development role but could not assign database
+  ownership without role membership. The idempotent retry now grants that role only for
+  database creation and immediately revokes it; the partial empty role is safely reused.

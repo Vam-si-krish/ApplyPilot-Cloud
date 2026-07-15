@@ -87,8 +87,10 @@ docker exec -i applypilot-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
 select format('create role %I login password %L', :'role', :'pass')
 where not exists (select 1 from pg_roles where rolname = :'role') \gexec
 select format('alter role %I login password %L', :'role', :'pass') \gexec
+select format('grant %I to %I', :'role', current_user) \gexec
 select format('create database %I owner %I', :'db', :'role')
 where not exists (select 1 from pg_database where datname = :'db') \gexec
+select format('revoke %I from %I', :'role', current_user) \gexec
 SQL
 
 npm ci --prefix "$DEV_BACKEND"
