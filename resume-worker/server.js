@@ -160,7 +160,7 @@ app.delete('/claude-connection', async (req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'tailor-queue'];
+  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'tailor-queue'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -212,7 +212,7 @@ app.post('/score-jobs', async (req, res) => {
     const [jobs, resumeText] = await Promise.all([getJobsByIds(ids), getScoringResumeText()]);
     // Only score jobs not yet AI-scored; to re-score, the user deletes the fit score first
     // (Jobs tab, ADR 0048), which resets the job to 'unscored'.
-    const toScore = jobs.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+    const toScore = jobs.filter((j) => j.fit_score == null && j.status !== 'archived');
     console.log(`[score-jobs] scoring ${toScore.length}/${ids.length} jobs`);
 
     // Sequential (ADR 0066): the subscription is window-throttled anyway, and scoring one
@@ -226,17 +226,23 @@ app.post('/score-jobs', async (req, res) => {
           ? { ...result.breakdown, missing: result.missing ?? null, seniority: result.seniority ?? null }
           : null;
         const usage = client.lastUsage ? { ...client.lastUsage } : null;
-        await updateJob(job.id, {
+        const scorePatch = {
           fit_score: result.score,
           score_note: result.note,
           score_keywords: result.keywords,
           score_reasoning: result.reasoning,
           score_breakdown: breakdown,
-          employment_type: result.employment_type ?? null,
+          company_tier: result.company_tier ?? null,
+          company_tier_note: result.company_tier_note ?? null,
+          tech_stack: result.tech_stack ?? null,
           score_usage: usage,
           scored_at: new Date().toISOString(),
           status: 'scored',
-        });
+        };
+        // Preserve actor-derived employment metadata when the provider fails or
+        // returns an older response without EMPLOYMENT.
+        if (result.employment_type != null) scorePatch.employment_type = result.employment_type;
+        await updateJob(job.id, scorePatch);
         console.log(`[score-jobs] job ${job.id} scored ${result.score} cacheRead=${usage?.cache_read_input_tokens ?? 0}`);
       } catch (e) {
         console.error(`[score-jobs] job ${job.id} failed:`, e instanceof Error ? e.message : String(e));

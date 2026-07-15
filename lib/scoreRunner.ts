@@ -134,10 +134,11 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
       // Pre-scoring gate (ADR 0008): skip the LLM for jobs whose cheap match score
       // is below the threshold. A null prefilter_score (legacy/empty résumé) passes.
       if (gate != null && job.prefilter_score != null && job.prefilter_score < gate) {
-        await supabaseAdmin()
+        const { error } = await supabaseAdmin()
           .from('jobs')
           .update({ status: 'filtered', scored_at: new Date().toISOString() })
           .eq('id', job.id);
+        if (error) throw new Error(`persist pre-filter result: ${error.message}`);
         filtered++;
         return;
       }
@@ -145,10 +146,11 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
       // Skill gate (ADR 0019): skip the LLM for jobs that don't match enough of the
       // user's skills. A null skill_match_score (no skills set / other actor) passes.
       if (skillGate != null && job.skill_match_score != null && job.skill_match_score < skillGate) {
-        await supabaseAdmin()
+        const { error } = await supabaseAdmin()
           .from('jobs')
           .update({ status: 'filtered', scored_at: new Date().toISOString() })
           .eq('id', job.id);
+        if (error) throw new Error(`persist skill-filter result: ${error.message}`);
         filtered++;
         return;
       }
@@ -165,7 +167,7 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
           .eq('id', job.duplicate_of)
           .maybeSingle();
         if (canonical?.fit_score != null) {
-          await supabaseAdmin()
+          const { error } = await supabaseAdmin()
             .from('jobs')
             .update({
               fit_score: canonical.fit_score,
@@ -182,14 +184,16 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
               scored_at: new Date().toISOString(),
             })
             .eq('id', job.id);
+          if (error) throw new Error(`persist inherited score: ${error.message}`);
           scored++;
           return;
         }
         if (canonical?.status === 'filtered') {
-          await supabaseAdmin()
+          const { error } = await supabaseAdmin()
             .from('jobs')
             .update({ status: 'filtered', scored_at: new Date().toISOString() })
             .eq('id', job.id);
+          if (error) throw new Error(`persist inherited filter result: ${error.message}`);
           filtered++;
           return;
         }
@@ -208,28 +212,34 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
         ? { ...result.breakdown, missing: result.missing ?? null, seniority: result.seniority ?? null }
         : null;
 
+      const scorePatch: Record<string, unknown> = {
+        fit_score: result.score,
+        score_note: result.note,
+        score_keywords: result.keywords,
+        score_reasoning: result.reasoning,
+        score_breakdown: breakdown,
+        // Company assessment now rides the scoring call (ADR 0065) — one write, no
+        // second LLM pass. tier defaults to null (unassessed) only when the model omitted it.
+        company_tier: result.company_tier ?? null,
+        company_tier_note: result.company_tier_note ?? null,
+        tech_stack: result.tech_stack ?? null,
+        // Per-score token/cache/cost usage (ADR 0066); null when the provider didn't report it.
+        score_usage: result.usage ?? null,
+        scored_at: new Date().toISOString(),
+        status: 'scored',
+      };
+      // Ingestion may already know the actor's contract type. A provider failure or
+      // old-format response must not erase that deterministic source metadata.
+      if (result.employment_type != null) scorePatch.employment_type = result.employment_type;
+
       const { error } = await supabaseAdmin()
         .from('jobs')
-        .update({
-          fit_score: result.score,
-          score_note: result.note,
-          score_keywords: result.keywords,
-          score_reasoning: result.reasoning,
-          score_breakdown: breakdown,
-          employment_type: result.employment_type ?? null,
-          // Company assessment now rides the scoring call (ADR 0065) — one write, no
-          // second LLM pass. tier defaults to null (unassessed) only when the model omitted it.
-          company_tier: result.company_tier ?? null,
-          company_tier_note: result.company_tier_note ?? null,
-          tech_stack: result.tech_stack ?? null,
-          // Per-score token/cache/cost usage (ADR 0066); null when the provider didn't report it.
-          score_usage: result.usage ?? null,
-          scored_at: new Date().toISOString(),
-          status: 'scored',
-        })
+        .update(scorePatch)
         .eq('id', job.id);
-      if (!error) scored++;
-    } catch {
+      if (error) throw new Error(`persist AI score: ${error.message}`);
+      scored++;
+    } catch (error) {
+      console.error(`[score-runner] job ${job.id} failed:`, error instanceof Error ? error.message : String(error));
       errors++;
     }
   }

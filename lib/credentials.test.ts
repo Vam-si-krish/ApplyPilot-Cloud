@@ -14,6 +14,7 @@ vi.mock('./supabase', () => {
 });
 
 import {
+  apiKeyProviderMismatch,
   maskKey,
   getActiveApiCredential,
   getActiveApiKey,
@@ -37,6 +38,22 @@ describe('isApiKeyProvider', () => {
     expect(isApiKeyProvider('gemini')).toBe(true);
     expect(isApiKeyProvider('cohere')).toBe(false);
     expect(isApiKeyProvider(123)).toBe(false);
+  });
+});
+
+describe('apiKeyProviderMismatch', () => {
+  it('catches an Apify token saved in the OpenAI lane', () => {
+    expect(apiKeyProviderMismatch('openai', 'apify_api_example')).toBe('apify');
+  });
+
+  it('accepts a credential in its matching provider lane', () => {
+    expect(apiKeyProviderMismatch('apify', 'apify_api_example')).toBeNull();
+    expect(apiKeyProviderMismatch('gemini', 'AIza-example')).toBeNull();
+    expect(apiKeyProviderMismatch('anthropic', 'sk-ant-example')).toBeNull();
+  });
+
+  it('does not guess a provider from the shared generic sk prefix', () => {
+    expect(apiKeyProviderMismatch('openai', 'sk-example')).toBeNull();
   });
 });
 

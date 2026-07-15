@@ -451,11 +451,13 @@ export default function JobsPage() {
     try {
       for (let i = 0; i < ids.length; i += 5) {
         const chunk = ids.slice(i, i + 5);
-        const d = await fetch('/api/score-selected', {
+        const response = await fetch('/api/score-selected', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: chunk }),
-        }).then((r) => r.json());
+        });
+        const d = await response.json();
+        if (!response.ok || d.error) throw new Error(d.error || `Scoring request failed (${response.status})`);
         if (d.delegated) {
           // Worker is scoring in the background — don't count the ack as progress.
           delegated = true;
@@ -514,8 +516,9 @@ export default function JobsPage() {
       setSelected(new Set());
       load(true);
       refreshStats();
-    } catch {
-      setBulkProgress({ label: 'Scoring failed', done, total: ids.length, phase: 'done', tone: 'sky' });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Unknown scoring error';
+      setBulkProgress({ label: `Scoring failed — ${reason}`, done, total: ids.length, phase: 'done', tone: 'sky' });
     } finally {
       setBulkBusy(false);
     }

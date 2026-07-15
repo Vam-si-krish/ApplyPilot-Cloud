@@ -246,7 +246,11 @@ export default function PastJobsPage() {
                             <ExternalLink size={15} />
                           </button>
                           <button
-                            onClick={() => patch(job.id, { status: job.status === 'archived' ? 'scored' : 'archived' })}
+                            onClick={() => patch(job.id, {
+                              status: job.status === 'archived'
+                                ? (job.fit_score == null ? 'unscored' : 'scored')
+                                : 'archived',
+                            })}
                             title={job.status === 'archived' ? 'Restore' : 'Archive'}
                             className="p-1 rounded-md text-slate-muted hover:text-rose hover:bg-rose/10 transition-colors"
                           >

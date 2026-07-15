@@ -103,7 +103,21 @@ async function handleForUser(req: Request) {
   }
 
   const resume = await getScoringResumeText();
-  const client = await buildScoringClient(settings);
+  let client;
+  try {
+    client = await buildScoringClient(settings);
+  } catch (error) {
+    // Configuration failures happen before scoreJob's visible score-0 boundary. Do
+    // not leave the single-flight mutex active until its stale timeout; release it
+    // and keep the rows unscored so the user can fix their own account credential.
+    await updateScoringProgress(token, baseDone, baseErrors + 1);
+    await releaseScoringLock(token);
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : String(error),
+      scored: 0,
+      remaining: await countUnscored(),
+    }, { status: 409 });
+  }
 
   const { scored, filtered, errors } = await scoreJobRows(batch, {
     resume,

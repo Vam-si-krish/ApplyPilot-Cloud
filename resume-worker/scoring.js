@@ -47,6 +47,14 @@ From the posting wording, classify the role:
 - full_time: a permanent direct-hire role.
 - unknown: not stated.
 
+### COMPANY ASSESSMENT (independent annotation — MUST NOT change the SCORE above)
+Separately from the fit score, judge the EMPLOYER behind this posting and name the role's core tech.
+- COMPANY_TIER — exactly one of good, medium, low, unknown. Use low only for a genuine
+  résumé-harvesting, lead-generation, or other time-waster with a concrete reason. An
+  external ATS, staffing firm, or contract role is not by itself a low-quality signal.
+  Prefer unknown when evidence is insufficient.
+- TECH_STACK — primary technologies/frameworks/languages in the posting; "none" if unclear.
+
 RESPOND IN EXACTLY THIS FORMAT, nothing else:
 SCORE: [0-10]
 EMPLOYMENT: [full_time|contract|internship|unknown]
@@ -55,9 +63,19 @@ BREAKDOWN: skills=<0-60> domain=<0-25> experience=<0-15>
 KEYWORDS: [comma-separated resume skills that are genuinely relevant to this job]
 MISSING: [comma-separated MUST-HAVE requirements the resume does NOT evidence; "none" if all are met]
 NOTE: [one concise sentence summarizing the match quality]
-REASONING: [3-5 sentences bridging concrete resume facts to the job's must-haves. State the candidate's EVIDENCED years of experience from the resume (or "not specified") and how it compares to any required years — NEVER claim the candidate meets a years/seniority bar the resume does not actually show. State the seniority fit, and remember overqualification is not a penalty for shortlisting.]`;
+REASONING: [3-5 sentences bridging concrete resume facts to the job's must-haves. State the candidate's EVIDENCED years of experience from the resume (or "not specified") and how it compares to any required years — NEVER claim the candidate meets a years/seniority bar the resume does not actually show. State the seniority fit, and remember overqualification is not a penalty for shortlisting.]
+COMPANY_TIER: [good|medium|low|unknown]
+COMPANY_NOTE: [one concise sentence on the employer's legitimacy; if low, name the concrete signal]
+TECH_STACK: [comma-separated primary technologies; "none" if unclear]`;
 
 const EMPLOYMENT_TYPES = ['full_time', 'contract', 'internship', 'unknown'];
+const COMPANY_TIERS = ['good', 'medium', 'low', 'unknown'];
+
+function parseTechStack(value) {
+  const values = value.split(',').map((item) => item.trim()).filter((item) => item && item.toLowerCase() !== 'none');
+  const unique = [...new Set(values)];
+  return unique.length ? unique : null;
+}
 
 function parseBreakdown(line) {
   const get = (k) => {
@@ -75,6 +93,7 @@ function parseBreakdown(line) {
 export function parseScoreResponse(response) {
   let score = 0, keywords = '', note = '', reasoning = response;
   let employment_type = null, seniority = null, missing = null, breakdown = null;
+  let company_tier = null, company_tier_note = null, tech_stack = null;
   for (const raw of response.split('\n')) {
     const line = raw.trim();
     if (line.startsWith('SCORE:')) {
@@ -92,13 +111,23 @@ export function parseScoreResponse(response) {
     } else if (line.toUpperCase().startsWith('MISSING:')) {
       const v = line.slice(8).trim();
       missing = v && v.toLowerCase() !== 'none' ? v : '';
+    } else if (line.toUpperCase().startsWith('COMPANY_TIER:')) {
+      const v = line.slice(13).trim().toLowerCase().replace(/[^a-z]/g, '');
+      company_tier = COMPANY_TIERS.includes(v) ? v : 'unknown';
+    } else if (line.toUpperCase().startsWith('COMPANY_NOTE:')) {
+      company_tier_note = line.slice(13).trim() || null;
+    } else if (line.toUpperCase().startsWith('TECH_STACK:')) {
+      tech_stack = parseTechStack(line.slice(11));
     } else if (line.startsWith('NOTE:')) {
       note = line.replace('NOTE:', '').trim();
     } else if (line.startsWith('REASONING:')) {
       reasoning = line.replace('REASONING:', '').trim();
     }
   }
-  return { score, keywords, note, reasoning, employment_type, seniority, missing, breakdown };
+  return {
+    score, keywords, note, reasoning, employment_type, seniority, missing, breakdown,
+    company_tier, company_tier_note, tech_stack,
+  };
 }
 
 /** Strip HTML to plain text (port of lib/prefilter.ts stripHtml) — scraped descriptions
@@ -153,6 +182,7 @@ export async function scoreJobWorker(resumeText, job, client) {
       score: 0, keywords: '', note: '',
       reasoning: `LLM error: ${e instanceof Error ? e.message : String(e)}`,
       employment_type: null, seniority: null, missing: null, breakdown: null,
+      company_tier: null, company_tier_note: null, tech_stack: null,
     };
   }
 }

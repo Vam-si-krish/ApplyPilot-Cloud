@@ -100,7 +100,7 @@ export async function POST(req: Request) {
 
     // Only score jobs not yet AI-scored; already-scored/archived are skipped. (To re-score,
     // delete the fit score first — it resets the job to 'unscored'.)
-    const toScore = rows.filter((j) => j.status === 'unscored' || j.status === 'filtered');
+    const toScore = rows.filter((j) => j.fit_score == null && j.status !== 'archived');
     const skipped = rows.length - toScore.length;
     console.log(tag, `toScore=${toScore.length} skipped=${skipped}`);
 

@@ -136,6 +136,17 @@ class HttpStatusError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** A 429 is not always a temporary rate limit. OpenAI uses the same status for
+ * exhausted billing quota; retrying that response can never succeed and used to
+ * consume the entire serverless invocation before the visible score-0 fallback
+ * could be persisted. */
+function isPermanentRateLimitError(error: HttpStatusError): boolean {
+  const body = error.body.toLowerCase();
+  return body.includes('insufficient_quota')
+    || body.includes('billing_hard_limit_reached')
+    || body.includes('billing_not_active');
+}
+
 export interface ChatOptions {
   temperature?: number;
   maxTokens?: number;
@@ -300,6 +311,10 @@ export class LLMClient {
             const s = nativeErr instanceof HttpStatusError ? `${nativeErr.status} — ${nativeErr.body.slice(0, 200)}` : String(nativeErr);
             throw new Error(`Both Gemini endpoints failed. Compat: 403/404. Native: ${s}`);
           }
+        }
+
+        if (err instanceof HttpStatusError && err.status === 429 && isPermanentRateLimitError(err)) {
+          throw err;
         }
 
         if (err instanceof HttpStatusError && (err.status === 429 || err.status === 503) && attempt < MAX_RETRIES - 1) {

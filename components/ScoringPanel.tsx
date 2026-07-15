@@ -79,10 +79,10 @@ export default function ScoringPanel({ onActivity }: { onActivity?: () => void }
   const pct = st.total > 0 ? Math.min(100, Math.round((st.done / st.total) * 100)) : null;
 
   const line = stopping
-    ? `Stopping after this batch — ${st.done} of ${st.total} scored`
+    ? `Stopping after this batch — ${st.done} of ${st.total} processed`
     : running
-      ? `Auto-scoring jobs — ${st.done} of ${st.total}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`
-      : `Done — scored ${st.done} job${st.done === 1 ? '' : 's'}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`;
+      ? `Auto-scoring jobs — ${st.done} of ${st.total} processed${st.errors > 0 ? ` · ${st.errors} errored` : ''}`
+      : `Done — processed ${st.done} job${st.done === 1 ? '' : 's'}${st.errors > 0 ? ` · ${st.errors} errored` : ''}`;
 
   return (
     <div className="card mb-5 px-5 py-4 animate-fade-in">

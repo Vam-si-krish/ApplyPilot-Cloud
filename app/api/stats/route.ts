@@ -7,11 +7,18 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const db = supabaseAdmin();
-  const head = () => db.from('jobs').select('id', { count: 'exact', head: true });
+  // Dashboard statistics describe the scraped Jobs workspace. Manual Tailor & Apply
+  // rows are intentionally hidden there and must not inflate "scored" or "to score".
+  const head = () => db
+    .from('jobs')
+    .select('id', { count: 'exact', head: true })
+    .or('source.is.null,source.neq.manual');
 
   const [totalR, scoredR, shortlistedR, unscoredR, filteredR, appliedR] = await Promise.all([
     head().neq('status', 'archived').neq('status', 'filtered'),
-    head().eq('status', 'scored'),
+    // A score of 0 is a visible terminal AI result; NULL means no AI score, regardless
+    // of a legacy/bad status value.
+    head().eq('status', 'scored').not('fit_score', 'is', null),
     head().eq('is_shortlisted', true),
     head().eq('status', 'unscored'),
     head().eq('status', 'filtered'),
@@ -25,7 +32,11 @@ export async function GET() {
   const applied = appliedR.count ?? 0;
 
   // Score distribution (scored jobs grouped by fit_score).
-  const { data: scoredRows } = await db.from('jobs').select('fit_score').not('fit_score', 'is', null);
+  const { data: scoredRows } = await db
+    .from('jobs')
+    .select('fit_score')
+    .or('source.is.null,source.neq.manual')
+    .not('fit_score', 'is', null);
   const distMap = new Map<number, number>();
   for (const r of scoredRows ?? []) {
     const s = (r as { fit_score: number }).fit_score;

@@ -25,6 +25,22 @@ export function isApiKeyProvider(v: unknown): v is ApiKeyProvider {
   return typeof v === 'string' && (API_KEY_PROVIDERS as string[]).includes(v);
 }
 
+/** Reject only unmistakable cross-provider mistakes. Generic `sk-` keys are not
+ * classified because several providers use that prefix. */
+export function apiKeyProviderMismatch(provider: ApiKeyProvider, value: string): ApiKeyProvider | null {
+  const key = value.trim();
+  const detected: ApiKeyProvider | null = key.startsWith('apify_api_')
+    ? 'apify'
+    : key.startsWith('AIza')
+      ? 'gemini'
+      : key.startsWith('sk-ant-')
+        ? 'anthropic'
+        : key.startsWith('sk-proj-')
+          ? 'openai'
+          : null;
+  return detected && detected !== provider ? detected : null;
+}
+
 export interface ApiCredential {
   id: string | null;
   value: string;

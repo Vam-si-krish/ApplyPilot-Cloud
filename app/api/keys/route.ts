@@ -6,7 +6,7 @@
  * it's saved). POST stores a new key for a provider.
  */
 import { NextResponse } from 'next/server';
-import { listApiKeys, createApiKey, isApiKeyProvider } from '@/lib/credentials';
+import { apiKeyProviderMismatch, listApiKeys, createApiKey, isApiKeyProvider } from '@/lib/credentials';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,6 +33,12 @@ export async function POST(req: Request) {
   const value = typeof body.value === 'string' ? body.value.trim() : '';
   if (!value) {
     return NextResponse.json({ error: 'key value required' }, { status: 400 });
+  }
+  const detectedProvider = apiKeyProviderMismatch(body.provider, value);
+  if (detectedProvider) {
+    return NextResponse.json({
+      error: `This looks like a ${detectedProvider} credential, not a ${body.provider} credential.`,
+    }, { status: 400 });
   }
   const label = typeof body.label === 'string' ? body.label : '';
 

@@ -224,8 +224,8 @@ export async function addApplications(jobIds: string[]): Promise<number> {
  * user adds by hand (e.g. from a recruiter email) so they can tailor a résumé to it.
  * Company and link are OPTIONAL; only the title + description are required (the
  * description is what tailoring reads). The job is flagged `source='manual'` (hidden from
- * the scraped Jobs list) and `status='scored'` with no fit_score so the scoring loop
- * skips it. `jobs.url` is unique + not-null, so a synthetic internal url is always used
+ * the scraped Jobs list) and remains honestly `unscored`; automatic queue reads exclude
+ * manual rows. `jobs.url` is unique + not-null, so a synthetic internal url is always used
  * and the user's link (if any) is stored in `application_url` — no collision with scraped rows.
  */
 export async function createCustomApplication(input: {
@@ -247,7 +247,7 @@ export async function createCustomApplication(input: {
       title,
       company: (input.company || '').trim() || null,
       full_description: description,
-      status: 'scored', // not 'unscored' → the scoring loop ignores it
+      status: 'unscored', // truthful: no fit_score exists; automatic queue excludes manual rows
       source: 'manual', // hidden from the scraped Jobs list
     })
     .select('*')
@@ -314,7 +314,8 @@ export async function countUnscored(): Promise<number> {
   const { count, error } = await supabaseAdmin()
     .from('jobs')
     .select('id', { count: 'exact', head: true })
-    .eq('status', 'unscored');
+    .eq('status', 'unscored')
+    .or('source.is.null,source.neq.manual');
   if (error) throw new Error(`Failed to count unscored: ${error.message}`);
   return count ?? 0;
 }
@@ -333,6 +334,7 @@ export async function getUnscoredBatch(limit: number): Promise<Job[]> {
     .from('jobs')
     .select('*')
     .eq('status', 'unscored')
+    .or('source.is.null,source.neq.manual')
     // Canonicals before duplicates (ADR 0057): by the time a duplicate row is
     // processed its canonical is usually scored, so it copies instead of calling the LLM.
     .order('duplicate_of', { ascending: true, nullsFirst: true })

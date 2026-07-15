@@ -3,6 +3,7 @@ import {
   CHATGPT_SUBSCRIPTION_PROVIDER,
   detectProvider,
   isSubscriptionProvider,
+  makeClient,
   makeWorkerClient,
   WorkerLLMClient,
 } from './llm';
@@ -46,6 +47,21 @@ describe('detectProvider', () => {
 
   it('throws a clear error when no provider key is set', () => {
     expect(() => detectProvider({})).toThrow(/No LLM provider configured/);
+  });
+});
+
+describe('LLMClient retry classification', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('does not retry a permanent OpenAI insufficient-quota 429', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      error: { type: 'insufficient_quota', code: 'insufficient_quota', message: 'quota exhausted' },
+    }), { status: 429 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = makeClient('openai', 'gpt-4o-mini', 'sk-test');
+    await expect(client.chat([{ role: 'user', content: 'hello' }])).rejects.toThrow(/insufficient_quota/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

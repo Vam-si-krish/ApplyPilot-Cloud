@@ -14,6 +14,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const patch: Record<string, unknown> = {};
   if (typeof body.is_shortlisted === 'boolean') patch.is_shortlisted = body.is_shortlisted;
+  // The database invariant rejects `scored` unless fit_score is already numeric. The
+  // browser only uses it to restore an archived job that retained its existing score.
   if (body.status && ['unscored', 'scored', 'archived', 'filtered'].includes(body.status)) patch.status = body.status;
   // applied_at: ISO string to mark applied, null to unmark
   if ('applied_at' in body) {

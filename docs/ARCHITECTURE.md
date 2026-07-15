@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0078
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0079
 
 ## Current deployment topology
 
@@ -145,6 +145,13 @@ contract lives in `lib/scoring.ts` and its tests/evals:
 5. Parse and clamp the structured response. Parse/provider failure produces a visible
    score of 0; the application never fabricates a score.
 
+`status='scored'` and `fit_score` are one persistence invariant: scored always has a
+numeric 0–10 result, enforced by migration 0047. Dashboards and delegated progress use
+the numeric field as proof of completion, not status alone. Manual Tailor & Apply rows
+remain unscored but are excluded from the automatic queue by source. Permanent provider
+billing/quota failures skip retry backoff so score 0 can be persisted within the
+serverless request; temporary rate limits still retry. See ADR 0079.
+
 The labeled evals protect directional score bands and known regressions, not equality
 with a retired Python implementation.
 
@@ -165,6 +172,10 @@ with a retired Python implementation.
 - Claude subscription login is UUID-isolated. Settings brokers Claude Code's
   official PKCE flow, and each Agent SDK call receives only the requesting
   user's `CLAUDE_CONFIG_DIR`; there is no cross-user fallback (ADR 0074).
+- The direct and subscription scoring implementations share the complete persisted
+  result contract: numeric fit score, explanation/breakdown, employment, company tier,
+  tech stack, and usage. Worker `/version` advertises `score-company-parity` for deploy
+  verification (ADR 0079).
 
 ## Data model (PostgreSQL; legacy migration directory name retained)
 Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`.

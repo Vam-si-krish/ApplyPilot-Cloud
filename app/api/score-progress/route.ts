@@ -8,8 +8,8 @@
  * no LLM, no writes. (Company assessment now rides the scoring call — ADR 0065 — so there is
  * no separate 'assess' mode to poll anymore.)
  *
- * Body: { ids: string[] } → { scored, total }: counts ids that have left the 'unscored'
- * status (scored / filtered / archived — all terminal).
+ * Body: { ids: string[] } → { scored, total }: counts ids with a persisted numeric AI
+ * score. Score 0 is terminal and visible; status alone is never proof of a score.
  */
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
@@ -28,12 +28,12 @@ export async function POST(req: Request) {
   const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string') : [];
   if (ids.length === 0) return NextResponse.json({ scored: 0, total: 0 });
 
-  const { data, error } = await supabaseAdmin().from('jobs').select('id, status').in('id', ids);
+  const { data, error } = await supabaseAdmin().from('jobs').select('id, fit_score').in('id', ids);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const rows = data ?? [];
-  // done = left the 'unscored' queue. Counting a terminal state (not "still pending") means
-  // the toast can't hang if a row errors.
-  const scored = rows.filter((r) => (r as { status: string }).status !== 'unscored').length;
+  // Provider/parser failures persist score 0, so they still complete the poll without
+  // conflating filtered/archived/status-corrupt rows with an AI result.
+  const scored = rows.filter((r) => (r as { fit_score: number | null }).fit_score != null).length;
   return NextResponse.json({ scored, total: rows.length });
 }

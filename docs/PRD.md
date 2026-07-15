@@ -97,6 +97,8 @@ must never be publicly readable — a single shared password gates everything (A
 - A manual trigger of `/api/run` results in jobs landing in the configured backend as `unscored`,
   then transitioning to `scored` with `fit_score` populated — end to end, no single
   serverless invocation exceeding the platform timeout.
+- Every UI/dashboard claim that a job is AI-scored corresponds to a persisted numeric
+  `fit_score` (including visible error score 0); no account can show “Scored” with “–”.
 - The app is unreachable without the password; the resume/profile are never public.
 - The daily cron runs unattended and logs each run in the `runs` table.
 
