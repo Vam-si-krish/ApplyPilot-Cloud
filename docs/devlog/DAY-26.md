@@ -48,4 +48,12 @@
   skipped; backend passed 4/4; worker passed 20/20; TypeScript passed; the 33-page
   production build passed; and documentation validation passed with 123 Markdown files
   and 81 ADRs.
-- Push and public service results are appended below after release verification.
+- Pushed implementation commit `3ebdb06`, fast-forwarded the clean isolated server
+  checkout through its normal autopull path, and restarted its gateway/REST/worker stack.
+  Public gateway health passed and `/worker/version` reported `3ebdb06` with the expected
+  multi-user, subscription, candidate-control, custom-section, and tailoring-repair
+  features.
+- The live account remained onboarding-complete with 9 keys, 68 runs, 4,726 jobs,
+  714 applications, 2,549 mail messages, and zero `scored` rows lacking a number. The
+  ChatGPT status endpoint reported connected; Claude reported disconnected as expected.
+  All four retained backup artifacts passed their SHA-256 manifest again after deployment.
