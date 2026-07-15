@@ -9,14 +9,14 @@
 - Chose Netlify's stable `develop` branch deploy with branch-specific secrets; scheduled
   functions do not execute automatically on branch deploys.
 
-## Implementation in progress
+## Implementation
 
 - Parameterized Compose and operational scripts so production and development derive
   locks, containers, labels, and restarts from protected instance configuration.
 - Extended the forced-command boundary with explicit production/development targets and
   one commit-addressed development provisioner. Added `scripts/jobpilot-dev-server`.
-- Added backend regression coverage. Live provisioning and isolation verification remain
-  pending the production-safe operational rollout.
+- Added backend regression coverage and deployed the production-safe parameterization
+  before provisioning the new runtime.
 
 ## Pre-provision verification
 
@@ -40,3 +40,21 @@
   it from the development server's mode-0600 environment. Netlify retains
   `multi-user-fork` as its production branch, allows only that branch plus `develop`, and
   now has independent secret values scoped specifically to `branch:develop`.
+
+## Live verification
+
+- Production and development gateway/worker health passed simultaneously, and both server
+  checkouts were clean on their expected branches.
+- Correct database and worker secrets returned `200` in their own environments. Both
+  production-secret-to-development and development-secret-to-production checks returned
+  `401` for the database gateway and protected worker route.
+- Development contains zero jobs, applications, runs, and mail messages. Its fixed
+  identities are `vamsi`, `surya`, and `samitha`; no production history was copied.
+- A real development backup completed through the restricted operator command. The
+  development autopull, watchdog, backend, worker, and backup launchd jobs are installed,
+  and public `/jobpilot-dev` gateway/worker health is green.
+- The first hosted `develop` attempt was blocked by Netlify secret scanning because the
+  non-secret `DEPLOYMENT_ENV=development` value appears throughout source and docs. The
+  runbook now requires a Builds-scoped `SECRETS_SCAN_OMIT_KEYS=DEPLOYMENT_ENV` exception
+  only; all real secrets remain scanned. At the owner's request, the final Netlify deploy,
+  branch environment review, and browser login/write smoke test are an explicit handoff.
