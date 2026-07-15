@@ -103,6 +103,7 @@ Apify runs the scrape (minutes) … then calls:
 POST /api/apify-webhook
    │  • fetch the run's dataset with the same user-owned key that launched it
    │  • map → job rows, de-dupe by url, insert with status='unscored'
+   │  • enrich only missing Easy Apply/External metadata when a known URL reappears
    │  • update the `runs` row (jobs_found)
    │  • kick off /api/score-batch
    ▼

@@ -58,9 +58,9 @@ export async function GET(req: Request) {
   if (maxMatch !== null && maxMatch !== '') q = q.lte('prefilter_score', Number(maxMatch));
   if (shortlisted === 'true') q = q.eq('is_shortlisted', true);
   if (easyApply === 'true') q = q.eq('easy_apply', true);
-  // Actors frequently omit the flag. The UI renders null as an external application,
-  // so the filter must use the same semantics instead of excluding those rows.
-  if (easyApply === 'false') q = q.or('easy_apply.eq.false,easy_apply.is.null');
+  // Unknown is not evidence of an external application. Keep it out of both explicit
+  // apply-type filters, matching the UI's decision not to render a badge for NULL.
+  if (easyApply === 'false') q = q.eq('easy_apply', false);
   if (applied === 'true') q = q.not('applied_at', 'is', null);
   // Keep jobs you've already applied to out of the working list (they live under the Applied tab).
   if (url.searchParams.get('excludeApplied') === 'true') q = q.is('applied_at', null);

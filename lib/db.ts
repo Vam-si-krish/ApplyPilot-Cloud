@@ -4,6 +4,7 @@ import { supabaseAdmin } from './supabase';
 import { normalizeResume, resumeToText } from './resume';
 import { partitionByGeneration, pickCanonical } from './dedupe';
 import { scoringPreferences } from './candidatePreferences';
+import { explicitApplyTypeUrls } from './jobApplyType';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
 
 // ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
@@ -392,6 +393,31 @@ export async function getUnscoredBatch(limit: number): Promise<Job[]> {
     .limit(limit);
   if (error) throw new Error(`Failed to load unscored batch: ${error.message}`);
   return (data ?? []) as Job[];
+}
+
+/**
+ * Fill missing application-type metadata when a later actor run returns the same URL
+ * with an explicit value. Existing true/false values are immutable here, and no other
+ * job fields are touched, so normal URL de-duplication remains safe.
+ */
+export async function enrichExistingJobApplyTypes(
+  rows: Array<{ url: string; easy_apply: boolean | null }>,
+): Promise<number> {
+  const groups = explicitApplyTypeUrls(rows);
+  let changed = 0;
+  for (const [easyApply, urls] of [[true, groups.easy], [false, groups.external]] as const) {
+    for (let offset = 0; offset < urls.length; offset += 100) {
+      const { data, error } = await supabaseAdmin()
+        .from('jobs')
+        .update({ easy_apply: easyApply })
+        .is('easy_apply', null)
+        .in('url', urls.slice(offset, offset + 100))
+        .select('id');
+      if (error) throw new Error(`Failed to enrich job application types: ${error.message}`);
+      changed += data?.length ?? 0;
+    }
+  }
+  return changed;
 }
 
 /**

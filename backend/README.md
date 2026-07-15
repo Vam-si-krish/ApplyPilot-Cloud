@@ -118,3 +118,22 @@ Do not use this tool for continuous synchronization, public signup, or copying a
 person's account. UUID-scoped Claude Keychain credentials are intentionally not portable;
 the migrated user reconnects Claude once in Settings. ChatGPT device credentials may be
 copied only into that same user's protected UUID directory with mode `0600`.
+
+### Recovering historical application-type metadata
+
+The ADR 0087 snapshot predates the current `applyType` mapping on some rows. The recovery
+tool reads only the target user's original Apify datasets and fills only NULL
+`easy_apply` values backed by an explicit actor label. It never classifies from a URL:
+
+```bash
+LOCAL_POSTGRES_PASSWORD=<local-admin-password> \
+node backend/scripts/backfill-easy-apply-from-apify.mjs
+
+# Review the counts, then opt in to the database update:
+LOCAL_POSTGRES_PASSWORD=<local-admin-password> \
+node backend/scripts/backfill-easy-apply-from-apify.mjs --execute
+```
+
+Expired/inaccessible runs remain unknown. Normal ingestion can later enrich an unknown
+row if the same URL reappears with explicit metadata, without changing its score or
+workflow state.

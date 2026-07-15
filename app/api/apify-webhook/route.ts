@@ -9,7 +9,10 @@ import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
-import { updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId, getScoringResumeText, getSettings, linkDuplicateJobs } from '@/lib/db';
+import {
+  updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId,
+  getScoringResumeText, getSettings, linkDuplicateJobs, enrichExistingJobApplyTypes,
+} from '@/lib/db';
 import { atsMatchScores } from '@/lib/prefilter';
 import { jobContentKey } from '@/lib/dedupe';
 import { triggerScoreBatch } from '@/lib/pipeline';
@@ -108,6 +111,15 @@ export async function POST(req: Request) {
         .select('id');
       if (error) throw new Error(error.message);
       inserted = data?.length ?? 0;
+
+      // A migrated/legacy row may predate applyType mapping. URL de-duplication correctly
+      // preserves its score and workflow state, but it must not also preserve a NULL badge
+      // forever when today's actor payload explicitly identifies the application type.
+      const enriched = await enrichExistingJobApplyTypes(rows).catch((e) => {
+        console.error('[apify-webhook] application-type enrichment failed:', e instanceof Error ? e.message : String(e));
+        return 0;
+      });
+      if (enriched > 0) console.log(`[apify-webhook] enriched ${enriched} existing application type(s)`);
 
       // Link duplicate postings (ADR 0057): later copies point at the first-seen
       // canonical and inherit its AI score when it's already scored — they leave the
