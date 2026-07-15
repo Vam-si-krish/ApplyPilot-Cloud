@@ -1,9 +1,11 @@
 # ApplyPilot-Cloud
 
 > **`multi-user-fork` branch:** this branch is becoming a separate multi-user product
-> with its own server-laptop backend and no access to ApplyPilot production data.
+> with its own server-laptop backend and no runtime access to ApplyPilot production data.
 > Phase 2A now supports three fixed private accounts with enforced per-user ownership and
-> résumé onboarding. Public self-service signup remains deferred. See [ADR 0073](docs/adr/0073-fixed-accounts-and-enforced-user-ownership.md)
+> résumé onboarding. A one-time owner-authorized snapshot populated the isolated `vamsi`
+> account; it is not a shared database or ongoing sync. Public self-service signup remains
+> deferred. See [ADR 0073](docs/adr/0073-fixed-accounts-and-enforced-user-ownership.md)
 > and the [backend runbook](backend/README.md).
 
 A private multi-user web app that **runs itself daily in the cloud**:

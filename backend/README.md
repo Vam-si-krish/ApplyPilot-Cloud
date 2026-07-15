@@ -1,7 +1,7 @@
 # Independent server-laptop backend
 
 This directory turns the `multi-user-fork` branch into a new application with no
-dependency on Supabase and no access to the existing ApplyPilot production data.
+dependency on Supabase and no runtime access to the existing ApplyPilot production data.
 The architecture decision and phase boundary are recorded in
 [ADR 0072](../docs/adr/0072-independent-multi-user-fork-foundation.md).
 
@@ -63,9 +63,10 @@ ONBOARDING_SUBSCRIPTION_PROVIDER=chatgpt_subscription
 ONBOARDING_SUBSCRIPTION_MODEL=gpt-5.4
 ```
 
-Apify and LLM keys can be added through the existing Settings UI after login. The new
-database starts empty and does not inherit any production profile, job, Gmail, résumé,
-or API-key records.
+Apify and LLM keys can be added through the existing Settings UI after login. A fresh
+installation starts empty. The current server installation contains the one-time,
+owner-authorized snapshot described in ADR 0087 under the `vamsi` UUID; it does not read
+from or synchronize with the source database or storage after the recorded cutoff.
 
 After the Netlify URL is known, replace `CORS_ORIGINS` in `backend/.env` and restart
 `com.jobpilotmulti.backend`. Server-side Netlify calls do not require CORS, but keeping
@@ -86,3 +87,34 @@ curl -fsS "$PUBLIC_URL/health"
 
 The explicit restart is required even though the migration runner sends Postgres's
 schema-reload notification; PostgREST has occasionally missed that notification.
+
+## One-time owner snapshot migration
+
+[`scripts/migrate-owner-from-production.mjs`](scripts/migrate-owner-from-production.mjs)
+exists only for the approved ADR 0087 owner cutover. It is dry-run by default, refuses a
+non-empty target history, rewrites ownership to the fixed target UUID, preserves IDs and
+relationships, verifies every copied file by size and SHA-256, and never modifies the
+source. It deliberately excludes `resume_worker_url` and `resume_worker_secret` because
+those are deployment-owned trust-boundary values.
+
+Create and verify database plus storage backups before staging the source storage tree.
+Then load the isolated backend environment and run the preview before the explicit write:
+
+```bash
+set -a; source backend/.env; set +a
+LOCAL_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+SOURCE_STORAGE_ROOT=/secure/read-only-source-storage \
+DESTINATION_STORAGE_ROOT="$PWD/backend/data" \
+node backend/scripts/migrate-owner-from-production.mjs
+
+# Only after reviewing the dry-run and confirming that the target account is empty:
+LOCAL_POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+SOURCE_STORAGE_ROOT=/secure/read-only-source-storage \
+DESTINATION_STORAGE_ROOT="$PWD/backend/data" \
+node backend/scripts/migrate-owner-from-production.mjs --execute
+```
+
+Do not use this tool for continuous synchronization, public signup, or copying another
+person's account. UUID-scoped Claude Keychain credentials are intentionally not portable;
+the migrated user reconnects Claude once in Settings. ChatGPT device credentials may be
+copied only into that same user's protected UUID directory with mode `0600`.

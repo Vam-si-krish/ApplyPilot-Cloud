@@ -17,8 +17,12 @@ the existing ApplyPilot production database. The accepted roadmap is [ADR 0072](
   signup is deferred; normal work uses each account's own Apify/LLM keys or its own
   connected UUID-isolated Claude or ChatGPT subscription (ADRs 0074 and 0081).
 
-The fork must never point at or copy production backend credentials/data. The frontend
-deploys separately on Netlify; persistent services stay on the server laptop.
+The fork must never point at, continuously share, or synchronize with the production
+backend. ADR 0087 records one explicit owner-authorized cutover exception: a verified
+snapshot of the original owner account was copied into the isolated `vamsi` UUID while
+deployment-owned worker credentials stayed separate. The two products remain independent
+after that cutoff. The frontend deploys separately on Netlify; persistent services stay
+on the server laptop.
 
 ## The rule that matters (scoring discipline)
 **Scoring is deliberate, never fabricated.** As of **ADR 0022** the scorer is a v2 weighted,

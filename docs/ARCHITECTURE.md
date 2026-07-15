@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0086
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0087
 
 ## Current deployment topology
 
@@ -9,7 +9,7 @@ The application code has two deliberately separate deployment identities:
 | Identity | Frontend/API routes | Persistent backend | Data boundary |
 |---|---|---|---|
 | ApplyPilot production (`main`) | Next.js on Netlify | Existing self-hosted Supabase-compatible stack + worker on the server laptop | Existing owner data; reserved infrastructure |
-| New product (`multi-user-fork`) | Separate Netlify site/custom domain | `backend/` gateway + PostgREST + separate worker on the server laptop | Empty `jobpilot_multi` database and `backend/data/`; never production data |
+| New product (`multi-user-fork`) | Separate Netlify site/custom domain | `backend/` gateway + PostgREST + separate worker on the server laptop | Independent `jobpilot_multi` database and `backend/data/`; `vamsi` contains the ADR 0087 cutoff snapshot, with no runtime source access |
 
 The rest of this document describes the application pipeline shared by both identities.
 Where it says “Supabase,” the fork uses the compatibility boundary described below; no
@@ -47,6 +47,15 @@ Deployment isolation is enforced operationally:
 - public entry: Funnel path `/jobpilot` (the production Funnel root remains reserved);
 - files/secrets/backups: the fork checkout's `backend/` runtime directories and `.env`;
 - lifecycle: `com.jobpilotmulti.backend|worker|autopull|watchdog|backup`.
+
+ADR 0087 permits one narrow exception to the empty-installation rule: at the owner's
+explicit request, a repeatable-read snapshot of the original owner rows and all physical
+source résumé objects was imported once into the fixed `vamsi` UUID. IDs and relationships
+were preserved while `user_id` and file paths were rewritten into that UUID boundary.
+Database/storage backups preceded the import; deployment worker URL/secret values were
+excluded; and the source remained read-only. Nine legacy jobs marked `scored` without a
+numeric result were reset to `unscored`, and active scoring state was cleared rather than
+resumed. There is no ongoing synchronization or runtime dependency on production.
 
 Phase 2A is implemented per ADR 0073. Three fixed server-side accounts carry stable UUIDs
 in signed sessions. Middleware injects the verified UUID; the gateway converts it into a

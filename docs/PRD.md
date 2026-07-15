@@ -10,8 +10,12 @@ runs on the server laptop, without Supabase or another cloud database.
 
 ### Non-negotiable isolation
 
-- Never point the fork at ApplyPilot production environment variables, database, files,
-  worker secret, or API-key rows.
+- Never point the fork at, continuously share, or synchronize with ApplyPilot production
+  environment variables, database, files, worker, or secrets.
+- ADR 0087 is the only approved cutover exception: the owner explicitly authorized one
+  verified snapshot of their own rows, user API/Gmail connections, and available files
+  into the fixed `vamsi` UUID. Deployment worker credentials were excluded, and the fork
+  remains independent after the recorded cutoff.
 - Reuse the shared PostgreSQL **cluster process** only: the fork gets its own database,
   owner role, API signing secret, storage directory, worker, ports, Funnel path, services,
   logs, and backups.
@@ -61,6 +65,10 @@ Tailoring accepts a model response only through the protected structured parser.
 literal paragraph break inside an otherwise-valid quoted JSON value is repaired without
 making the user rerun a paid generation; other malformed structure still fails visibly
 instead of being guessed (ADR 0086).
+The fixed `vamsi` account is populated from the one-time owner snapshot in ADR 0087,
+including profile, settings, job/application/mail history, user-owned provider keys,
+Gmail state, and every physical résumé object available at the source. This is an account
+cutover, not a bridge to the original deployment; new activity belongs only to the fork.
 
 **Phase 2B — public-account readiness (next):** replace fixed credentials with account
 creation, verified recovery, session controls, and operational account lifecycle. Encrypt

@@ -6,7 +6,8 @@
   `~/apps/jobpilot-multi`, run `backend/scripts/bootstrap.sh`, and pass the fresh-DB,
   local/public health, REST, storage, worker, recovery, and backup gates.
 - [ ] **Phase 1: deploy the separate Netlify site and complete an end-to-end smoke test.**
-  Use only the fork credentials, custom domain, and empty data. Do not copy production env.
+  Use only the fork deployment credentials and custom domain. Exercise the imported
+  `vamsi` snapshot plus another fixed account without pointing at production services.
 - [x] **Phase 2A: write the identity/multi-tenancy ADR before implementation.** Decide the
   account/session model and ownership enforcement, then cover every table, query, file,
   worker call, API key, onboarding flow, password reset, and rate/spend boundary.
@@ -28,11 +29,14 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 4. Commit (conventional commit, *why* in the body). Fork development stays on
    `multi-user-fork`; do not merge production backend configuration from `main`.
 
-## Current release state (verified 2026-07-14)
+## Current release state (verified 2026-07-15)
 
 - The independent backend and fixed-account/RLS foundation are live on the server laptop.
 - UUID-isolated Claude and ChatGPT subscription connections plus the centralized Candidate
   Profile controls are implemented; credential encryption remains a Phase 2B gate.
+- The owner-authorized ADR 0087 snapshot is present under `vamsi` and verified through
+  RLS/storage denial tests. The source itself was missing 999 historic application PDF
+  references (591 résumé and 408 cover-letter files); all 285 physical objects were copied.
 - The separate Netlify site and its end-to-end smoke test remain an explicit deployment gap.
 - Worker code changes go live only after the isolated `com.jobpilotmulti.*` worker restarts;
   app changes go live only after a push and successful Netlify build.
@@ -85,6 +89,16 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
     description + reasoning.
 
 ## P3 — Smaller wins
+- [ ] **I. Resolve historic application rows whose source PDFs no longer exist.**
+  - Why: the owner snapshot preserved all 714 application rows, but the source storage
+    already lacked 591 referenced résumé PDFs and 408 cover-letter PDFs. Fifty-eight of
+    the 285 surviving physical objects are not referenced by a current application.
+  - Fix: decide whether to regenerate documents from preserved structured data, mark the
+    unavailable links clearly in the UI, and separately archive/delete only proven orphan
+    objects. Never invent a file or silently drop application history.
+  - Verify: every displayed download either resolves to a UUID-scoped file or has an
+    explicit unavailable state; cross-user signing remains denied.
+
 - [ ] **E. Render the tailored job title (`basics.label`) on the PDF.**
   - Why: tailoring computes/stores `basics.label`, and the `.label` CSS exists in
     [templates.js](../resume-worker/templates.js), but the header only draws `.name` +
