@@ -63,7 +63,8 @@
   `applypilot.vamsikrish.com` project was not selected.
 - Protected-configuration checks confirmed `vamsi` is unchanged, the two new credentials
   authenticate to UUIDs ending `0002`/`0003`, and the former pilot usernames are rejected.
-  The coordinated database/frontend rollout remains pending the deployment commit.
+  Netlify production then returned valid sessions for `vamsi`, `surya`, and `samitha`,
+  while both former pilot usernames returned HTTP 401.
 
 ## Restricted-deploy reconciliation fix
 
@@ -76,3 +77,8 @@
   service reconciliation even when an earlier attempt updated Git before failing.
 - Zsh syntax checks and all 9 backend regressions passed, including coverage that the
   forced deploy path uses login-shell reconciliation.
+- A second bounded sync at `cdcf510` reconciled the partial update, applied migration
+  0049, restarted the isolated services, and left the server checkout clean. Authenticated
+  backend verification returned `vamsi`/`surya`/`samitha` for UUIDs ending
+  `0001`/`0002`/`0003`. Netlify published the same commit successfully at
+  `apply.vamsikrish.com`; the original production project remained untouched.
