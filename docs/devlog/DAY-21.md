@@ -28,3 +28,5 @@
 - Full gates passed: 195 app tests (9 credentialed eval runs skipped), 11 worker tests,
   TypeScript typecheck, production build, and documentation checks (113 Markdown files,
   76 ADRs).
+- Implementation commit `6df3b76` was pushed to `multi-user-fork`; the managed worker
+  restarted successfully and both local and public `/version` reported that commit.
