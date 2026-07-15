@@ -16,14 +16,14 @@
 - [ ] **Phase 2B: complete public-account security gates.** Add self-service signup,
   verified password recovery, session controls, credential encryption at rest, encrypted
   off-host backup handling, and abuse/rate/spend controls before enabling public access.
-- [x] **Supervised Apply Phase 1: queue and reviewed handoff.** Add the five-row External
-  Apply queue, readiness/lifecycle API, blocker-to-Set-Aside flow, exact-file download,
-  and copyable Chrome prompt with an explicit final-submit confirmation (ADR 0093).
-- [ ] **Supervised Apply Phase 2: evaluated browser execution.** Prototype the actual
-  browser-control loop only after defining supported-site allowlists, answer provenance,
-  prompt-injection resistance, login/CAPTCHA behavior, per-field audit output, and
-  success detection. Retain the immediate pre-Submit user confirmation and never include
-  LinkedIn without explicit platform authorization.
+- [x] **AI Apply Navigator Phase 1: extension-autofill handoff.** Add the five-row External
+  Apply queue, lifecycle API, blocker-to-Set-Aside flow, exact-file download, and bounded
+  Chrome prompt. The extension owns values; AI navigates and submits without per-job
+  confirmation, then records visible success (ADRs 0093–0094).
+- [ ] **AI Apply Navigator Phase 2: native evaluated execution.** Prototype one-click
+  browser-run invocation only after defining supported-site allowlists, extension control,
+  prompt-injection resistance, login/CAPTCHA behavior, audit output, and success detection.
+  Never include LinkedIn without explicit platform authorization.
 
 A living, do-it-one-by-one checklist from a full-codebase review (token efficiency,
 performance, correctness, UX). Work top-to-bottom unless priorities change.

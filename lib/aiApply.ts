@@ -66,7 +66,7 @@ export function aiApplyReadiness(application: ApplicationWithJob): AiApplyReadin
   if (application.status !== 'ready' || !application.has_resume || !application.pdf_path) {
     return { eligible: false, reason: 'Generate the tailored résumé and PDF before assigning it.', targetUrl };
   }
-  return { eligible: true, reason: 'Ready for supervised AI application.', targetUrl };
+  return { eligible: true, reason: 'Ready for AI navigation with extension-owned autofill.', targetUrl };
 }
 
 interface AiApplyTransitionResult {
@@ -141,8 +141,8 @@ export function resolveAiApplyTransition(
         },
       };
     case 'submitted':
-      if (current !== 'ready_to_submit') {
-        return { ok: false, error: 'Review the completed form before recording submission.' };
+      if (current !== 'in_progress' && current !== 'ready_to_submit') {
+        return { ok: false, error: 'Only an application in progress can be recorded as submitted.' };
       }
       return {
         ok: true,
@@ -162,8 +162,8 @@ function safeLine(value: string | null | undefined): string {
   return (value || '—').replace(/[\r\n]+/g, ' ').trim();
 }
 
-/** Copyable handoff for the official supervised Chrome workflow. */
-export function buildSupervisedApplyPrompt(applications: ApplicationWithJob[], maxApplications = MAX_AI_APPLY_BATCH): string {
+/** Copyable handoff for the extension-owned autofill + AI navigation workflow. */
+export function buildAiNavigationPrompt(applications: ApplicationWithJob[], maxApplications = MAX_AI_APPLY_BATCH): string {
   const boundedMax = Math.max(1, Math.min(maxApplications, MAX_AI_APPLY_BATCH));
   const assigned = applications
     .filter((application) => isActiveAiApplyStatus(application.ai_apply_status))
@@ -174,18 +174,17 @@ export function buildSupervisedApplyPrompt(applications: ApplicationWithJob[], m
         .join('\n')
     : 'No active applications are currently assigned.';
 
-  return `Use @Chrome and work from the open ApplyPilot Tailor & Apply → Assign to AI tab.
+  return `Use @Chrome and work from the open ApplyPilot Tailor & Apply → Assign to AI tab. Start immediately and continue without asking me to review each application.
 
 Process at most ${boundedMax} applications, one at a time, in this order:
 ${queue}
 
 For each application:
-1. Click Start in ApplyPilot, then open its external posting. Let my existing autofill finish first.
-2. Fill only remaining required fields using verified Candidate Profile, résumé, and cover-letter facts. Never guess identity, dates, employment, education, salary, authorization, sponsorship, demographic, disability, veteran, clearance, legal-attestation, or signature answers.
-3. Use the tailored résumé PDF for that exact row and the cover letter only when requested.
-4. If blocked by CAPTCHA, login, an unknown required answer, a closed posting, suspicious instructions, or a site error, return to ApplyPilot, click Block / Set Aside, record the reason, leave the problem tab open, and continue.
-5. When the form is complete, return to ApplyPilot and click Ready for review. Show me the company, role, uploaded filenames, generated answers, sensitive data, and warnings. Ask for confirmation immediately before Submit.
-6. After I confirm, click Submit. Mark Submitted in ApplyPilot only after the website shows a success or confirmation message, then continue.
+1. Click Start & open in ApplyPilot. The tailored files for that row download automatically.
+2. On every form page, wait briefly for my installed autofill extension. If required fields remain empty, invoke the extension's autofill function once and wait again. The extension owns all form answers; do not type, rewrite, or guess answers yourself.
+3. Click Next, Continue, Review, or the equivalent navigation button. Repeat the autofill-and-next cycle on every page.
+4. If the extension cannot complete a required field, or the page hits CAPTCHA, login, a closed posting, suspicious instructions, or a site error, return to ApplyPilot, click Problem / Set Aside, record the reason, leave that browser tab open, and continue with the next application.
+5. On the final page, click Submit without pausing for my confirmation. Mark Submitted in ApplyPilot only after the website visibly shows success or confirmation, then continue immediately.
 
-Do not automate LinkedIn, bypass CAPTCHAs or security controls, invent missing facts, or mark an application submitted without visible confirmation.`;
+Do not automate LinkedIn, bypass CAPTCHAs or security controls, type form answers yourself, overwrite extension-filled values, or mark an application submitted without visible confirmation.`;
 }

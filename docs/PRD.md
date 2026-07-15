@@ -73,13 +73,13 @@ dedicated column. It remains available from the fit-score tooltip, while complet
 reasoning stays in the expanded job details. On desktop, role type, apply type, company
 assessment, duplicate locations, ATS match, skill match, and opened state each retain a
 stable column, and row actions retain fixed icon slots (ADR 0092).
-Tailor & Apply also provides Supervised Apply Phase 1. A user may assign no more than
-five prepared, explicitly External Apply jobs to a separate AI queue, copy a bounded
-Chrome handoff prompt, start/open each posting with its exact tailored files, record a
-blocker into Set Aside, retry it later, and confirm a visibly successful submission.
-LinkedIn/Easy Apply, CAPTCHAs, login barriers, unknown required answers, silent browser
-control, and submission without an immediate user review remain outside this phase
-(ADR 0093).
+Tailor & Apply also provides AI Apply Navigator Phase 1. A user may assign no more than
+five prepared, explicitly External Apply jobs to a separate AI queue and start a bounded
+Chrome handoff. The installed extension exclusively owns form values; the AI waits for
+or invokes autofill, navigates Next/Continue pages, submits without a per-job review
+pause, records visible success, and moves blockers into Set Aside before continuing.
+LinkedIn/Easy Apply, CAPTCHA bypass, AI-authored form answers, silent browser launch, and
+recording submission without visible success remain outside this phase (ADRs 0093–0094).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
@@ -131,8 +131,9 @@ on the user's machine. Replacing local scraping with the **Apify API** turns the
 into two HTTP calls (fetch + score), so it can be **fully serverless** and self-running.
 
 **Historical non-goal:** the original baseline had no auto-apply and stopped at
-*fetched → scored → shortlisted*. ADR 0093 narrowly amends that baseline with a
-supervised external-application handoff; autonomous browser control remains a non-goal.
+*fetched → scored → shortlisted*. ADRs 0093–0094 amend that baseline with a bounded,
+user-invoked external-application navigation run. The app still does not fill forms or
+silently launch a native browser executor.
 
 ## Users
 One person (the owner). The app exposes the user's resume and personal data, so it

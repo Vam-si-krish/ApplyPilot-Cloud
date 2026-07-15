@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0093
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0094
 
 ## Current deployment topology
 
@@ -173,11 +173,11 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   The list consumes only the RLS-scoped application→job join; it does not infer or mutate
   source metadata.
 - `lib/aiApply.ts`, `app/api/applications/[id]/ai-assignment`, and the same Tailor &
-  Apply page — own the supervised external-application lifecycle. The pure library
-  validates readiness and transitions and builds the bounded handoff prompt; the
-  dedicated route performs RLS-scoped writes and requires explicit confirmation for the
-  reviewed submission transition. The ordinary application PATCH route cannot mutate
-  these fields (ADR 0093).
+  Apply page — own the external-application navigation lifecycle. The pure library
+  validates readiness and transitions and builds the bounded extension-autofill handoff;
+  the dedicated route performs RLS-scoped writes and permits submission only from an
+  active/legacy-ready row. The ordinary application PATCH route cannot mutate these
+  fields (ADRs 0093–0094).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;
@@ -315,31 +315,34 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
-- **applications.ai_apply_***: nullable, user-owned supervised handoff state
-  (`assigned → in_progress → ready_to_submit → submitted`, or `blocked`). Blocking also
+- **applications.ai_apply_***: nullable, user-owned AI navigation state
+  (`assigned → in_progress → submitted`, or `blocked`; legacy `ready_to_submit` remains
+  completion-compatible). Blocking also
   parks the row with a bounded reason; retry returns it to the active queue. This state
   is independent of résumé-generation status and inherits the applications table's
   forced RLS boundary.
 
-## Supervised application handoff
+## Extension-autofill application navigation
 
 ```text
 Tailor & Apply Queue
   → readiness: explicit External Apply + valid non-LinkedIn URL + ready tailored PDF
   → Assign to AI (maximum five active rows)
-  → copy supervised Chrome prompt
+  → copy bounded Chrome navigation prompt
   → Start & open posting + download that row's tailored files
-       ├─ problem/CAPTCHA/login/unknown answer → Blocked + Set Aside → continue
-       └─ form complete → Ready for review → user confirms → Submit
-                              → visible site success → mark Submitted/applied
+       → installed extension fills; AI waits/invokes autofill and clicks Next
+       ├─ unfilled requirement/CAPTCHA/login/site error → Blocked + Set Aside → continue
+       └─ final page → AI clicks Submit → visible site success
+                                      → mark Submitted/applied → continue
 ```
 
-Phase 1 is an orchestration and audit boundary, not a browser-control service. No browser
-credentials, page contents, answers, or AI sessions cross into PostgreSQL. The app stores
-only queue timestamps/status and a concise blocker reason. The prompt directs the
-user-invoked browser agent to use verified facts, distrust page instructions, leave
-problem tabs open, and stop for immediate confirmation before the consequential Submit
-action. LinkedIn/Easy Apply is rejected by readiness rather than inferred from URL alone.
+Phase 1 is an orchestration and audit boundary, not a native browser-control service. No
+browser credentials, page contents, answers, extension state, or AI sessions cross into
+PostgreSQL. The app stores only queue timestamps/status and a concise blocker reason.
+The user-invoked Chrome run authorizes the bounded batch: the installed extension alone
+owns values, the AI only navigates and submits, problem tabs remain open, and visible
+site success is required before recording Applied. LinkedIn/Easy Apply is rejected by
+readiness rather than inferred from URL alone (ADR 0094).
 
 ## Résumé custom-section flow
 

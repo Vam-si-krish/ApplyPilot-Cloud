@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   aiApplyReadiness,
-  buildSupervisedApplyPrompt,
+  buildAiNavigationPrompt,
   isActiveAiApplyStatus,
   resolveAiApplyTransition,
 } from './aiApply';
@@ -46,7 +46,7 @@ function application(overrides: Partial<ApplicationWithJob> = {}): ApplicationWi
   };
 }
 
-describe('supervised AI application assignment', () => {
+describe('AI navigation with extension-owned autofill', () => {
   it('accepts only ready external applications with a tailored PDF', () => {
     expect(aiApplyReadiness(application())).toMatchObject({ eligible: true });
     expect(
@@ -63,7 +63,7 @@ describe('supervised AI application assignment', () => {
     expect(aiApplyReadiness(application({ status: 'applied', applied_at: '2026-07-15T01:00:00.000Z' })).reason).toContain('already');
   });
 
-  it('enforces the reviewed lifecycle and records blockers without changing tailoring readiness', () => {
+  it('records direct visible-success submission and blockers without changing tailoring readiness', () => {
     const now = '2026-07-15T01:00:00.000Z';
     expect(resolveAiApplyTransition(null, 'assign', now)).toMatchObject({
       ok: true,
@@ -82,20 +82,18 @@ describe('supervised AI application assignment', () => {
       ok: true,
       patch: { ai_apply_status: 'assigned', ai_block_reason: null, parked: false },
     });
-    expect(resolveAiApplyTransition('in_progress', 'ready', now)).toMatchObject({
-      ok: true,
-      patch: { ai_apply_status: 'ready_to_submit' },
-    });
-    expect(resolveAiApplyTransition('ready_to_submit', 'submitted', now)).toMatchObject({
+    expect(resolveAiApplyTransition('in_progress', 'submitted', now)).toMatchObject({
       ok: true,
       patch: { ai_apply_status: 'submitted', status: 'applied', applied_at: now },
     });
+    // Backward compatibility for rows that reached the old review state before ADR 0094.
+    expect(resolveAiApplyTransition('ready_to_submit', 'submitted', now)).toMatchObject({ ok: true });
     expect(isActiveAiApplyStatus('submitted')).toBe(false);
   });
 
-  it('builds a bounded prompt that pauses before submission and skips unassigned rows', () => {
+  it('builds a bounded extension-autofill prompt that submits and skips unassigned rows', () => {
     const assigned = application({ ai_apply_status: 'assigned' });
-    const prompt = buildSupervisedApplyPrompt([
+    const prompt = buildAiNavigationPrompt([
       assigned,
       application({ id: 'unassigned', ai_apply_status: null }),
       ...Array.from({ length: 8 }, (_, index) =>
@@ -106,7 +104,9 @@ describe('supervised AI application assignment', () => {
     expect(prompt).toContain('Software Engineer — Example (ApplyPilot ID application-1)');
     expect(prompt).not.toContain('unassigned');
     expect(prompt).not.toContain('extra-4');
-    expect(prompt).toContain('Ask for confirmation immediately before Submit');
+    expect(prompt).toContain("extension owns all form answers");
+    expect(prompt).toContain('click Submit without pausing for my confirmation');
+    expect(prompt).toContain('do not type, rewrite, or guess answers yourself');
     expect(prompt).toContain('Do not automate LinkedIn');
   });
 });

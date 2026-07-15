@@ -1,9 +1,9 @@
 /**
  * PATCH /api/applications/[id]/ai-assignment
  *
- * Guarded lifecycle for the supervised Apply Assistant queue (ADR 0093). The ordinary
+ * Guarded lifecycle for the AI Apply Navigator queue (ADRs 0093–0094). The ordinary
  * application PATCH route cannot mutate these fields, keeping browser-workflow state
- * separate from tailoring state and limiting submission to the reviewed transition.
+ * separate from tailoring state and records submission only after visible site success.
  */
 import { NextResponse } from 'next/server';
 import {
@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
 const ACTIONS: AiApplyAction[] = ['assign', 'start', 'ready', 'block', 'retry', 'unassign', 'submitted'];
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  let body: { action?: unknown; reason?: unknown; confirmed?: unknown };
+  let body: { action?: unknown; reason?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -51,10 +51,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       : null;
   const action = body.action as AiApplyAction;
 
-  if (action === 'submitted' && body.confirmed !== true) {
-    return NextResponse.json({ error: 'Confirm the reviewed form immediately before recording submission.' }, { status: 400 });
-  }
-
   if (action === 'assign' || action === 'retry') {
     const readiness = aiApplyReadiness(application);
     if (!readiness.eligible) {
@@ -67,7 +63,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .in('ai_apply_status', [...ACTIVE_AI_APPLY_STATUSES]);
     if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
     if ((count ?? 0) >= MAX_AI_APPLY_BATCH) {
-      return NextResponse.json({ error: `The supervised queue is limited to ${MAX_AI_APPLY_BATCH} active applications.` }, { status: 409 });
+      return NextResponse.json({ error: `The AI queue is limited to ${MAX_AI_APPLY_BATCH} active applications.` }, { status: 409 });
     }
   }
 

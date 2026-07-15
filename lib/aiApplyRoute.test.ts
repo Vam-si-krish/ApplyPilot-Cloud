@@ -27,7 +27,7 @@ describe('AI assignment persistence boundary', () => {
     expect(route).toContain("const ACTIONS: AiApplyAction[]");
     expect(route).toContain("action === 'assign' || action === 'retry'");
     expect(route).toContain("action === 'submitted'");
-    expect(route).toContain("body.confirmed !== true");
+    expect(route).not.toContain('body.confirmed');
     expect(route).toContain('MAX_AI_APPLY_BATCH');
     expect(route).toContain(".from('jobs')");
     expect(route).toContain('applied_at: updated.applied_at');
@@ -42,11 +42,12 @@ describe('AI assignment persistence boundary', () => {
     expect(migration).not.toMatch(/create policy|disable row level security/i);
   });
 
-  it('keeps the supervised controls in a stable row slot and exposes blocker recovery', () => {
+  it('keeps the navigation controls in a stable row slot and exposes blocker recovery', () => {
     expect(applicationsPage).toContain("{ id: 'ai' as View, label: 'Assign to AI' }");
     expect(applicationsPage).toContain('w-[190px] shrink-0');
     expect(applicationsPage).toContain("updateAiApplication(a, 'block')");
     expect(applicationsPage).toContain("updateAiApplication(a, 'retry')");
     expect(applicationsPage).toContain('<AiApplyStatusBadge');
+    expect(applicationsPage).not.toContain('Ready for review');
   });
 });

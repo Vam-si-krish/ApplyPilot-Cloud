@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-07-15
 - Amends: original no-auto-apply non-goal; ADR 0061 application parking
+- Amended by: ADR 0094 extension-owned autofill with unattended AI navigation
 
 ## Context
 

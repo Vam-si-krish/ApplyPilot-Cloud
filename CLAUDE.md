@@ -3,10 +3,11 @@
 A private multi-user, password-protected web app that **runs itself daily**:
 it fetches recent job postings through Apify, scores each 0–10 for fit against
 the authenticated user's résumé, and supports shortlisting, tailoring, cover
-letters, inbox tracking, and application tracking. It does **not** auto-apply.
-ADR 0093 adds a bounded **supervised application handoff** for prepared external jobs:
-the app owns queue/readiness state and a copyable browser prompt, while the user reviews
-and confirms immediately before Submit. It is not autonomous browser control.
+letters, inbox tracking, and application tracking. For prepared external jobs, ADRs 0093
+and 0094 add a bounded **AI navigation handoff**: the installed extension exclusively
+fills form values while a user-invoked Chrome agent clicks through, submits without a
+per-job confirmation pause, verifies visible success, and sets problem tabs aside. The
+app does not itself fill forms or silently launch a browser run.
 
 ## Active branch direction: independent multi-user product
 
