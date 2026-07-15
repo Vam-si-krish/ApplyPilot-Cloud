@@ -36,3 +36,5 @@
 - Full verification passed: 191 app tests (9 credentialed eval runs skipped), 2 backend
   tests, 8 worker tests, TypeScript typecheck, production build, and documentation checks
   (109 Markdown files, 74 ADRs).
+- Implementation commit `e319cbf` was pushed to `multi-user-fork`; the managed worker
+  was restarted and both local and public `/version` reported that commit.
