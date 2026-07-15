@@ -36,4 +36,5 @@
 - Full gates passed: 207 app tests with 9 credentialed evals skipped, 16 backend
   regressions, 20 worker tests, TypeScript, the 33-page production build, and docs
   validation across 133 Markdown files and 85 ADRs.
-- Commit and development code deployment remain pending.
+- Implementation commit `855def5` deployed successfully to the isolated development
+  server; public gateway/database and worker health reported green at that commit.
