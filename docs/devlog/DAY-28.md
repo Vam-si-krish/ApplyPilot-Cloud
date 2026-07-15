@@ -37,3 +37,12 @@
   and documentation validation passed with 126 Markdown files and 82 ADRs.
 - Restricted SSH end-to-end deploy/restart/status, backup/log bounds, push, and public
   rollout results are appended after the server receives the forced-command script.
+- Pushed implementation commit `6539e64` and deployed it through the normal isolated
+  autopull path. A temporary ED25519 key with the exact production `restrict`/forced-command
+  entry then passed help, status, protected dev-environment validation, bounded logs,
+  immediate deploy verification, worker restart, and a real backup. An arbitrary shell
+  request was rejected with the expected allowlist error.
+- The temporary credential was removed after testing; `authorized_keys` contains zero
+  active keys until the personal laptop runs `setup-key`. The test backup produced an
+  11.2 MB database dump and 40.9 MB file archive at mode `0600`. Public gateway health and
+  worker version both passed on `6539e64` after restart.

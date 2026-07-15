@@ -25,7 +25,7 @@ health_wait() {
   local url="$1"
   local attempt
   for attempt in {1..20}; do
-    if curl -fsS -m 8 "$url"; then
+    if curl -fsS -m 8 "$url" 2>/dev/null; then
       print
       return 0
     fi
