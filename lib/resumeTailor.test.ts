@@ -75,6 +75,26 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
     ]);
   });
 
+  it('deterministically preserves titles and Base résumé skills when strict controls are selected', () => {
+    const tailored: ResumeDoc = {
+      ...base(),
+      basics: { ...base().basics, label: 'Staff Platform Engineer' },
+      work: base().work.map((work) => ({ ...work, position: 'Platform Architect' })),
+      skills: [{ name: 'New', keywords: ['Rust', 'Kubernetes'] }],
+    };
+    const out = mergeTailored(base(), tailored, {
+      skillAdditionMode: 'evidenced_only',
+      skillLearningHorizonDays: 30,
+      titleAlignment: 'preserve',
+      evidenceStandard: 'base_only',
+    });
+    expect(out.basics.label).toBe(base().basics.label);
+    expect(out.work.map((work) => work.position)).toEqual(base().work.map((work) => work.position));
+    expect(out.skills).toEqual(base().skills);
+    expect(titleChanges(base(), out)).toEqual([]);
+    expect(addedSkills(base(), out)).toEqual([]);
+  });
+
   it('falls back to base skills only when the model returns no skills at all', () => {
     const out = mergeTailored(base(), { ...base(), skills: [] });
     expect(out.skills).toEqual(base().skills);
@@ -210,6 +230,7 @@ describe('buildTailorMessages', () => {
     expect(TAILOR_PROMPT).toContain('TITLE ALIGNMENT');
     expect(TAILOR_PROMPT).toContain("MIRROR THE POSTING'S EXACT WORDING");
     expect(TAILOR_PROMPT).toContain('TOP THIRD');
+    expect(TAILOR_PROMPT).toContain('VALIDATED USER CONTROL');
   });
 });
 

@@ -170,5 +170,8 @@ describe('buildScoreMessages', () => {
     expect(SCORE_PROMPT).toContain('missing/blank profile field means UNKNOWN');
     expect(SCORE_PROMPT).toContain('avoid_security_clearance_jobs=true');
     expect(SCORE_PROMPT).toContain('scoring_preferences.scoring_instructions');
+    expect(SCORE_PROMPT).toContain('experience_shortfall_tolerance_years');
+    expect(SCORE_PROMPT).toContain('overqualification_treatment');
+    expect(SCORE_PROMPT).toContain('contract_role_treatment="avoid"');
   });
 });

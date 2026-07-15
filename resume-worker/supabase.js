@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import ws from 'ws';
 import { currentUserId } from './userContext.js';
+import { scoringPreferences } from './candidatePreferences.js';
 
 const BUCKET = process.env.RESUMES_BUCKET || 'resumes';
 
@@ -189,17 +190,7 @@ export async function getScoringCandidateContext() {
     `USER-MAINTAINED PROFILE FACTS (JSON — authoritative only for fields explicitly present; missing means unknown):\n` +
       JSON.stringify({
         work_authorization: data?.work_authorization ?? {},
-        scoring_preferences: {
-          ...(typeof data?.candidate_preferences?.avoid_security_clearance_jobs === 'boolean'
-            ? { avoid_security_clearance_jobs: data.candidate_preferences.avoid_security_clearance_jobs }
-            : {}),
-          ...(typeof data?.candidate_preferences?.avoid_citizenship_restricted_jobs === 'boolean'
-            ? { avoid_citizenship_restricted_jobs: data.candidate_preferences.avoid_citizenship_restricted_jobs }
-            : {}),
-          ...(typeof data?.candidate_preferences?.scoring_instructions === 'string'
-            ? { scoring_instructions: data.candidate_preferences.scoring_instructions.slice(0, 4000) }
-            : {}),
-        },
+        scoring_preferences: scoringPreferences(data?.candidate_preferences),
       }),
   );
   return parts.join('\n\n---\n');

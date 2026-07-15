@@ -376,13 +376,15 @@ export function extractJsonObject(text) {
 export const TAILOR_PROMPT = `You are an expert résumé writer helping the candidate LAND INTERVIEWS for a specific job, and optimizing the résumé to pass ATS keyword screening (aim for a strong keyword match with the posting).
 
 You may ENHANCE the résumé, not merely reword it. You ARE allowed to:
-- Rewrite bullet points to foreground the job's requirements and keywords, adding plausible detail and metrics consistent with the candidate's real roles.
-- ADD skills the job wants when the candidate could CREDIBLY have them or learn them in under ~15 days given their background, or that are closely ADJACENT to skills they already list. Weave those skills into the bullets too.
+- Rewrite bullet points to foreground the job's requirements and keywords. Whether you may add plausible supporting detail is set by the VALIDATED TAILORING CONTROLS in the user message.
+- Handle missing skills exactly as the VALIDATED TAILORING CONTROLS direct. The default permits closely adjacent skills and skills credibly learnable within 15 days; a stricter user choice overrides that permission. Weave an allowed added skill into bullets too.
 - Reorder/regroup skills and reframe the summary to match the role.
 
-TITLE ALIGNMENT — recruiters shortlist on job-title match, so set "basics.label" to an HONEST variant of the TARGET job title whenever the candidate's real background supports doing that job (targeting "Senior Frontend Engineer", a capable full-stack dev's label becomes "Frontend Engineer · React & TypeScript"). Keep the seniority the dates support: never adopt Senior/Staff/Principal/Lead from the posting unless the base résumé already claims that level. If the role is outside what the candidate could credibly claim, keep the base label.
+VALIDATED USER CONTROL — the user message always supplies bounded choices for skills, learning horizon, title alignment, and evidence standard. Follow those choices exactly. They can RESTRICT the enhancement permissions above, but they never relax truthfulness, verified-fact anchoring, tenure, disclosure, or length rules.
 
-JOB TITLES — ALIGN each role's title ("position") with the TARGET job title whenever the role's actual work honestly supports it; recruiters pattern-match titles in a 7-second scan and the MOST RECENT role matters most (base "Senior Frontend Developer" targeting a React Developer posting → "Senior React Developer"; a generic "Software Engineer" whose work was frontend → "Frontend Engineer"). Reframe the DISCIPLINE, never the LEVEL: keep each base title's level exactly (never add Senior/Staff/Lead/Principal the base title doesn't have), and employer names and dates stay untouched. A changed title must survive a reference check ("yes, that's a fair description of what they did there"). Leave a title unchanged ONLY when the role's real work doesn't support the target's discipline — omit "position" for those. Every title change is auto-detected and shown to the candidate for review.
+TITLE ALIGNMENT — when the validated controls permit honest reframing, set "basics.label" to an HONEST variant of the TARGET job title whenever the candidate's real background supports doing that job (targeting "Senior Frontend Engineer", a capable full-stack dev's label becomes "Frontend Engineer · React & TypeScript"). When they say preserve, return the base label unchanged. Keep the seniority the dates support: never adopt Senior/Staff/Principal/Lead from the posting unless the base résumé already claims that level. If the role is outside what the candidate could credibly claim, keep the base label.
+
+JOB TITLES — when the validated controls permit honest reframing, ALIGN each role's title ("position") with the TARGET job title whenever the role's actual work honestly supports it; recruiters pattern-match titles in a 7-second scan and the MOST RECENT role matters most (base "Senior Frontend Developer" targeting a React Developer posting → "Senior React Developer"; a generic "Software Engineer" whose work was frontend → "Frontend Engineer"). When they say preserve, omit every "position" change. Reframe the DISCIPLINE, never the LEVEL: keep each base title's level exactly (never add Senior/Staff/Lead/Principal the base title doesn't have), and employer names and dates stay untouched. A changed title must survive a reference check ("yes, that's a fair description of what they did there"). Leave a title unchanged ONLY when the role's real work doesn't support the target's discipline — omit "position" for those. Every title change is auto-detected and shown to the candidate for review.
 
 MIRROR THE POSTING'S EXACT WORDING — many ATS scans match literally. For every skill you keep or add, write it EXACTLY as the posting writes it ("CI/CD" if they write CI/CD, "PostgreSQL" not "Postgres", "Next.js" not "NextJS"), in both the skills section and the bullets. Work the posting's key multi-word requirement phrases in verbatim once each where truthful ("distributed systems", "REST APIs"). The user message lists exact posting terms the résumé currently lacks — cover every one you truthfully can.
 
@@ -611,13 +613,20 @@ function capSkills(base, tailored) {
 /** Merge the model's draft onto the base, anchoring verifiable facts (ADR 0026) and
  *  capping bullet counts + summary length + skill count to keep it one page
  *  (ADR 0029/0031). Pure — never throws. */
-export function mergeTailored(base, tailored) {
+export function mergeTailored(base, tailored, policy = {
+  skillAdditionMode: 'learnable',
+  skillLearningHorizonDays: 15,
+  titleAlignment: 'honest_reframe',
+  evidenceStandard: 'plausible_with_review',
+}) {
   // Years of experience is a verifiable fact derived from the dates (ADR 0041): clamp any
   // claim that exceeds the candidate's true career span so the model can't inflate tenure.
   const maxYears = totalExperienceYears(base);
   const finish = (s) => cleanText(clampYoeClaims(s, maxYears));
   const cappedSummary = capSummary(base, tailored.basics.summary);
-  const rawLabel = tailored.basics.label?.trim() || base.basics.label;
+  const rawLabel = policy.titleAlignment === 'preserve'
+    ? base.basics.label
+    : tailored.basics.label?.trim() || base.basics.label;
   const basics = {
     ...base.basics,
     summary: cappedSummary ? finish(cappedSummary) : cappedSummary,
@@ -627,11 +636,15 @@ export function mergeTailored(base, tailored) {
   // detected + disclosed via titleChanges(); empty/omitted keeps the base title.
   const work = base.work.map((b, i) => ({
     ...b,
-    position: tailored.work[i]?.position?.trim() ? finish(tailored.work[i].position.trim()) : b.position,
+    position: policy.titleAlignment === 'preserve'
+      ? b.position
+      : tailored.work[i]?.position?.trim() ? finish(tailored.work[i].position.trim()) : b.position,
     highlights: capHighlights(b.highlights, tailored.work[i]?.highlights).map(finish),
   }));
   const tailoredSkills = tailored.skills.filter((g) => g.keywords.length > 0);
-  const skills = tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
+  const skills = policy.skillAdditionMode === 'evidenced_only'
+    ? base.skills
+    : tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
   const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(finish) }));
   return { basics, work, education: base.education, skills, projects };
 }
@@ -684,7 +697,12 @@ function extractChangeNotes(json) {
  * maxTokens is raised to fit the résumé JSON AND the ~350-word letter without either
  * crowding the other (the résumé is the priority; the letter is a bonus in the same call).
  */
-export async function tailorResume(base, job, signals, client, instructions = '') {
+export async function tailorResume(base, job, signals, client, instructions = '', policy = {
+  skillAdditionMode: 'learnable',
+  skillLearningHorizonDays: 15,
+  titleAlignment: 'honest_reframe',
+  evidenceStandard: 'plausible_with_review',
+}) {
   if (!base || base.work.length === 0) {
     throw new Error('Base résumé is empty — build it under Candidate Profile → Résumé first.');
   }
@@ -693,7 +711,7 @@ export async function tailorResume(base, job, signals, client, instructions = ''
   const json = extractJsonObject(response);
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
-  const resume = mergeTailored(base, normalizeResume(json));
+  const resume = mergeTailored(base, normalizeResume(json), policy);
   // Usage of THIS call (ADR 0064) — the client path that answered sets lastUsage;
   // null when the provider doesn't report it. Persisted so the user can see what
   // one résumé costs (and whether the cache is being read).

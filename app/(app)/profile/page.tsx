@@ -248,7 +248,96 @@ export default function ProfilePage() {
         {tab === 'prompts' && (
           <div className="space-y-4">
             <div className="rounded-lg border border-sky/20 bg-sky/5 px-4 py-3 text-[12px] text-slate-muted">
-              These instructions customize emphasis and preferences. They cannot disable truthfulness, eligibility checks, score formatting, verified-fact protection, or résumé-length limits.
+              Choose the trade-offs that fit your search, then add optional guidance in your own words. Safe controls are validated before saving; they cannot disable truthfulness, eligibility checks, score formatting, verified-fact protection, or résumé-length limits.
+            </div>
+            <div className="card p-5 space-y-4">
+              <div>
+                <h2 className="text-[14px] font-semibold text-slate-text">Résumé tailoring controls</h2>
+                <p className="mt-1 text-[11px] text-slate-muted">These choices apply to every new tailored résumé. Existing generated files do not change until regenerated.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SelectField
+                  label="Missing skills"
+                  value={form.candidate_preferences?.skill_addition_mode ?? 'learnable'}
+                  onChange={(v) => set('candidate_preferences.skill_addition_mode', v)}
+                  help="Controls whether tailoring may add skills not already listed in your Base résumé."
+                  options={[
+                    ['evidenced_only', 'Base résumé skills only'],
+                    ['adjacent_only', 'Closely adjacent skills'],
+                    ['learnable', 'Adjacent or quickly learnable'],
+                  ]}
+                />
+                <SelectField
+                  label="Quick-learning window"
+                  value={String(form.candidate_preferences?.skill_learning_horizon_days ?? 15)}
+                  onChange={(v) => set('candidate_preferences.skill_learning_horizon_days', Number(v))}
+                  help="Used only when quickly learnable skills are allowed. It never permits unrelated or implausible skills."
+                  disabled={(form.candidate_preferences?.skill_addition_mode ?? 'learnable') !== 'learnable'}
+                  options={[
+                    ['7', '7 days'],
+                    ['15', '15 days (default)'],
+                    ['30', '30 days'],
+                    ['60', '60 days'],
+                  ]}
+                />
+                <SelectField
+                  label="Job-title alignment"
+                  value={form.candidate_preferences?.title_alignment ?? 'honest_reframe'}
+                  onChange={(v) => set('candidate_preferences.title_alignment', v)}
+                  help="Honest reframing can align the discipline, such as Software Engineer to Frontend Engineer, but never invents a promotion."
+                  options={[
+                    ['preserve', 'Keep every Base résumé title'],
+                    ['honest_reframe', 'Honestly align discipline (default)'],
+                  ]}
+                />
+                <SelectField
+                  label="Supporting detail"
+                  value={form.candidate_preferences?.evidence_standard ?? 'plausible_with_review'}
+                  onChange={(v) => set('candidate_preferences.evidence_standard', v)}
+                  help="Strict mode rephrases only stated facts. Review mode may draft plausible detail and must disclose material additions for your approval."
+                  options={[
+                    ['base_only', 'Only facts already stated'],
+                    ['plausible_with_review', 'Plausible detail, show for review (default)'],
+                  ]}
+                />
+              </div>
+            </div>
+            <div className="card p-5 space-y-4">
+              <div>
+                <h2 className="text-[14px] font-semibold text-slate-text">Job scoring controls</h2>
+                <p className="mt-1 text-[11px] text-slate-muted">These choices affect new scores only. Hard eligibility blockers and missing core skills still follow the protected rubric.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SelectField
+                  label="Experience shortfall tolerance"
+                  value={String(form.candidate_preferences?.experience_shortfall_tolerance_years ?? 3)}
+                  onChange={(v) => set('candidate_preferences.experience_shortfall_tolerance_years', Number(v))}
+                  help="A required-years gap up to this size is treated as a small soft gap, never proof that you have those years."
+                  options={[0, 1, 2, 3, 4, 5].map((n) => [String(n), `${n} year${n === 1 ? '' : 's'}${n === 3 ? ' (default)' : ''}`])}
+                />
+                <SelectField
+                  label="Overqualification"
+                  value={form.candidate_preferences?.overqualification_treatment ?? 'ignore'}
+                  onChange={(v) => set('candidate_preferences.overqualification_treatment', v)}
+                  help="A penalty is limited to a genuine seniority collision and can never create a hard rejection."
+                  options={[
+                    ['ignore', 'Do not penalize (default)'],
+                    ['note', 'Mention it, keep score'],
+                    ['small_penalty', 'Allow a small penalty'],
+                  ]}
+                />
+                <SelectField
+                  label="Contract and temporary roles"
+                  value={form.candidate_preferences?.contract_role_treatment ?? 'neutral'}
+                  onChange={(v) => set('candidate_preferences.contract_role_treatment', v)}
+                  help="Avoid marks contract, C2C, 1099, temporary, and staffing-placement roles as score 1 by your explicit preference."
+                  options={[
+                    ['neutral', 'Score normally (default)'],
+                    ['note', 'Flag it, keep fit score'],
+                    ['avoid', 'Avoid these roles (score 1)'],
+                  ]}
+                />
+              </div>
             </div>
             <TextArea
               label="Global scoring guidance"
@@ -315,6 +404,32 @@ function TextArea({ label, value, onChange, placeholder, rows }: { label: string
       />
       <p className="mt-1 text-right font-mono text-[10px] text-slate-dim">{String(value ?? '').length}/4000</p>
     </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  help,
+  options,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  help: string;
+  options: string[][];
+  disabled?: boolean;
+}) {
+  return (
+    <label className={disabled ? 'opacity-50' : ''}>
+      <span className="label">{label}</span>
+      <select className="input" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+      <span className="mt-1.5 block text-[11px] leading-relaxed text-slate-muted">{help}</span>
+    </label>
   );
 }
 

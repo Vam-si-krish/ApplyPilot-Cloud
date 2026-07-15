@@ -28,4 +28,7 @@ test('subscription scorer is owner-neutral and receives the caller dossier', () 
   });
   assert.match(messages[1].content[0].text, /CANDIDATE CONTEXT:\nCandidate A/);
   assert.match(messages[1].content[0].text, /"require_sponsorship":false/);
+  assert.match(SCORE_PROMPT, /experience_shortfall_tolerance_years/);
+  assert.match(SCORE_PROMPT, /overqualification_treatment/);
+  assert.match(SCORE_PROMPT, /contract_role_treatment="avoid"/);
 });

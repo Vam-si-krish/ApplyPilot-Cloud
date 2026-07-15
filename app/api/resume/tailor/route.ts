@@ -11,7 +11,7 @@ import { buildTailoringClient } from '@/lib/scoreRunner';
 import { tailorResume } from '@/lib/resumeTailor';
 import { atsMatchScores } from '@/lib/prefilter';
 import { resumeToText } from '@/lib/resume';
-import { globalTailoringInstructions } from '@/lib/candidatePreferences';
+import { globalTailoringInstructions, resolveTailoringPolicy } from '@/lib/candidatePreferences';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -53,6 +53,7 @@ export async function POST(req: Request) {
       { atsMissing: ats?.breakdown.missing ?? null }, // no scorer signals in the manual flow
       client,
       globalTailoringInstructions(preferences),
+      resolveTailoringPolicy(preferences),
     );
     return NextResponse.json({ ok: true, resume, changes });
   } catch (e) {

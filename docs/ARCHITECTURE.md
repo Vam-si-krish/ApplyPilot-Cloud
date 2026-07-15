@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0082
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0083
 
 ## Current deployment topology
 
@@ -139,6 +139,14 @@ facts and prompt guidance remain exclusively under Candidate Profile. API keys, 
 connections, settings rows, RLS, and worker credentials retain their existing owners and
 save semantics.
 
+Candidate AI customization is a validated policy boundary (ADR 0083), not a user-editable
+system prompt. `candidate_preferences` stores bounded scoring/tailoring choices; the API and
+worker normalize them, then project only scorer or tailorer fields into that task. Current
+defaults preserve the reviewed shared behavior. Direct and worker `mergeTailored` also
+enforce the strict choices that are structurally decidable (preserve titles/headline and
+keep the Base résumé skill list). Score parsing, rubric weights/caps, eligibility proof,
+verified facts/tenure, disclosure, and one-page budgets remain protected shared contracts.
+
 ## Scoring (current v2 contract)
 
 ADR 0022 retired exact behavioral parity with the original Lite scorer. The current
@@ -147,7 +155,9 @@ contract lives in `lib/scoring.ts` and its tests/evals:
 1. Validate that the posting is a real role and apply explicit hard blockers.
 2. Score must-have skills (0–60), role relevance (0–25), and experience/seniority
    (0–15). A missing core hard requirement caps the overall score at 4; a modest years
-   shortfall alone does not.
+   shortfall alone does not. The account may choose a validated 0–5-year soft-gap
+   tolerance, overqualification treatment, and contract-role preference without changing
+   the protected weights, caps, or eligibility rules.
 3. Include the posting title, company, location, metadata, and HTML-stripped description
    truncated to 15,000 characters. Company assessment is returned in the same LLM call.
 4. Make one LLM call per job with `temperature: 0.1` and `maxTokens: 1000`, preserving
@@ -157,8 +167,8 @@ contract lives in `lib/scoring.ts` and its tests/evals:
 
 The rubric is shared and owner-neutral; the candidate context is per user (ADR 0080).
 `getScoringCandidateContext()` combines the RLS-scoped structured Base résumé with that
-user's explicit `profile.work_authorization` plus only scorer-relevant avoidance flags and
-guidance from `candidate_preferences`. Eligibility is a hard block only when those facts
+user's explicit `profile.work_authorization` plus only scorer-relevant avoidance flags,
+validated trade-offs, and guidance from `candidate_preferences`. Eligibility is a hard block only when those facts
 prove the candidate cannot meet the posting's condition. Explicit avoidance preferences
 are also decisive; missing facts stay unknown.
 `getScoringResumeText()` deliberately excludes authorization JSON because local ATS,
@@ -213,7 +223,7 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
 - **profile**: one row per user — personal, experience, compensation, work_authorization,
   skills_boundary, `base_resume` (the current résumé source for scoring/tailoring/ApplyBuddy),
   `candidate_preferences` (avoidance flags, recurring application answers, constrained AI
-  guidance), legacy `resume_text` fallback, and resume_pdf_path. Candidate Profile is the
+  guidance, and validated scoring/tailoring policy), legacy `resume_text` fallback, and resume_pdf_path. Candidate Profile is the
   sole ongoing editor; onboarding is initial setup only.
 - **settings**: one row per user — schedule/search configuration plus legacy `llm_*` and the three task pairs:
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).

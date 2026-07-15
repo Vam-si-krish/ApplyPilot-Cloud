@@ -42,7 +42,10 @@ each call receives only the authenticated user's Base résumé/profile context, 
 copies work-authorization facts only when the PDF states them explicitly (ADR 0080).
 Candidate Profile is the single ongoing edit surface for the Base résumé, eligibility,
 recurring application answers, avoidance preferences, and constrained scoring/tailoring
-guidance (ADR 0081).
+guidance. Its AI Guidance area also exposes validated per-user trade-offs for learnable
+skills (including a 7/15/30/60-day horizon), title alignment, evidence strictness,
+experience shortfalls, overqualification, and contract roles while keeping score, truth,
+eligibility, and one-page contracts protected (ADRs 0081 and 0083).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

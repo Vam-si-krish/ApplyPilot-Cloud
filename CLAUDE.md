@@ -33,6 +33,12 @@ then truncated to 15000 chars, with the candidate context marked as a prompt-cac
 `employment_type` (so contract roles are flagged, not demoted) and a sub-score `breakdown`. Eval cases
 (`evals/cases/`) are the regression net — keep them green when touching scoring.
 
+Candidate trade-offs are bounded values, not editable system prompts (ADR 0083).
+Candidate Profile may choose the learnable-skill horizon, skill/title/evidence tailoring
+policy, experience-gap tolerance, overqualification handling, and contract-role treatment.
+Those values never override the protected scoring parser/rubric, eligibility proof,
+verified facts/tenure, review disclosure, or one-page constraints.
+
 Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /api/apify-webhook
 (insert unscored) → /api/score-batch (chunked scoring loop) → user reads scored jobs`.
 

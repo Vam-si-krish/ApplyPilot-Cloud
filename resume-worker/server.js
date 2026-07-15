@@ -46,6 +46,7 @@ import {
 } from './claudeConnection.js';
 import { generateCoverLetter } from './coverLetter.js';
 import { currentUserId, runAsUser, validUserId } from './userContext.js';
+import { combinedTailoringInstructions, resolveTailoringPolicy } from './candidatePreferences.js';
 
 const LLM_PROVIDERS = new Set(['gemini', 'openai', 'deepseek', 'anthropic']);
 // Worker-only subscription providers (ADR 0042/0069); neither uses a vault key.
@@ -53,17 +54,6 @@ const SUBSCRIPTION_PROVIDER = 'subscription';
 const CHATGPT_SUBSCRIPTION_PROVIDER = 'chatgpt_subscription';
 const isSubscriptionProvider = (provider) =>
   provider === SUBSCRIPTION_PROVIDER || provider === CHATGPT_SUBSCRIPTION_PROVIDER;
-
-function combinedTailoringInstructions(preferences, perJob = '') {
-  const global = typeof preferences?.tailoring_instructions === 'string'
-    ? preferences.tailoring_instructions.trim().slice(0, 4000)
-    : '';
-  const local = typeof perJob === 'string' ? perJob.trim().slice(0, 2000) : '';
-  return [
-    global ? `GLOBAL CANDIDATE GUIDANCE:\n${global}` : '',
-    local ? `JOB-SPECIFIC GUIDANCE:\n${local}` : '',
-  ].filter(Boolean).join('\n\n');
-}
 
 /**
  * Resolve the LLM client for a provider+model (ADR 0025/0042):
@@ -209,7 +199,7 @@ app.delete('/chatgpt-connection', async (req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'chatgpt-user-login', 'tailor-queue'];
+  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'chatgpt-user-login', 'tailor-queue', 'candidate-prompt-controls'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -465,7 +455,11 @@ app.post('/tailor', async (req, res) => {
     const tStart = Date.now();
     console.log(`[/tailor] start id=${id} provider=${provider} model=${model}`);
     const client = resolved.client;
-    tailorResume(base, job, signals, client, combinedTailoringInstructions(preferences, appRow.tailor_instructions))
+    tailorResume(
+      base, job, signals, client,
+      combinedTailoringInstructions(preferences, appRow.tailor_instructions),
+      resolveTailoringPolicy(preferences),
+    )
       .then(async ({ resume, changes, coverLetter, usage }) => {
         console.log(`[/tailor] done id=${id} ${Date.now() - tStart}ms`);
         await updateApplication(id, {
@@ -547,6 +541,7 @@ async function runFullPipeline({ appRow, base, tailorClient, preferences }) {
   const { resume, changes, coverLetter, usage } = await tailorResume(
     base, job, tailorSignals(job), tailorClient,
     combinedTailoringInstructions(preferences, appRow.tailor_instructions),
+    resolveTailoringPolicy(preferences),
   );
   await updateApplication(id, {
     tailored_resume: resume,

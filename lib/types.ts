@@ -196,6 +196,15 @@ export interface CandidatePreferences {
   /** Constrained user guidance appended to the protected scoring/tailoring prompts. */
   scoring_instructions?: string;
   tailoring_instructions?: string;
+  /** Validated tailoring policy knobs. Defaults preserve the historical reviewed prompt. */
+  skill_addition_mode?: 'evidenced_only' | 'adjacent_only' | 'learnable';
+  skill_learning_horizon_days?: 7 | 15 | 30 | 60;
+  title_alignment?: 'preserve' | 'honest_reframe';
+  evidence_standard?: 'base_only' | 'plausible_with_review';
+  /** Validated scoring trade-offs; none may weaken eligibility or output contracts. */
+  experience_shortfall_tolerance_years?: 0 | 1 | 2 | 3 | 4 | 5;
+  overqualification_treatment?: 'ignore' | 'note' | 'small_penalty';
+  contract_role_treatment?: 'neutral' | 'note' | 'avoid';
   /** Stable facts ApplyBuddy can use to answer recurring application/interview questions. */
   application_answers?: {
     willing_to_relocate?: boolean | null;
