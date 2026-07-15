@@ -39,3 +39,7 @@
 - Full app regression passed with 203 tests and 9 credentialed evals skipped; backend
   passed 6/6; worker passed 20/20; TypeScript passed; the 33-page production build passed;
   and documentation validation passed with 124 Markdown files and 81 ADRs.
+- Pushed fix commit `7a3afc8`, fast-forwarded the clean isolated server checkout through
+  its normal autopull path, and verified public gateway health plus worker version. The
+  live database still reported the expected 697 Easy Apply, 3,362 External, and 667
+  unknown rows after service restart.
