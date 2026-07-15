@@ -41,4 +41,6 @@
 - The 33-page production build and the standalone TypeScript check both passed against
   the final rebased tree. Final documentation check passed with 119 Markdown files and
   79 ADRs.
-- Push and live worker restart/version probe are recorded below after deployment.
+- Pushed feature commit `c13d04f`, fast-forwarded the clean server checkout, and restarted
+  `com.jobpilotmulti.worker`. Both the local worker and the external gateway returned a
+  healthy browser and advertised `custom-resume-sections` from commit `c13d04f`.
