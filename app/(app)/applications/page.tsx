@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput, Bot, Copy, Play, ShieldCheck, CircleX, RotateCcw } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput, Bot, Play, ShieldCheck, CircleX, RotateCcw } from 'lucide-react';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ResumeDiff from '@/components/ResumeDiff';
@@ -21,7 +21,6 @@ import {
 } from '@/lib/applicationPresentation';
 import {
   aiApplyReadiness,
-  buildSupervisedApplyPrompt,
   isActiveAiApplyStatus,
   MAX_AI_APPLY_BATCH,
   type AiApplyAction,
@@ -336,10 +335,10 @@ export default function ApplicationsPage() {
             return sendAiAction(id, 'unassign');
           }
           return fetch(`/api/applications/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ parked }),
-            });
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parked }),
+          });
         }),
       );
       if (expanded && ids.includes(expanded)) {
@@ -401,16 +400,6 @@ export default function ApplicationsPage() {
     await load(true);
     setBulkBusy(false);
     setMsg(`Set aside ${moved} AI application${moved === 1 ? '' : 's'} with the blocker reason.`);
-    setTimeout(() => setMsg(null), 6000);
-  }
-
-  async function copyAiPrompt() {
-    try {
-      await navigator.clipboard.writeText(buildSupervisedApplyPrompt(apps));
-      setMsg('Supervised Apply prompt copied. Paste it into ChatGPT with Chrome connected.');
-    } catch {
-      setMsg('The browser blocked clipboard access. Select the page and try again.');
-    }
     setTimeout(() => setMsg(null), 6000);
   }
 
@@ -1213,18 +1202,13 @@ export default function ApplicationsPage() {
             </>
           )}
           {inAi && (
-            <>
-              <button onClick={copyAiPrompt} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 rounded-lg transition-all">
-                <Copy size={13} /> Copy prompt
-              </button>
-              <button
-                onClick={blockSelectedAi}
-                disabled={bulkBusy || selected.size === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-40 rounded-lg transition-all"
-              >
-                <CircleX size={13} /> Problem / Set Aside{selected.size ? ` (${selected.size})` : ''}
-              </button>
-            </>
+            <button
+              onClick={blockSelectedAi}
+              disabled={bulkBusy || selected.size === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-40 rounded-lg transition-all"
+            >
+              <CircleX size={13} /> Problem / Set Aside{selected.size ? ` (${selected.size})` : ''}
+            </button>
           )}
           {!inAi && (
             <button
