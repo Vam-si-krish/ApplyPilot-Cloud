@@ -100,10 +100,12 @@ and must never receive a production snapshot. Use a separate local worktree and
 `scripts/jobpilot-dev-server` for bootstrap, status, deploy, restart, logs, and backup.
 Production continues to use `scripts/jobpilot-server`.
 
-## Netlify variables
+## Development Netlify branch
 
-Set these on the new Netlify site. Secrets are copied from the server laptop's
-`~/apps/jobpilot-multi/backend/.env`; never copy the production Netlify values.
+On the existing Netlify site, enable a branch deploy for `develop` and set these as
+`branch:develop` values. After `scripts/jobpilot-dev-server bootstrap`, the generated
+development values are available in the mode-`0600` `.env.local` in the development
+worktree. Never reuse values from the production worktree or production Netlify context.
 
 ```text
 BACKEND_URL=<PUBLIC_URL>
@@ -116,16 +118,24 @@ CRON_SECRET=<new random value>
 NEXT_PUBLIC_APP_URL=<new Netlify/custom-domain URL>
 ONBOARDING_SUBSCRIPTION_PROVIDER=chatgpt_subscription
 ONBOARDING_SUBSCRIPTION_MODEL=gpt-5.4
+DEPLOYMENT_ENV=development
 ```
+
+Set `SECRETS_SCAN_OMIT_KEYS=DEPLOYMENT_ENV` for the `develop` branch's **Builds** scope.
+`DEPLOYMENT_ENV` is a public environment label whose literal value appears in source and
+documentation; omitting only that key prevents Netlify's secret scanner from treating the
+word `development` as a leaked credential. Do not omit any authentication, backend, cron,
+or worker key from secret scanning.
 
 Apify and LLM keys can be added through the existing Settings UI after login. A fresh
 installation starts empty. The current server installation contains the one-time,
 owner-authorized snapshot described in ADR 0087 under the `vamsi` UUID; it does not read
 from or synchronize with the source database or storage after the recorded cutoff.
 
-After the Netlify URL is known, replace `CORS_ORIGINS` in `backend/.env` and restart
-`com.jobpilotmulti.backend`. Server-side Netlify calls do not require CORS, but keeping
-the origin accurate is useful for later browser-facing Phase 2 endpoints.
+The provisioner sets `NEXT_PUBLIC_APP_URL` and development `CORS_ORIGINS` to the stable
+`develop--willowy-dieffenbachia-21307c.netlify.app` branch URL. If that URL changes, update
+both values and restart `com.jobpilotdev.backend`. Server-side Netlify calls do not require
+CORS, but keeping the origin accurate is useful for later browser-facing Phase 2 endpoints.
 
 ## Applying migrations manually
 
