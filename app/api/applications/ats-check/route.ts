@@ -43,13 +43,22 @@ export async function POST(req: Request) {
     const tailored = atsMatchScores({ text: resumeToText(app.tailored_resume), skills }, [job]).get(job.id);
     if (!tailored) return NextResponse.json({ error: 'Tailored résumé produced no text to match.' }, { status: 409 });
 
-    const baseText = await getScoringResumeText().catch(() => '');
-    const base = atsMatchScores({ text: baseText, skills }, [job]).get(job.id) ?? null;
+    const baseText = await getScoringResumeText();
+    if (!baseText.trim()) {
+      return NextResponse.json(
+        { error: 'Base résumé produced no text to match. Save a base résumé before comparing ATS scores.' },
+        { status: 409 },
+      );
+    }
+    const base = atsMatchScores({ text: baseText, skills }, [job]).get(job.id);
+    if (!base) {
+      return NextResponse.json({ error: 'Base résumé ATS score could not be computed.' }, { status: 409 });
+    }
 
     await updateApplication(id, {
       tailored_match_score: tailored.score,
       tailored_match_breakdown: tailored.breakdown,
-      base_match_score: base?.score ?? null,
+      base_match_score: base.score,
     });
 
     return NextResponse.json({ ok: true, base, tailored });

@@ -61,6 +61,9 @@ eligibility, and one-page contracts protected (ADRs 0081 and 0083).
 The Base résumé editor and Tailor & Apply editor/change review use the same responsive,
 print-like white document hierarchy as the downloaded résumé. The worker-rendered PDF
 remains the final one-page layout authority (ADR 0084).
+Tailor & Apply carries each job's Easy Apply or External Apply type into its row and
+filters, and every completed local ATS recheck shows the method-identical Base-to-tailored
+comparison even when the score is unchanged (ADR 0090).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

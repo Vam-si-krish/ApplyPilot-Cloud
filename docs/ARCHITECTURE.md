@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0089
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0090
 
 ## Current deployment topology
 
@@ -164,6 +164,10 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   résumé presentation for Base/tailored editing and contextual change review. It mirrors
   the PDF hierarchy but never owns page fitting or generated-file truth; custom sections
   use the same shared canvas and generic entry presentation.
+- `lib/applicationPresentation.ts` and `app/(app)/applications/page.tsx` — own the
+  Tailor & Apply application-type filter/badges and complete Base-to-tailored ATS display.
+  The list consumes only the RLS-scoped application→job join; it does not infer or mutate
+  source metadata.
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
@@ -236,6 +240,13 @@ the numeric field as proof of completion, not status alone. Manual Tailor & Appl
 remain unscored but are excluded from the automatic queue by source. Permanent provider
 billing/quota failures skip retry backoff so score 0 can be persisted within the
 serverless request; temporary rate limits still retry. See ADR 0079.
+
+Tailored ATS checking is a separate local comparison and never changes `fit_score`.
+`POST /api/applications/ats-check` computes the current Base and tailored résumé with the
+same single-job algorithm, then atomically persists both application scores. A missing or
+unscorable Base résumé fails visibly; the UI always renders `base% → tailored%`, including
+an unchanged result. Tailor & Apply also projects `jobs.easy_apply` and applies the same
+null-aware Easy/External semantics as Jobs (ADR 0090).
 
 The labeled evals protect directional score bands and known regressions, not equality
 with a retired Python implementation.

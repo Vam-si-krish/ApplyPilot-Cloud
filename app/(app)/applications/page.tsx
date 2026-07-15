@@ -11,6 +11,12 @@ import CompanyTierBadge from '@/components/CompanyTierBadge';
 import { useProgress } from '@/components/ProgressContext';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 import { scoreUsageCostUsd } from '@/lib/pricing';
+import {
+  applicationApplyTypeLabel,
+  atsComparisonLabel,
+  matchesApplicationApplyType,
+  type ApplicationApplyTypeFilter,
+} from '@/lib/applicationPresentation';
 
 type View = 'list' | 'parked' | 'manual';
 
@@ -52,6 +58,7 @@ export default function ApplicationsPage() {
   // Filters (parity with the Jobs tab — the subset that maps to applications).
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ApplicationStatus>('all');
+  const [applyTypeFilter, setApplyTypeFilter] = useState<ApplicationApplyTypeFilter>('all');
   const [hideApplied, setHideApplied] = useState(true);
 
   // Auto-download on open (ADR 0061): when on, opening a posting from a row also
@@ -163,7 +170,7 @@ export default function ApplicationsPage() {
   // Clear the selection whenever the filters or the tab change (the visible rows change).
   useEffect(() => {
     setSelected(new Set());
-  }, [search, statusFilter, hideApplied, view]);
+  }, [search, statusFilter, applyTypeFilter, hideApplied, view]);
 
   function toggleExpand(a: ApplicationWithJob) {
     if (expanded === a.id) {
@@ -407,6 +414,10 @@ export default function ApplicationsPage() {
   const filtered = apps.filter((a) => {
     if (!!a.parked !== inParked) return false;
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    if (
+      applyTypeFilter !== 'all' &&
+      (!a.job || !matchesApplicationApplyType(a.job.easy_apply, applyTypeFilter))
+    ) return false;
     if (hideApplied && statusFilter !== 'applied' && a.status === 'applied') return false;
     if (q) {
       const hay = `${a.job?.title ?? ''} ${a.job?.company ?? ''} ${a.job?.location ?? ''}`.toLowerCase();
@@ -920,6 +931,16 @@ export default function ApplicationsPage() {
               ))}
             </div>
             <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
+            <select
+              value={applyTypeFilter}
+              onChange={(e) => setApplyTypeFilter(e.target.value as ApplicationApplyTypeFilter)}
+              title="Filter Tailor & Apply by how the job is submitted"
+              className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
+            >
+              <option value="all">Any apply type</option>
+              <option value="easy">Easy Apply</option>
+              <option value="external">External Apply</option>
+            </select>
             <label
               title="Hide applications you've already applied to"
               className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
@@ -976,7 +997,7 @@ export default function ApplicationsPage() {
               <>
                 <p className="text-[13px] text-slate-text mb-1">No applications match these filters.</p>
                 <button
-                  onClick={() => { setSearch(''); setStatusFilter('all'); setHideApplied(false); }}
+                  onClick={() => { setSearch(''); setStatusFilter('all'); setApplyTypeFilter('all'); setHideApplied(false); }}
                   className="text-[12px] text-sky hover:underline"
                 >
                   Clear filters
@@ -1106,6 +1127,18 @@ export default function ApplicationsPage() {
                     </p>
                     {/* All three signals: original job fit · AI company tier · tailored-résumé fit (ADR 0029). */}
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {job && (
+                        <span
+                          title={job.easy_apply === true ? 'One-click apply on LinkedIn' : 'Apply on the company or external site'}
+                          className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded-md border ${
+                            job.easy_apply === true
+                              ? 'bg-emerald/10 border-emerald/25 text-emerald'
+                              : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                          }`}
+                        >
+                          {applicationApplyTypeLabel(job.easy_apply)}
+                        </span>
+                      )}
                       {typeof job?.fit_score === 'number' && (
                         <ScoreChip label="Job fit" value={job.fit_score} title="Original fit of your base résumé to this job" />
                       )}
@@ -1151,16 +1184,9 @@ export default function ApplicationsPage() {
                         }`}
                       >
                         <Gauge size={13} />
-                        {a.tailored_match_score != null ? (
-                          <>
-                            {a.base_match_score != null && a.base_match_score !== a.tailored_match_score && (
-                              <span className="opacity-60">{a.base_match_score}%→</span>
-                            )}
-                            {a.tailored_match_score}%
-                          </>
-                        ) : (
-                          <span className="hidden sm:inline">ATS</span>
-                        )}
+                        <span className={a.base_match_score == null && a.tailored_match_score != null ? 'text-[10px]' : ''}>
+                          {atsComparisonLabel(a.base_match_score, a.tailored_match_score)}
+                        </span>
                       </button>
                     ))}
                   {/* PDF — created automatically after generation; download straight from the
