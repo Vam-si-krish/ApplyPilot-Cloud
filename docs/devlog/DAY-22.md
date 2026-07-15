@@ -39,4 +39,10 @@
 
 ## Deployment
 
-- Pending implementation commit/push and isolated worker restart/version verification.
+- Implementation commit `9836300` was pushed to `multi-user-fork`.
+- The isolated `com.jobpilotmulti.worker` service restarted successfully. Local and
+  public `/version` both reported commit `9836300` with the
+  `candidate-prompt-controls` marker; public gateway health also passed.
+- The branch push is the frontend deployment handoff. This checkout has no linked
+  Netlify CLI site metadata, so the production build is the local frontend gate and the
+  configured Netlify branch deployment remains observable in Netlify.
