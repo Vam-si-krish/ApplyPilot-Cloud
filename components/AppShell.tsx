@@ -28,7 +28,7 @@ const navGroups: { title: string; items: { to: string; label: string; icon: type
   {
     title: 'Setup',
     items: [
-      { to: '/profile', label: 'Profile', icon: User },
+      { to: '/profile', label: 'Candidate Profile', icon: User },
       { to: '/settings', label: 'Settings', icon: SettingsIcon },
     ],
   },

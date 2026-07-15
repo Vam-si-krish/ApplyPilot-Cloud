@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0080
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0081
 
 ## Current deployment topology
 
@@ -59,7 +59,7 @@ First login leads to PDF résumé onboarding. Netlify extracts PDF text, makes o
 anti-fabrication parse through the owner's subscription worker, and initializes only that
 user's structured résumé, explicit résumé-stated work authorization, profile facts, skills,
 roles, and locations. It never infers immigration/citizenship/clearance facts. Normal work uses
-keys from that user's vault or that user's UUID-isolated Claude subscription connection;
+keys from that user's vault or that user's UUID-isolated Claude/ChatGPT subscription connection;
 deployment-level LLM/Apify fallback is disabled in the fork.
 
 In a managed fork (`BACKEND_URL` is configured), the résumé worker URL and secret are
@@ -117,6 +117,8 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
 - `lib/db.ts` — user-scoped data access; forced PostgreSQL RLS remains the final boundary.
 - `lib/scoring.ts` — **pure** where possible: `parseScoreResponse(text)` and the prompt
   are deterministic and unit-tested. `scoreJob(resume, job)` makes the one LLM call.
+- `lib/candidatePreferences.ts` — normalizes user-managed Candidate Profile preferences
+  and exposes purpose-limited projections for scoring, tailoring, and ApplyBuddy.
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
@@ -148,10 +150,13 @@ contract lives in `lib/scoring.ts` and its tests/evals:
 
 The rubric is shared and owner-neutral; the candidate context is per user (ADR 0080).
 `getScoringCandidateContext()` combines the RLS-scoped structured Base résumé with that
-user's explicit `profile.work_authorization`. Eligibility is a hard block only when those
-facts prove the candidate cannot meet the posting's condition. Missing facts stay unknown.
+user's explicit `profile.work_authorization` plus only scorer-relevant avoidance flags and
+guidance from `candidate_preferences`. Eligibility is a hard block only when those facts
+prove the candidate cannot meet the posting's condition. Explicit avoidance preferences
+are also decisive; missing facts stay unknown.
 `getScoringResumeText()` deliberately excludes authorization JSON because local ATS,
-prefilter, and keyword matching must operate on résumé content only. The worker mirrors the
+prefilter, and keyword matching must operate on résumé content only and cannot impose a
+universal candidate-eligibility cap. The worker mirrors the
 same candidate-context assembly for subscription scoring.
 
 `status='scored'` and `fit_score` are one persistence invariant: scored always has a
@@ -181,6 +186,9 @@ with a retired Python implementation.
 - Claude subscription login is UUID-isolated. Settings brokers Claude Code's
   official PKCE flow, and each Agent SDK call receives only the requesting
   user's `CLAUDE_CONFIG_DIR`; there is no cross-user fallback (ADR 0074).
+- ChatGPT subscription login is also UUID-isolated. Settings brokers Codex's official
+  device-code flow, forces file credentials under `backend/data/chatgpt-users/<uuid>`,
+  and each Codex SDK call receives only that user's `CODEX_HOME` (ADR 0081).
 - The direct and subscription scoring implementations share the complete persisted
   result contract: numeric fit score, explanation/breakdown, employment, company tier,
   tech stack, and usage. Worker `/version` advertises `score-company-parity` for deploy
@@ -197,7 +205,9 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   scored_at, source.
 - **profile**: one row per user — personal, experience, compensation, work_authorization,
   skills_boundary, `base_resume` (the current résumé source for scoring/tailoring/ApplyBuddy),
-  legacy `resume_text` fallback, and resume_pdf_path.
+  `candidate_preferences` (avoidance flags, recurring application answers, constrained AI
+  guidance), legacy `resume_text` fallback, and resume_pdf_path. Candidate Profile is the
+  sole ongoing editor; onboarding is initial setup only.
 - **settings**: one row per user — schedule/search configuration plus legacy `llm_*` and the three task pairs:
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,

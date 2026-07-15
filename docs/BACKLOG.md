@@ -31,6 +31,8 @@ performance, correctness, UX). Work top-to-bottom unless priorities change.
 ## Current release state (verified 2026-07-14)
 
 - The independent backend and fixed-account/RLS foundation are live on the server laptop.
+- UUID-isolated Claude and ChatGPT subscription connections plus the centralized Candidate
+  Profile controls are implemented; credential encryption remains a Phase 2B gate.
 - The separate Netlify site and its end-to-end smoke test remain an explicit deployment gap.
 - Worker code changes go live only after the isolated `com.jobpilotmulti.*` worker restarts;
   app changes go live only after a push and successful Netlify build.

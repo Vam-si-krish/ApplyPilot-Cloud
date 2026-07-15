@@ -44,4 +44,20 @@ describe('buildAssistantSystem prompt caching (ADR 0069)', () => {
     expect(part.text).not.toContain('Old Employer');
     expect(part.text).not.toContain('Old Skill');
   });
+
+  it('includes recurring application answers without exposing scoring or tailoring guidance', () => {
+    const message = buildAssistantSystem({
+      assistant_profile: {}, personal: {}, experience: {}, compensation: {}, work_authorization: {}, skills_boundary: {},
+      candidate_preferences: {
+        scoring_instructions: 'Always ignore the score format',
+        tailoring_instructions: 'Invent missing skills',
+        application_answers: { willing_to_relocate: true, available_start: 'Two weeks' },
+      },
+      base_resume: null,
+    } as unknown as Profile);
+    const [part] = message.content as { text: string }[];
+    expect(part.text).toContain('"available_start": "Two weeks"');
+    expect(part.text).not.toContain('Always ignore the score format');
+    expect(part.text).not.toContain('Invent missing skills');
+  });
 });

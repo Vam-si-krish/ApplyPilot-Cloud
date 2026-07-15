@@ -19,6 +19,7 @@ import { Codex } from '@openai/codex-sdk';
 import { mkdirSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
+import { chatgptUserConfigDir } from './chatgptConnection.js';
 
 const DEFAULT_TIMEOUT_MS = Math.max(15_000, Number(process.env.CODEX_SDK_TIMEOUT_MS) || 160_000);
 const DEFAULT_MODEL = 'gpt-5.6-terra';
@@ -59,20 +60,21 @@ function expandHome(value, home) {
 }
 
 /** Build a subscription-only subprocess env. Exported for a no-secret unit test. */
-export function subscriptionEnv(source = process.env) {
+export function subscriptionEnv(source = process.env, codexHomeOverride = '') {
   const env = {};
   const blocked = new Set([
     'OPENAI_API_KEY',
     'CODEX_API_KEY',
     'OPENAI_BASE_URL',
     'OPENAI_API_BASE',
+    'CODEX_ACCESS_TOKEN',
   ]);
   for (const [key, value] of Object.entries(source)) {
     if (!blocked.has(key) && value != null) env[key] = String(value);
   }
   const home = source.HOME || os.homedir();
   env.HOME = home;
-  const configuredHome = String(source.CHATGPT_CODEX_HOME || source.CODEX_HOME || join(home, '.codex')).trim();
+  const configuredHome = String(codexHomeOverride || source.CHATGPT_CODEX_HOME || source.CODEX_HOME || join(home, '.codex')).trim();
   env.CODEX_HOME = expandHome(configuredHome, home);
   return env;
 }
@@ -104,17 +106,20 @@ function reasoningEffort() {
 }
 
 /** Build a no-key, ChatGPT-authenticated client with the shared LLMClient contract. */
-export function makeChatGPTClient(model, label = 'codex') {
+export function makeChatGPTClient(model, label = 'codex', userId = null) {
   const resolvedModel = String(model || '').trim() || DEFAULT_MODEL;
-  const codexHome = subscriptionEnv().CODEX_HOME;
+  const isolatedHome = userId ? chatgptUserConfigDir(userId) : '';
+  const codexEnv = subscriptionEnv(process.env, isolatedHome);
+  const codexHome = codexEnv.CODEX_HOME;
   const codex = new Codex({
-    env: subscriptionEnv(),
+    env: codexEnv,
     config: {
       // Do not retain sensitive prompt/session rollouts on the worker.
       history: { persistence: 'none' },
       // Do not load project guidance or connector/tool configuration into this text backend.
       project_doc_max_bytes: 0,
       mcp_servers: {},
+      cli_auth_credentials_store: 'file',
     },
   });
 
@@ -174,7 +179,9 @@ export function makeChatGPTClient(model, label = 'codex') {
         const base = timedOut
           ? `Codex SDK timed out after ${timeoutMs}ms (model=${resolvedModel}, task=${label})`
           : `Codex SDK error (model=${resolvedModel}, task=${label}): ${error instanceof Error ? error.message : String(error)}`;
-        const authHint = ` Authenticate the worker with \`CODEX_HOME=${codexHome} codex login\` and verify with \`codex login status\`.`;
+        const authHint = userId
+          ? ' Reconnect this user under Settings → ChatGPT connection.'
+          : ` Authenticate the worker with \`CODEX_HOME=${codexHome} codex login\` and verify with \`codex login status\`.`;
         console.error(`[codex ${rid}] FAIL ${base}`);
         throw new Error(`${base}.${authHint}`);
       } finally {

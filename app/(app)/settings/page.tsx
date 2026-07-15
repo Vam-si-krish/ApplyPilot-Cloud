@@ -131,6 +131,16 @@ export default function SettingsPage() {
     if (!response.ok) throw new Error('Claude connected, but the tailoring selection could not be saved.');
   }
 
+  async function enableChatGPTTailoring() {
+    patch({ tailor_provider: 'chatgpt_subscription', tailor_model: 'gpt-5.6-terra' });
+    const response = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tailor_provider: 'chatgpt_subscription', tailor_model: 'gpt-5.6-terra' }),
+    });
+    if (!response.ok) throw new Error('ChatGPT connected, but the tailoring selection could not be saved.');
+  }
+
   async function save() {
     if (!s) return;
     setSaving(true);
@@ -372,6 +382,7 @@ export default function SettingsPage() {
 
       {/* AI Models — three independent lanes (ADR 0025/0069) */}
       <ClaudeConnectionSection onConnected={enableClaudeTailoring} />
+      <ChatGPTConnectionSection onConnected={enableChatGPTTailoring} />
 
       <Section title="AI Models">
         <p className="text-slate-muted text-[12px] mb-4">
@@ -849,6 +860,150 @@ function ClaudeConnectionSection({ onConnected }: { onConnected: () => Promise<v
       <p className="mt-3 text-[11px] text-slate-muted">
         A successful connection automatically selects <span className="text-emerald">Claude subscription (no API key)</span> for Tailoring.
       </p>
+    </Section>
+  );
+}
+
+type ChatGPTConnectionState = {
+  connected: boolean;
+  pending?: boolean;
+  authMethod?: string;
+  authorizationUrl?: string;
+  code?: string;
+  expiresInSeconds?: number;
+};
+
+/** Official Codex device-code login, persisted in this ApplyPilot user's CODEX_HOME. */
+function ChatGPTConnectionSection({ onConnected }: { onConnected: () => Promise<void> }) {
+  const [status, setStatus] = useState<ChatGPTConnectionState | null>(null);
+  const [device, setDevice] = useState<ChatGPTConnectionState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function request(init?: RequestInit): Promise<ChatGPTConnectionState> {
+    const response = await fetch('/api/chatgpt-connection', init);
+    const data = (await response.json().catch(() => ({}))) as ChatGPTConnectionState & { error?: string };
+    if (!response.ok) throw new Error(data.error || `ChatGPT connection failed (${response.status})`);
+    return data;
+  }
+
+  async function reload(activate = false) {
+    try {
+      const next = await request();
+      setStatus(next);
+      if (next.connected) {
+        setDevice(null);
+        if (activate) await onConnected();
+      }
+      return next;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  useEffect(() => {
+    if (!device || status?.connected) return;
+    const timer = window.setInterval(async () => {
+      const next = await reload(true);
+      if (next?.connected) window.clearInterval(timer);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [device, status?.connected]);
+
+  async function start() {
+    setBusy(true);
+    setError(null);
+    const popup = window.open('about:blank', 'applypilot-chatgpt-login');
+    if (popup) popup.opener = null;
+    try {
+      const next = await request({ method: 'POST' });
+      if (next.connected) {
+        popup?.close();
+        setStatus(next);
+        await onConnected();
+        return;
+      }
+      setDevice(next);
+      if (popup && next.authorizationUrl) popup.location.href = next.authorizationUrl;
+    } catch (reason) {
+      popup?.close();
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!window.confirm('Disconnect your ChatGPT subscription from ApplyPilot?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await request({ method: 'DELETE' });
+      setStatus(next);
+      setDevice(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="ChatGPT connection">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[13px] font-medium text-slate-text">Use your ChatGPT subscription without an API key</p>
+          <p className="text-[12px] text-slate-muted mt-1 max-w-xl">
+            ApplyPilot starts OpenAI&apos;s official Codex device login. Your password stays on OpenAI&apos;s website; the server stores the resulting tokens only in this user&apos;s private folder. ChatGPT plan limits and workspace rules apply.
+          </p>
+        </div>
+        {status?.connected && (
+          <span className="shrink-0 flex items-center gap-1.5 rounded-full border border-emerald/30 bg-emerald/10 px-2.5 py-1 text-[11px] text-emerald">
+            <CheckCircle size={13} /> Connected
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-rose/30 bg-rose/10 px-3.5 py-3 text-[12px] text-rose">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" /> {error}
+        </div>
+      )}
+
+      {status === null ? (
+        <p className="mt-4 text-[12px] text-slate-muted">Checking connection…</p>
+      ) : status.connected ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-ink bg-raised px-3.5 py-3">
+          <span className="text-[12px] text-slate-text">ChatGPT / Codex subscription connected</span>
+          <button onClick={disconnect} disabled={busy} className="flex items-center gap-1.5 rounded-lg border border-rose/30 px-2.5 py-1.5 text-[12px] text-rose hover:bg-rose/10 disabled:opacity-50">
+            <LogOut size={13} /> Disconnect
+          </button>
+        </div>
+      ) : device?.authorizationUrl && device.code ? (
+        <div className="mt-4 rounded-lg border border-sky/25 bg-sky/5 p-4">
+          <p className="text-[12px] font-medium text-slate-text">Finish on OpenAI</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-slate-muted">
+            <li>Open the official OpenAI device page below.</li>
+            <li>Sign into the ChatGPT account whose subscription you want to use.</li>
+            <li>Enter this one-time code: <span className="select-all font-mono text-base font-semibold tracking-wider text-sky">{device.code}</span></li>
+          </ol>
+          <a href={device.authorizationUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-sky hover:underline">
+            Open OpenAI device login <ExternalLink size={13} />
+          </a>
+          <p className="mt-3 text-[11px] text-slate-muted">Only continue because you started this login here. This page checks automatically when OpenAI finishes.</p>
+        </div>
+      ) : (
+        <button onClick={start} disabled={busy} className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] text-sky hover:bg-sky/20 disabled:opacity-50">
+          <ExternalLink size={13} /> {busy ? 'Starting ChatGPT login…' : 'Connect ChatGPT subscription'}
+        </button>
+      )}
+
+      <p className="mt-3 text-[11px] text-slate-muted">A successful connection automatically selects ChatGPT subscription for Tailoring. You can also select it for AI Chat or Everything else below.</p>
     </Section>
   );
 }

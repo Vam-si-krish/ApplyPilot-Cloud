@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getProfile } from '@/lib/db';
+import { normalizeCandidatePreferences } from '@/lib/candidatePreferences';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,7 @@ const ALLOWED = [
   'compensation',
   'work_authorization',
   'skills_boundary',
+  'candidate_preferences',
   // 'resume_text' retired (ADR 0036) — the structured base résumé is the single source.
   'resume_pdf_path',
 ] as const;
@@ -34,7 +36,9 @@ export async function PUT(req: Request) {
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const key of ALLOWED) {
-    if (key in body) patch[key] = body[key];
+    if (key in body) patch[key] = key === 'candidate_preferences'
+      ? normalizeCandidatePreferences(body[key])
+      : body[key];
   }
 
   const { error } = await supabaseAdmin().from('profile').update(patch).eq('id', 1);

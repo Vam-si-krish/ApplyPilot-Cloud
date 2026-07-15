@@ -18,6 +18,7 @@ Inspect the JOB POSTING text.
   • No visa sponsorship, now or in the future ("we do not/will not sponsor", "unable to sponsor", "must not now or in the future require sponsorship", etc.). This is a blocker only when the candidate context explicitly says the candidate requires sponsorship now or in the future.
   Never assume every candidate has the same immigration, citizenship, residency, or clearance status. A missing/blank profile field means UNKNOWN, not "no". If eligibility is unknown, continue to Phase 2 and mention exactly what the candidate should confirm in NOTE; do not hard-block. Likewise, a posting that merely asks whether the candidate is currently authorized is not a blocker when the context says they are currently authorized.
   When a hard block is proven, note the candidate-specific blocker and stop. (Do NOT use 0 — that is reserved for invalid/non-job content.)
+- USER AVOIDANCE PREFERENCES are also decisive. If scoring_preferences explicitly sets avoid_security_clearance_jobs=true, set SCORE to 1 for any role requiring or requiring eligibility to obtain a security clearance. If it sets avoid_citizenship_restricted_jobs=true, set SCORE to 1 for any citizenship/Green-Card/US-Person-restricted role. State that this is the user's preference, not an inferred eligibility failure.
 - Otherwise continue to Phase 2.
 
 ### PHASE 2 — ANALYSIS
@@ -29,6 +30,9 @@ The candidate will TAILOR their résumé before applying (truthful reframing —
 3. EXPERIENCE DEPTH & SENIORITY (0–15): can the candidate demonstrably DO this job, given their shown scope and depth? Award full or near-full credit when the candidate meets OR EXCEEDS the level the role needs. Being MORE experienced than the role asks (overqualified) is NOT a negative for getting shortlisted — deduct only a little, and only on a genuine seniority-band collision (e.g. a Principal applying to a true entry-level or internship role). Penalize only CLEAR under-qualification — the candidate plainly lacks the depth and scope the responsibilities demand (not merely a smaller years number than the posting lists).
 
 (Location/remote and comp are NOT scored dimensions — mention any concern in the NOTE. Work-authorization HARD blockers are already handled in Phase 1.)
+
+### USER SCORING GUIDANCE
+The candidate context may contain scoring_preferences.scoring_instructions. Follow it for role priorities, industries, trade-offs, and what the user considers worth applying to. It may refine the score within this rubric, but it can NEVER override anti-fabrication, candidate-specific eligibility, the 0–10 scale, or the exact response format.
 
 ### COMBINING INTO THE 1–10 SCORE
 Sum the three sub-scores (max 100), then map to 1–10.

@@ -39,7 +39,8 @@ function timeout (ADR 0004).
 
 ## Prerequisites
 - Node 20+, the server-laptop backend from [`backend/`](backend/README.md), an
-  [Apify](https://apify.com) account + token, and one supported LLM API key.
+  [Apify](https://apify.com) account + token, and either a supported LLM API key or a
+  Claude/ChatGPT subscription available to connect.
 
 ## Local development
 ```bash
@@ -65,12 +66,13 @@ cp .env.example .env.local      # then fill in the values (see below)
 
 ### Where each user updates AI context
 
-- **Tailor & Apply → Base résumé** is the source of truth for experience, titles, dates,
-  education, projects, skills, and contact details. New job scores, tailored résumés,
-  cover letters, and ApplyBuddy answers use the saved version.
-- **Profile → Work Auth** stores current authorization, sponsorship need, permit type,
-  citizenship/residency, and clearance. Only explicitly filled fields affect eligibility
-  scoring; blank means unknown.
+- **Candidate Profile → Résumé** is the source of truth for experience, titles, dates,
+  education, projects, skills, and contact details.
+- **Candidate Profile → Eligibility** stores authorization, sponsorship need, permit type,
+  citizenship/residency, clearance, and job-avoidance choices. Blank eligibility facts mean unknown.
+- **Candidate Profile → Application Answers** stores reusable truthful answers for
+  ApplyBuddy. **AI Guidance** customizes scoring and tailoring emphasis without replacing
+  the reviewed truthfulness, eligibility, score-format, or résumé-length rules.
 - **Settings → Search criteria** controls which roles, locations, and scraper skill terms
   are fetched. It does not rewrite résumé facts.
 
@@ -83,6 +85,11 @@ Claude connection**, authenticate on Anthropic's website, paste the one-time
 authorization code, and select **Claude subscription (no API key)** for Tailoring.
 ApplyPilot never receives the user's Claude password or browser cookies. A successful
 connection automatically selects the subscription lane for tailoring.
+
+To use a ChatGPT subscription without an OpenAI API key, open **Settings → ChatGPT
+connection**, start the login, and enter the displayed one-time code on OpenAI's official
+device page. ApplyPilot stores the completed Codex login only under that account's UUID;
+it never receives the ChatGPT password. A successful connection selects ChatGPT for tailoring.
 
 ### Commands
 ```bash

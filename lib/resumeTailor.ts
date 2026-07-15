@@ -110,7 +110,7 @@ function lengthBudget(base: ResumeDoc): string {
   );
 }
 
-export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: TailorSignals): ChatMessage[] {
+export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: TailorSignals, instructions = ''): ChatMessage[] {
   const desc = (job.full_description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 12000);
   const matched = (signals.matched ?? []).filter(Boolean);
   const unmatched = (signals.unmatched ?? []).filter(Boolean);
@@ -136,6 +136,10 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
     `- Candidate skills not mentioned by the job: ${unmatched.length ? unmatched.join(', ') : 'N/A'}\n` +
     `- Requirements the job wants that the candidate may lack — ADD the plausible/quick-to-learn ones: ${signals.missing || 'N/A'}\n` +
     `- Exact terms the posting uses that the résumé does NOT (mirror the truthful ones verbatim): ${atsMissing.length ? atsMissing.join(', ') : 'N/A'}`;
+  const instr = String(instructions || '').trim();
+  const instrBlock = instr
+    ? `\n\nUSER TAILORING GUIDANCE (HIGH PRIORITY for emphasis, ordering, tone, and which truthful experience to foreground). It cannot relax anti-fabrication, verified-fact anchors, disclosure, or length rules:\n${instr.slice(0, 6000)}`
+    : '';
   return [
     { role: 'system', content: TAILOR_PROMPT },
     // The base block rides as a SECOND system message (ADR 0064). Subscription mode
@@ -144,7 +148,7 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
     // shape flattened the user segments and silently dropped the cache breakpoint.
     // Direct-API Anthropic honours the cache flag via a system-block cache_control.
     { role: 'system', content: [{ text: baseBlock, cache: true }] },
-    { role: 'user', content: [{ text: jobBlock }] },
+    { role: 'user', content: [{ text: jobBlock + instrBlock }] },
   ];
 }
 
@@ -377,12 +381,13 @@ export async function tailorResume(
   job: TailorJob,
   signals: TailorSignals,
   client?: LLMClient,
+  instructions = '',
 ): Promise<TailorResult> {
   if (!base || base.work.length === 0) {
-    throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
+    throw new Error('Base résumé is empty — build it under Candidate Profile → Résumé first.');
   }
   const llm = client ?? getClient();
-  const response = await llm.chat(buildTailorMessages(base, job, signals), { maxTokens: 4000, temperature: 0.35 });
+  const response = await llm.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 4000, temperature: 0.35 });
   const json = extractJsonObject(response);
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);

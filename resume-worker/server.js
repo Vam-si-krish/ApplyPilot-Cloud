@@ -17,6 +17,7 @@ import {
   getApplication,
   getApplicationWithJob,
   getBaseResume,
+  getCandidatePreferences,
   getSettings,
   getActiveApiKey,
   getJobsByIds,
@@ -33,6 +34,11 @@ import { makeClient, tailorResume, condenseResume } from './tailor.js';
 import { makeAgentClient } from './agentClient.js';
 import { makeChatGPTClient } from './chatgptClient.js';
 import {
+  chatgptConnectionStatus,
+  disconnectChatGPTConnection,
+  startChatGPTConnection,
+} from './chatgptConnection.js';
+import {
   claudeConnectionStatus,
   completeClaudeConnection,
   disconnectClaudeConnection,
@@ -47,6 +53,17 @@ const SUBSCRIPTION_PROVIDER = 'subscription';
 const CHATGPT_SUBSCRIPTION_PROVIDER = 'chatgpt_subscription';
 const isSubscriptionProvider = (provider) =>
   provider === SUBSCRIPTION_PROVIDER || provider === CHATGPT_SUBSCRIPTION_PROVIDER;
+
+function combinedTailoringInstructions(preferences, perJob = '') {
+  const global = typeof preferences?.tailoring_instructions === 'string'
+    ? preferences.tailoring_instructions.trim().slice(0, 4000)
+    : '';
+  const local = typeof perJob === 'string' ? perJob.trim().slice(0, 2000) : '';
+  return [
+    global ? `GLOBAL CANDIDATE GUIDANCE:\n${global}` : '',
+    local ? `JOB-SPECIFIC GUIDANCE:\n${local}` : '',
+  ].filter(Boolean).join('\n\n');
+}
 
 /**
  * Resolve the LLM client for a provider+model (ADR 0025/0042):
@@ -69,10 +86,15 @@ async function resolveTaskClient(provider, model, label = 'task') {
     if (userId === ownerId || sharedOnboarding) return { client: makeAgentClient(model, label) };
     return { error: 'Connect your Claude subscription under Settings → Claude connection.' };
   }
-  if (provider === CHATGPT_SUBSCRIPTION_PROVIDER && userId !== ownerId && !sharedOnboarding) {
-    return { error: 'Add your own LLM API key or connect Claude under Settings.' };
+  if (provider === CHATGPT_SUBSCRIPTION_PROVIDER) {
+    const connection = userId ? await chatgptConnectionStatus(userId) : { connected: false };
+    if (userId && connection.connected) {
+      return { client: makeChatGPTClient(model, label, userId) };
+    }
+    // Preserve the bounded shared onboarding lane and the owner's legacy login.
+    if (userId === ownerId || sharedOnboarding) return { client: makeChatGPTClient(model, label) };
+    return { error: 'Connect your ChatGPT subscription under Settings → ChatGPT connection.' };
   }
-  if (provider === CHATGPT_SUBSCRIPTION_PROVIDER) return { client: makeChatGPTClient(model, label) };
   if (!LLM_PROVIDERS.has(provider)) {
     return { error: `Provider "${provider || '(unset)'}" is not a supported LLM provider.` };
   }
@@ -150,6 +172,33 @@ app.delete('/claude-connection', async (req, res) => {
   }
 });
 
+app.get('/chatgpt-connection/status', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await chatgptConnectionStatus(currentUserId()));
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/chatgpt-connection/start', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await startChatGPTConnection(currentUserId()));
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete('/chatgpt-connection', async (req, res) => {
+  if (!authed(req)) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    res.json(await disconnectChatGPTConnection(currentUserId()));
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 /**
  * GET /version → { commit, features } — a redeploy check. Reports the git commit of the
  * checkout the worker is ACTUALLY running (resolved at request time from this file's dir),
@@ -160,7 +209,7 @@ app.delete('/claude-connection', async (req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'tailor-queue'];
+  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'chatgpt-user-login', 'tailor-queue'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -392,9 +441,9 @@ app.post('/tailor', async (req, res) => {
     if (!appRow) return res.status(404).json({ error: 'application not found' });
     if (!appRow.job) return res.status(409).json({ error: 'the job for this application was removed' });
 
-    const base = await getBaseResume();
+    const [base, preferences] = await Promise.all([getBaseResume(), getCandidatePreferences()]);
     if (!base || !Array.isArray(base.work) || base.work.length === 0) {
-      return res.status(409).json({ error: 'No base résumé yet — build it under Applications → Base résumé first.' });
+      return res.status(409).json({ error: 'No base résumé yet — build it under Candidate Profile → Résumé first.' });
     }
 
     const settings = await getSettings();
@@ -416,7 +465,7 @@ app.post('/tailor', async (req, res) => {
     const tStart = Date.now();
     console.log(`[/tailor] start id=${id} provider=${provider} model=${model}`);
     const client = resolved.client;
-    tailorResume(base, job, signals, client, appRow.tailor_instructions || '')
+    tailorResume(base, job, signals, client, combinedTailoringInstructions(preferences, appRow.tailor_instructions))
       .then(async ({ resume, changes, coverLetter, usage }) => {
         console.log(`[/tailor] done id=${id} ${Date.now() - tStart}ms`);
         await updateApplication(id, {
@@ -489,13 +538,16 @@ function tailorSignals(job) {
  * so a second score on the same rubric is redundant + spends a call per résumé. The tailored
  * fit is available on demand via the manual "Score résumé" button if ever wanted.
  */
-async function runFullPipeline({ appRow, base, tailorClient }) {
+async function runFullPipeline({ appRow, base, tailorClient, preferences }) {
   const id = appRow.id;
   const job = appRow.job;
 
   // 1. Tailor (the one expensive LLM call). Throwing here marks the row failed below.
   await updateApplication(id, { status: 'generating', error: null }).catch(() => {});
-  const { resume, changes, coverLetter, usage } = await tailorResume(base, job, tailorSignals(job), tailorClient, appRow.tailor_instructions || '');
+  const { resume, changes, coverLetter, usage } = await tailorResume(
+    base, job, tailorSignals(job), tailorClient,
+    combinedTailoringInstructions(preferences, appRow.tailor_instructions),
+  );
   await updateApplication(id, {
     tailored_resume: resume,
     tailor_changes: changes,
@@ -585,7 +637,7 @@ app.post('/tailor-queue', async (req, res) => {
   // launchd fires hourly with scheduled:true; only then do we honor the UI toggle + hour.
   const scheduled = req.body?.scheduled === true;
 
-  let base, tailorClient, queued;
+  let base, tailorClient, queued, preferences;
   try {
     const settings = await getSettings();
 
@@ -602,9 +654,9 @@ app.post('/tailor-queue', async (req, res) => {
       }
     }
 
-    base = await getBaseResume();
+    [base, preferences] = await Promise.all([getBaseResume(), getCandidatePreferences()]);
     if (!base || !Array.isArray(base.work) || base.work.length === 0) {
-      return res.status(409).json({ error: 'No base résumé yet — build it under Applications → Base résumé first.' });
+      return res.status(409).json({ error: 'No base résumé yet — build it under Candidate Profile → Résumé first.' });
     }
 
     // Tailoring client (required) — the queue can't run without it.
@@ -632,7 +684,7 @@ app.post('/tailor-queue', async (req, res) => {
     console.log(`[/tailor-queue] start — ${batch.length} of ${queued.length} queued (limit ${limit})`);
     for (const appRow of batch) {
       try {
-        await runFullPipeline({ appRow, base, tailorClient });
+        await runFullPipeline({ appRow, base, tailorClient, preferences });
         ok++;
         console.log(`[/tailor-queue] ok ${ok}/${batch.length} id=${appRow.id}`);
       } catch (e) {
@@ -674,7 +726,7 @@ app.post('/cover-letter', async (req, res) => {
 
     const base = await getBaseResume();
     if (!base || !Array.isArray(base.work) || base.work.length === 0) {
-      return res.status(409).json({ error: 'No base résumé yet — build it under Applications → Base résumé first.' });
+      return res.status(409).json({ error: 'No base résumé yet — build it under Candidate Profile → Résumé first.' });
     }
 
     const settings = await getSettings();

@@ -168,5 +168,7 @@ describe('buildScoreMessages', () => {
     expect(SCORE_PROMPT).not.toMatch(/candidate is on F1|they are, on OPT|will need H-1B/i);
     expect(SCORE_PROMPT).toContain('Never assume every candidate has the same immigration');
     expect(SCORE_PROMPT).toContain('missing/blank profile field means UNKNOWN');
+    expect(SCORE_PROMPT).toContain('avoid_security_clearance_jobs=true');
+    expect(SCORE_PROMPT).toContain('scoring_preferences.scoring_instructions');
   });
 });

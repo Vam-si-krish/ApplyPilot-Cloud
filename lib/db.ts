@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
 import { resumeToText } from './resume';
 import { partitionByGeneration, pickCanonical } from './dedupe';
+import { scoringPreferences } from './candidatePreferences';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
 
 // ── Scoring session: single-flight lock + progress (ADR 0028) ────────────────
@@ -123,6 +124,12 @@ export async function getProfile(): Promise<Profile> {
   return data as Profile;
 }
 
+export async function getCandidatePreferences(): Promise<Record<string, unknown>> {
+  const { data, error } = await supabaseAdmin().from('profile').select('candidate_preferences').eq('id', 1).single();
+  if (error) throw new Error(`Failed to load candidate preferences: ${error.message}`);
+  return (data?.candidate_preferences as Record<string, unknown> | null) ?? {};
+}
+
 export async function getResumeText(): Promise<string> {
   const { data, error } = await supabaseAdmin().from('profile').select('resume_text').eq('id', 1).single();
   if (error) throw new Error(`Failed to load resume: ${error.message}`);
@@ -151,7 +158,7 @@ export async function getScoringResumeText(): Promise<string> {
 export async function getScoringCandidateContext(): Promise<string> {
   const { data, error } = await supabaseAdmin()
     .from('profile')
-    .select('base_resume, resume_text, work_authorization')
+    .select('base_resume, resume_text, work_authorization, candidate_preferences')
     .eq('id', 1)
     .single();
   if (error) throw new Error(`Failed to load candidate context: ${error.message}`);
@@ -162,6 +169,7 @@ export async function getScoringCandidateContext(): Promise<string> {
     base,
     rendered,
     (data?.work_authorization as Record<string, unknown> | null) ?? {},
+    scoringPreferences(data?.candidate_preferences),
   );
 }
 
@@ -192,12 +200,13 @@ export function composeScoringCandidateContext(
   base: ResumeDoc | null,
   renderedText: string,
   workAuthorization: Record<string, unknown> = {},
+  preferences: Record<string, unknown> = {},
 ): string {
   const resume = composeScoringResume(base, renderedText);
   if (!resume) return '';
   return resume + '\n\n---\n' +
     `USER-MAINTAINED PROFILE FACTS (JSON — authoritative only for fields explicitly present; missing means unknown):\n` +
-    JSON.stringify({ work_authorization: workAuthorization });
+    JSON.stringify({ work_authorization: workAuthorization, scoring_preferences: preferences });
 }
 
 // ── Base résumé + Applications (ADR 0024) ────────────────────────────────────

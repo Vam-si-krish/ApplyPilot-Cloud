@@ -176,6 +176,7 @@ export interface Profile {
   compensation: Record<string, unknown>;
   work_authorization: Record<string, unknown>;
   skills_boundary: Record<string, unknown>;
+  candidate_preferences: CandidatePreferences;
   /** Complete applicant facts for the Assistant (ADR 0011): job_preferences,
    *  availability, eeo_voluntary, work_history, education, resume_facts, etc.
    *  The five structured sections above override their counterparts here. */
@@ -186,6 +187,24 @@ export interface Profile {
    *  from resume_text. Source of truth for per-job tailoring. */
   base_resume: ResumeDoc | null;
   updated_at: string;
+}
+
+export interface CandidatePreferences {
+  /** User policy choices applied by the scorer in addition to factual eligibility. */
+  avoid_security_clearance_jobs?: boolean;
+  avoid_citizenship_restricted_jobs?: boolean;
+  /** Constrained user guidance appended to the protected scoring/tailoring prompts. */
+  scoring_instructions?: string;
+  tailoring_instructions?: string;
+  /** Stable facts ApplyBuddy can use to answer recurring application/interview questions. */
+  application_answers?: {
+    willing_to_relocate?: boolean | null;
+    preferred_work_arrangement?: string;
+    available_start?: string;
+    employment_types?: string;
+    salary_expectation?: string;
+    additional_facts?: string;
+  };
 }
 
 export interface Settings {

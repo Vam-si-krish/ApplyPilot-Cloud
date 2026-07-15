@@ -6,11 +6,12 @@
  * truthful (same merge discipline as the scored path).
  */
 import { NextResponse } from 'next/server';
-import { getBaseResume, getSettings } from '@/lib/db';
+import { getBaseResume, getCandidatePreferences, getSettings } from '@/lib/db';
 import { buildTailoringClient } from '@/lib/scoreRunner';
 import { tailorResume } from '@/lib/resumeTailor';
 import { atsMatchScores } from '@/lib/prefilter';
 import { resumeToText } from '@/lib/resume';
+import { globalTailoringInstructions } from '@/lib/candidatePreferences';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,11 +31,11 @@ export async function POST(req: Request) {
     const base = await getBaseResume();
     if (!base || base.work.length === 0) {
       return NextResponse.json(
-        { error: 'No base résumé yet — build it under Applications → Base résumé first.' },
+        { error: 'No base résumé yet — build it under Candidate Profile → Résumé first.' },
         { status: 409 },
       );
     }
-    const settings = await getSettings();
+    const [settings, preferences] = await Promise.all([getSettings(), getCandidatePreferences()]);
     const client = await buildTailoringClient(settings);
     const title = typeof body.title === 'string' ? body.title : null;
     // No job row in the manual flow, but the local ATS scan (ADR 0053) still works on the
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
       },
       { atsMissing: ats?.breakdown.missing ?? null }, // no scorer signals in the manual flow
       client,
+      globalTailoringInstructions(preferences),
     );
     return NextResponse.json({ ok: true, resume, changes });
   } catch (e) {

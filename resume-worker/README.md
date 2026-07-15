@@ -27,6 +27,7 @@ in `SETUP.md`/`DEPLOY.md` describe the legacy production topology, not this fork
 - `GET /version` → deployed commit + feature markers
 - `POST /llm` → one authenticated subscription completion (Claude Agent SDK or ChatGPT/Codex SDK)
 - `GET/POST/DELETE /claude-connection/*` → per-user Claude subscription PKCE login, status, and disconnect
+- `GET/POST/DELETE /chatgpt-connection/*` → per-user ChatGPT/Codex device login, status, and disconnect
 - `POST /score-jobs` → background subscription scoring for selected jobs
 - `POST /tailor` / `POST /tailor-queue` → tailor one application / drain the queue
 - `POST /generate` `{ "id": "<application uuid>" }` with header `Authorization: Bearer <WORKER_SECRET>`
@@ -46,6 +47,7 @@ real selectable text, standard fonts, no icons/columns → ATS-parseable.
 ## Multi-user isolation
 
 Every fork request carries a gateway-authenticated account UUID. Database/storage clients
-are scoped to it, Claude uses only `CLAUDE_CONFIG_DIR` under that UUID, and there is no
-cross-user credential fallback. Generated object paths are namespaced by the same UUID.
+are scoped to it, Claude uses only `CLAUDE_CONFIG_DIR` under that UUID, ChatGPT uses only
+file-backed `CODEX_HOME` under that UUID, and there is no cross-user credential fallback.
+Generated object paths are namespaced by the same UUID.
 The fork service is installed/restarted as `com.jobpilotmulti.worker` by `backend/scripts/`.

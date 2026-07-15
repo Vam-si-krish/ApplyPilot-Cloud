@@ -112,6 +112,11 @@ The worker **auto-detects** `~/.claude-acctN` once it exists. Account 1 keeps us
 The worker can also run any AI lane through OpenAI's official Codex SDK using the ChatGPT account's Codex
 entitlement. The SDK and its pinned CLI are installed by `npm install`; authenticate it once on this Mac:
 
+> `multi-user-fork` users do not run these shared-login commands. Each user opens
+> **Settings → ChatGPT connection** and completes the official device-code flow; the fork
+> stores that login under `backend/data/chatgpt-users/<uuid>/` (ADR 0081). The commands
+> below are only for the legacy single-owner deployment.
+
 ```bash
 cd /absolute/path/to/ApplyPilot-Cloud/resume-worker
 mkdir -p "$HOME/.applypilot-codex"

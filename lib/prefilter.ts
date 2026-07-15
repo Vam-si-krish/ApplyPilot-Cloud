@@ -501,8 +501,8 @@ export function requiresAdvancedDegree(text: string): boolean {
   return false;
 }
 
-/** Mirrors the LLM scorer's hard block (ADR 0038): clearance / citizenship-
- *  restricted postings the candidate cannot be considered for. */
+/** Detects clearance / citizenship-restricted postings. Whether those jobs are
+ *  acceptable is candidate-specific and is enforced by the AI scorer. */
 export function clearanceRestricted(text: string): boolean {
   return /\b(?:(?:active|secret|top.secret|security)\s+clearance|ts\/?sci|q clearance|public trust|us citizenship (?:is )?required|must be (?:a )?u\.?s\.? citizen|green card holders? only|permanent resident required|itar|us persons? only)\b/i.test(
     text,
@@ -613,11 +613,7 @@ export function atsMatchScores(resume: AtsResumeInput, jobs: AtsJobInput[]): Map
       flags.push('advanced degree required');
     }
 
-    let final = Math.max(0, Math.min(100, Math.round(score)));
-    if (clearanceRestricted(text)) {
-      final = Math.min(final, 5);
-      flags.push('clearance / citizenship restriction');
-    }
+    const final = Math.max(0, Math.min(100, Math.round(score)));
 
     result.set(job.id, {
       score: final,

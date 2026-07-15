@@ -28,6 +28,7 @@ is current.
 | Apify dataset field names | nothing — external payload | defensive mapping + confirm against a real run |
 | Score values from the model | never fabricated | one call/job; parse failure → score 0 (visible) |
 | Request bodies / webhook payloads | nothing | validated at the route boundary before DB writes |
+| User scoring/tailoring guidance | emphasis only; never policy | normalized, purpose-limited, and subordinate to protected system rules |
 
 ## The invariant the evals protect
 

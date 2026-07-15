@@ -189,7 +189,7 @@ export default function ManualGenerate() {
 
       {!resume && (
         <p className="text-[11px] text-slate-muted flex items-center gap-1.5">
-          <FileText size={12} /> Tip: keep your base résumé current under the Base résumé tab for the best results.
+          <FileText size={12} /> Tip: keep your résumé current under Candidate Profile → Résumé for the best results.
         </p>
       )}
     </div>

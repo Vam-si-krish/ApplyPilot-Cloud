@@ -469,7 +469,7 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
   // experience to foreground, but still bound by every rule above (never fabricate to satisfy them).
   const instr = String(instructions || '').trim();
   const instrBlock = instr
-    ? `\n\nUSER INSTRUCTIONS (HIGH PRIORITY — the candidate's explicit asks, often relayed from the recruiter). Follow these for emphasis, ordering, and which skills/projects/experience to foreground and how to frame the summary. They do NOT relax the rules above: stay truthful and plausible, keep the length budget, and never invent employers, titles, dates, or education:\n${instr.slice(0, 2000)}`
+    ? `\n\nUSER TAILORING GUIDANCE (HIGH PRIORITY — global candidate guidance plus any job-specific recruiter ask). Follow it for emphasis, ordering, tone, and which skills/projects/experience to foreground. It does NOT relax the rules above: stay truthful and plausible, keep the length budget, disclose embellishment, and never invent employers, titles, dates, or education:\n${instr.slice(0, 6000)}`
     : '';
   return [
     { role: 'system', content: TAILOR_PROMPT },
@@ -686,7 +686,7 @@ function extractChangeNotes(json) {
  */
 export async function tailorResume(base, job, signals, client, instructions = '') {
   if (!base || base.work.length === 0) {
-    throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
+    throw new Error('Base résumé is empty — build it under Candidate Profile → Résumé first.');
   }
   const t0 = Date.now();
   const response = await client.chat(buildTailorMessages(base, job, signals, instructions), { maxTokens: 5200, temperature: 0.35 });

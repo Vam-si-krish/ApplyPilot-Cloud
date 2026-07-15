@@ -2,6 +2,10 @@
 
 **Status:** accepted · **Date:** 2026-07-14 · **Amends:** ADRs 0030 and 0067
 
+> **Amendment:** [ADR 0081](0081-per-user-chatgpt-and-candidate-profile-controls.md)
+> moves all ongoing edits into Candidate Profile and adds purpose-limited scoring and
+> tailoring preferences. The original owner-neutral/context rules remain in force.
+
 ## Context
 
 The application became multi-user in ADRs 0072–0074, but the two runtime copies of

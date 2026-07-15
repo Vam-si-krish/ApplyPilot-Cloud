@@ -9,12 +9,14 @@ describe('composeScoringResume', () => {
       legally_authorized_to_work: true,
       require_sponsorship: false,
       citizenship_or_residency: 'US citizen',
-    });
+    }, { avoid_security_clearance_jobs: true, scoring_instructions: 'Prefer product roles' });
 
     expect(dossier).toContain('Jordan Candidate');
     expect(dossier).toContain('USER-MAINTAINED PROFILE FACTS');
     expect(dossier).toContain('"require_sponsorship":false');
     expect(dossier).toContain('"citizenship_or_residency":"US citizen"');
+    expect(dossier).toContain('"avoid_security_clearance_jobs":true');
+    expect(dossier).toContain('Prefer product roles');
     expect(dossier).not.toMatch(/F1 OPT|H-1B/i);
   });
 

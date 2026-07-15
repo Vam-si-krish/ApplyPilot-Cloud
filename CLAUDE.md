@@ -15,7 +15,7 @@ the existing ApplyPilot production database. The accepted roadmap is [ADR 0072](
 - **Phase 2A (implemented/current private release):** three fixed `APP_USERS_JSON` accounts, signed identity sessions,
   forced database RLS, per-user files/keys/jobs/settings, and PDF résumé onboarding. Public
   signup is deferred; normal work uses each account's own Apify/LLM keys or its own
-  connected Claude subscription (ADR 0074).
+  connected UUID-isolated Claude or ChatGPT subscription (ADRs 0074 and 0081).
 
 The fork must never point at or copy production backend credentials/data. The frontend
 deploys separately on Netlify; persistent services stay on the server laptop.
@@ -27,7 +27,7 @@ ApplyPilot-Lite scorer (the old "copy it byte-for-byte" rule is retired; see ADR
 holds, non-negotiably: **exactly one LLM call per job**; the model scores 0–10 and the threshold/sort
 decides; a parse failure or LLM error yields score `0` (visible), **never a fabricated score**; output
 is line-prefixed and parsed defensively (clamped 0–10, extra fields optional). The request is the
-current user's Base résumé + explicit work-authorization facts + job — description HTML-stripped
+current user's Base résumé + explicit work-authorization/scoring-preference facts + job — description HTML-stripped
 then truncated to 15000 chars, with the candidate context marked as a prompt-cache breakpoint
 (ADRs 0056 and 0080). Missing eligibility facts remain unknown. The scorer also reports
 `employment_type` (so contract roles are flagged, not demoted) and a sub-score `breakdown`. Eval cases
@@ -46,6 +46,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/supabase.ts` | REST/storage protocol clients; fork uses `BACKEND_*`, production keeps legacy env fallback |
 | `lib/auth.ts` | Fixed-account credential validation + identity session sign/verify |
 | `lib/workerConfig.ts` | Trusted worker resolution; deployment-only in the multi-user fork |
+| `lib/candidatePreferences.ts` | Normalize and purpose-limit Candidate Profile application/scoring/tailoring preferences |
 | `lib/types.ts` | Shared TS types for jobs/profile/settings/runs |
 | `middleware.ts` | Gates routes and replaces caller identity headers from the signed session |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |

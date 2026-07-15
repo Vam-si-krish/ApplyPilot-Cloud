@@ -1,19 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Profile } from '@/lib/types';
+import BaseResumeEditor from '@/components/BaseResumeEditor';
 
-type Tab = 'personal' | 'work' | 'skills';
+type Tab = 'resume' | 'eligibility' | 'answers' | 'prompts' | 'personal' | 'skills';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Form = any;
 
 export default function ProfilePage() {
-  const [tab, setTab] = useState<Tab>('personal');
+  const [tab, setTab] = useState<Tab>('resume');
   const [form, setForm] = useState<Form | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load once; sync remote → local via effect (never setState during render —
   // that loops when the fetched value equals current state; the bug the brief flagged).
@@ -38,14 +40,21 @@ export default function ProfilePage() {
 
   async function save() {
     setSaving(true);
+    setError(null);
     try {
-      await fetch('/api/profile', {
+      const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || `Could not save candidate profile (${response.status})`);
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setSaving(false);
     }
@@ -65,8 +74,11 @@ export default function ProfilePage() {
   }
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: 'resume', label: 'Résumé' },
+    { id: 'eligibility', label: 'Eligibility' },
+    { id: 'answers', label: 'Application Answers' },
+    { id: 'prompts', label: 'AI Guidance' },
     { id: 'personal', label: 'Personal' },
-    { id: 'work', label: 'Work Auth' },
     { id: 'skills', label: 'Skills' },
   ];
 
@@ -74,10 +86,9 @@ export default function ProfilePage() {
     <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8 animate-slide-up">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="page-title text-2xl">Profile</h1>
+          <h1 className="page-title text-2xl">Candidate Profile</h1>
           <p className="page-sub">
-            Your résumé lives in{' '}
-            <a href="/applications" className="text-sky hover:underline">Tailor &amp; Apply → Base résumé</a> and drives scoring, tailoring, cover letters, and ApplyBuddy. Work Auth below is also included in eligibility scoring.
+            The one place to manage the résumé and candidate facts used by scoring, tailoring, cover letters, and ApplyBuddy.
           </p>
         </div>
         {saved && (
@@ -87,7 +98,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <div className="flex gap-1 mb-5 border-b border-ink">
+      <div className="flex flex-wrap gap-1 mb-5 border-b border-ink">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -102,7 +113,15 @@ export default function ProfilePage() {
         ))}
       </div>
 
+      {error && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose/30 bg-rose/10 px-3.5 py-3 text-[12px] text-rose">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" /> {error}
+        </div>
+      )}
+
       <div className="animate-slide-up">
+        {tab === 'resume' && <BaseResumeEditor />}
+
         {tab === 'personal' && (
           <div className="space-y-4">
             <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -126,10 +145,10 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {tab === 'work' && (
+        {tab === 'eligibility' && (
           <div className="space-y-4">
             <p className="text-[12px] text-slate-muted">
-              These are candidate-specific AI facts. Fill them in truthfully; blank fields mean unknown, never an automatic rejection.
+              These factual answers drive eligibility scoring and ApplyBuddy. Blank means unknown. Avoidance switches are your preferences, even when you are technically eligible.
             </p>
             <div className="card p-5 space-y-4">
               <TriState
@@ -138,7 +157,7 @@ export default function ProfilePage() {
                 onChange={(v) => set('work_authorization.legally_authorized_to_work', v)}
               />
               <TriState
-                label="Requires visa sponsorship"
+                label="Requires visa sponsorship now or in the future"
                 value={form.work_authorization?.require_sponsorship}
                 onChange={(v) => set('work_authorization.require_sponsorship', v)}
               />
@@ -157,7 +176,95 @@ export default function ProfilePage() {
                 value={form.work_authorization?.security_clearance}
                 onChange={(v) => set('work_authorization.security_clearance', v)}
               />
+              <TriState
+                label="Willing / able to obtain a security clearance"
+                value={form.work_authorization?.willing_to_obtain_clearance}
+                onChange={(v) => set('work_authorization.willing_to_obtain_clearance', v)}
+              />
+              <div className="border-t border-ink pt-4 space-y-3">
+                <CheckBox
+                  label="Avoid every job that requires a security clearance"
+                  checked={!!form.candidate_preferences?.avoid_security_clearance_jobs}
+                  onChange={(v) => set('candidate_preferences.avoid_security_clearance_jobs', v)}
+                />
+                <CheckBox
+                  label="Avoid citizenship, Green Card, or US-Person-restricted jobs"
+                  checked={!!form.candidate_preferences?.avoid_citizenship_restricted_jobs}
+                  onChange={(v) => set('candidate_preferences.avoid_citizenship_restricted_jobs', v)}
+                />
+              </div>
             </div>
+            <SaveBtn onClick={save} loading={saving} />
+          </div>
+        )}
+
+        {tab === 'answers' && (
+          <div className="space-y-4">
+            <p className="text-[12px] text-slate-muted">
+              ApplyBuddy uses these stable answers for application forms, recruiter messages, and interview-screen questions. It still asks when a required fact is missing.
+            </p>
+            <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <TriState
+                label="Willing to relocate"
+                value={form.candidate_preferences?.application_answers?.willing_to_relocate}
+                onChange={(v) => set('candidate_preferences.application_answers.willing_to_relocate', v)}
+              />
+              <Field
+                label="Preferred work arrangement"
+                value={form.candidate_preferences?.application_answers?.preferred_work_arrangement}
+                onChange={(v) => set('candidate_preferences.application_answers.preferred_work_arrangement', v)}
+                placeholder="Remote, hybrid, onsite, or flexible"
+              />
+              <Field
+                label="Available start"
+                value={form.candidate_preferences?.application_answers?.available_start}
+                onChange={(v) => set('candidate_preferences.application_answers.available_start', v)}
+                placeholder="Immediately, two weeks, a date…"
+              />
+              <Field
+                label="Employment types accepted"
+                value={form.candidate_preferences?.application_answers?.employment_types}
+                onChange={(v) => set('candidate_preferences.application_answers.employment_types', v)}
+                placeholder="Full-time, W2 contract, C2C…"
+              />
+              <Field
+                label="Salary expectation"
+                value={form.candidate_preferences?.application_answers?.salary_expectation}
+                onChange={(v) => set('candidate_preferences.application_answers.salary_expectation', v)}
+                placeholder="Range or preferred answer"
+              />
+            </div>
+            <TextArea
+              label="Other recurring application / interview facts"
+              value={form.candidate_preferences?.application_answers?.additional_facts}
+              onChange={(v) => set('candidate_preferences.application_answers.additional_facts', v)}
+              placeholder="Certifications, travel availability, preferred name, portfolio context, or other truthful answers you want ApplyBuddy to know."
+              rows={7}
+            />
+            <SaveBtn onClick={save} loading={saving} />
+          </div>
+        )}
+
+        {tab === 'prompts' && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-sky/20 bg-sky/5 px-4 py-3 text-[12px] text-slate-muted">
+              These instructions customize emphasis and preferences. They cannot disable truthfulness, eligibility checks, score formatting, verified-fact protection, or résumé-length limits.
+            </div>
+            <TextArea
+              label="Global scoring guidance"
+              value={form.candidate_preferences?.scoring_instructions}
+              onChange={(v) => set('candidate_preferences.scoring_instructions', v)}
+              placeholder="Example: Prefer product companies and hands-on platform roles. Treat contract roles as acceptable, but note onsite requirements."
+              rows={8}
+            />
+            <TextArea
+              label="Global résumé-tailoring guidance"
+              value={form.candidate_preferences?.tailoring_instructions}
+              onChange={(v) => set('candidate_preferences.tailoring_instructions', v)}
+              placeholder="Example: Lead with platform and API work, keep the summary direct, and avoid adding adjacent skills unless already demonstrated."
+              rows={8}
+            />
+            <p className="text-[11px] text-slate-muted">Job-specific tailoring instructions in Tailor &amp; Apply are added after this global guidance.</p>
             <SaveBtn onClick={save} loading={saving} />
           </div>
         )}
@@ -176,11 +283,37 @@ export default function ProfilePage() {
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: unknown; onChange: (v: string) => void }) {
+function Field({ label, value, onChange, placeholder = '' }: { label: string; value: unknown; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
       <p className="label">{label}</p>
-      <input value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} className="input" />
+      <input value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="input" />
+    </div>
+  );
+}
+
+function CheckBox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 text-[13px] text-slate-text">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-4 w-4 accent-sky" />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function TextArea({ label, value, onChange, placeholder, rows }: { label: string; value: unknown; onChange: (v: string) => void; placeholder: string; rows: number }) {
+  return (
+    <div className="card p-5">
+      <p className="label">{label}</p>
+      <textarea
+        value={(value as string) ?? ''}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        maxLength={4000}
+        className="input resize-y leading-relaxed"
+      />
+      <p className="mt-1 text-right font-mono text-[10px] text-slate-dim">{String(value ?? '').length}/4000</p>
     </div>
   );
 }

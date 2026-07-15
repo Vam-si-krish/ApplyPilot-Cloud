@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput } from 'lucide-react';
-import BaseResumeEditor from '@/components/BaseResumeEditor';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ResumeDiff from '@/components/ResumeDiff';
@@ -13,7 +12,7 @@ import { useProgress } from '@/components/ProgressContext';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 import { scoreUsageCostUsd } from '@/lib/pricing';
 
-type View = 'list' | 'parked' | 'base' | 'manual';
+type View = 'list' | 'parked' | 'manual';
 
 const STATUS_STYLE: Record<ApplicationStatus, string> = {
   queued: 'bg-raised border-ink text-slate-muted',
@@ -776,7 +775,6 @@ export default function ApplicationsPage() {
           { id: 'list' as View, label: 'Queue' },
           { id: 'parked' as View, label: 'Set Aside' },
           { id: 'manual' as View, label: 'Quick Generate' },
-          { id: 'base' as View, label: 'Base résumé' },
         ]).map((t) => (
           <button
             key={t.id}
@@ -862,8 +860,6 @@ export default function ApplicationsPage() {
 
       {view === 'manual' ? (
         <ManualGenerate />
-      ) : view === 'base' ? (
-        <BaseResumeEditor />
       ) : loading ? (
         <div className="card divide-y divide-ink-subtle overflow-hidden">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -1399,7 +1395,7 @@ export default function ApplicationsPage() {
                       <p className="text-[12px] text-slate-muted py-2">
                         No tailored résumé yet. Click <span className="text-violet-300">Generate</span> to reframe your base
                         résumé for <span className="text-slate-text">{job?.title ?? 'this job'}</span>.{' '}
-                        {' '}Make sure your <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> is set first.
+                        {' '}Make sure your <Link href="/profile" className="text-sky hover:underline">Candidate Profile résumé</Link> is set first.
                       </p>
                     )}
 
@@ -1445,7 +1441,7 @@ export default function ApplicationsPage() {
       {view === 'list' && apps.length > 0 && (
         <p className="text-[11px] text-slate-muted mt-4">
           Generation reframes your real experience for each job (never fabricated). Keep your{' '}
-          <button onClick={() => setView('base')} className="text-sky hover:underline">base résumé</button> current for the best results.
+          <Link href="/profile" className="text-sky hover:underline">Candidate Profile résumé</Link> current for the best results.
         </p>
       )}
 
@@ -1503,4 +1499,3 @@ function ScoreChip({ label, value, title }: { label: string; value: number; titl
     </span>
   );
 }
-

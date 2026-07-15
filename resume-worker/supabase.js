@@ -74,6 +74,12 @@ export async function getBaseResume() {
   return data?.base_resume ?? null;
 }
 
+export async function getCandidatePreferences() {
+  const { data, error } = await client().from('profile').select('candidate_preferences').eq('id', 1).single();
+  if (error) throw new Error(`load candidate preferences: ${error.message}`);
+  return data?.candidate_preferences ?? {};
+}
+
 /**
  * The active vault key for a provider (ADR 0006), with the worker's own env var as
  * a fallback — mirrors lib/credentials.getActiveApiKey. Keys are stored plaintext
@@ -168,7 +174,7 @@ export function resumeToScoringText(resume) {
  * scoring only, so it also includes explicit user-maintained eligibility facts.
  */
 export async function getScoringCandidateContext() {
-  const { data, error } = await client().from('profile').select('base_resume, resume_text, work_authorization').eq('id', 1).single();
+  const { data, error } = await client().from('profile').select('base_resume, resume_text, work_authorization, candidate_preferences').eq('id', 1).single();
   if (error) throw new Error(`load resume: ${error.message}`);
   const base = data?.base_resume ?? null;
   const text = resumeToScoringText(base) || (data?.resume_text || '');
@@ -181,7 +187,20 @@ export async function getScoringCandidateContext() {
   }
   parts.push(
     `USER-MAINTAINED PROFILE FACTS (JSON — authoritative only for fields explicitly present; missing means unknown):\n` +
-      JSON.stringify({ work_authorization: data?.work_authorization ?? {} }),
+      JSON.stringify({
+        work_authorization: data?.work_authorization ?? {},
+        scoring_preferences: {
+          ...(typeof data?.candidate_preferences?.avoid_security_clearance_jobs === 'boolean'
+            ? { avoid_security_clearance_jobs: data.candidate_preferences.avoid_security_clearance_jobs }
+            : {}),
+          ...(typeof data?.candidate_preferences?.avoid_citizenship_restricted_jobs === 'boolean'
+            ? { avoid_citizenship_restricted_jobs: data.candidate_preferences.avoid_citizenship_restricted_jobs }
+            : {}),
+          ...(typeof data?.candidate_preferences?.scoring_instructions === 'string'
+            ? { scoring_instructions: data.candidate_preferences.scoring_instructions.slice(0, 4000) }
+            : {}),
+        },
+      }),
   );
   return parts.join('\n\n---\n');
 }

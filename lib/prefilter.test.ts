@@ -182,10 +182,10 @@ describe('atsMatchScores', () => {
     expect(swe.breakdown.title).not.toBeNull();
   });
 
-  it('caps clearance-restricted jobs at 5 even when skills match', () => {
+  it('does not universally reject clearance jobs before candidate preferences are applied', () => {
     const cleared = atsMatchScores({ text: RESUME }, jobs).get('cleared')!;
-    expect(cleared.score).toBeLessThanOrEqual(5);
-    expect(cleared.breakdown.flags.join(' ')).toMatch(/clearance/);
+    expect(cleared.score).toBeGreaterThan(5);
+    expect(cleared.breakdown.flags.join(' ')).not.toMatch(/clearance/);
   });
 
   it('counts the user\'s Settings→Skills as résumé skills', () => {

@@ -35,11 +35,13 @@ test('subscriptionEnv strips API billing credentials and isolates CODEX_HOME', (
     PATH: '/usr/bin',
     OPENAI_API_KEY: 'must-not-pass',
     CODEX_API_KEY: 'must-not-pass',
+    CODEX_ACCESS_TOKEN: 'must-not-pass',
     OPENAI_BASE_URL: 'https://paid.example',
     CHATGPT_CODEX_HOME: '~/.applypilot-codex',
   });
   assert.equal(env.OPENAI_API_KEY, undefined);
   assert.equal(env.CODEX_API_KEY, undefined);
+  assert.equal(env.CODEX_ACCESS_TOKEN, undefined);
   assert.equal(env.OPENAI_BASE_URL, undefined);
   assert.equal(env.CODEX_HOME, '/Users/tester/.applypilot-codex');
   assert.equal(env.PATH, '/usr/bin');

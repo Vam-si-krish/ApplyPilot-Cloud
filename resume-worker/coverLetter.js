@@ -106,7 +106,7 @@ function buildMessages(base, job, jd) {
  */
 export async function generateCoverLetter(base, job, client) {
   if (!base || !Array.isArray(base.work) || base.work.length === 0) {
-    throw new Error('Base résumé is empty — build it under Applications → Base résumé first.');
+    throw new Error('Base résumé is empty — build it under Candidate Profile → Résumé first.');
   }
   // Guard: with no job description the model can only hedge ("please share the JD"),
   // and that conversational reply would land in the PDF. Fail clearly instead.

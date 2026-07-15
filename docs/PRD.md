@@ -36,10 +36,13 @@ and abuse/rate/spend controls remain Phase 2B gates before public access.
 first for three environment-configured username/password accounts. Public signup and
 password reset remain disabled. Each account uploads a résumé PDF for AI-assisted initial
 profile/search setup, then supplies its own Apify/LLM API keys or connects its own
-UUID-isolated Claude subscription for normal work. The owner's server subscription is
+UUID-isolated Claude or ChatGPT subscription for normal work. The owner's server subscription is
 permitted only for the bounded onboarding parse. Shared AI instructions are owner-neutral:
 each call receives only the authenticated user's Base résumé/profile context, and onboarding
 copies work-authorization facts only when the PDF states them explicitly (ADR 0080).
+Candidate Profile is the single ongoing edit surface for the Base résumé, eligibility,
+recurring application answers, avoidance preferences, and constrained scoring/tailoring
+guidance (ADR 0081).
 
 **Phase 2B — public-account readiness (next):** replace fixed credentials with account
 creation, verified recovery, session controls, and operational account lifecycle. Encrypt
@@ -88,7 +91,7 @@ must never be publicly readable — a single shared password gates everything (A
    via Apify (not local scraping). `hours_old` defaults to 24, configurable.
 3. **Score every fetched job 1–10** for shortlist fit using the current weighted rubric
    and parser in `lib/scoring.ts` against that account's Base résumé and explicit
-   eligibility facts (see ARCHITECTURE §Scoring).
+   eligibility/avoidance/scoring-preference facts (see ARCHITECTURE §Scoring).
 4. **Present results**: a shortlist sorted by `fit_score` desc, with filters
    (score range, search, status) and a shortlist toggle. Fresh/unscored results are
    visible without silently active score/company/run constraints; “Clear all” removes

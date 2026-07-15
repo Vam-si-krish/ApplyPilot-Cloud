@@ -192,6 +192,20 @@ describe('buildTailorMessages', () => {
     expect(jobPart.text).toContain('CI/CD, GraphQL');
   });
 
+  it('adds global user guidance to the volatile tailoring tail without weakening protected rules', () => {
+    const msgs = buildTailorMessages(
+      base(),
+      { title: 'FE Eng', company: 'Acme', full_description: 'Need React.' },
+      {},
+      'Lead with accessibility work and keep the tone concise.',
+    );
+    const jobPart = (msgs[2].content as ContentPart[])[0];
+    expect(jobPart.text).toContain('USER TAILORING GUIDANCE');
+    expect(jobPart.text).toContain('Lead with accessibility work');
+    expect(jobPart.text).toContain('cannot relax anti-fabrication');
+    expect((msgs[1].content as ContentPart[])[0].text).not.toContain('Lead with accessibility work');
+  });
+
   it('prompt carries the title-alignment, exact-wording, and top-third summary rules', () => {
     expect(TAILOR_PROMPT).toContain('TITLE ALIGNMENT');
     expect(TAILOR_PROMPT).toContain("MIRROR THE POSTING'S EXACT WORDING");
