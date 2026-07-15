@@ -70,3 +70,19 @@ or API-key records.
 After the Netlify URL is known, replace `CORS_ORIGINS` in `backend/.env` and restart
 `com.jobpilotmulti.backend`. Server-side Netlify calls do not require CORS, but keeping
 the origin accurate is useful for later browser-facing Phase 2 endpoints.
+
+## Applying migrations manually
+
+The autopull service applies migrations and restarts PostgREST automatically. If a
+migration is applied directly from this checkout, force the REST schema cache to reload
+before testing the web app:
+
+```bash
+set -a; source backend/.env; set +a
+node backend/migrate.mjs
+docker compose --project-directory backend --env-file backend/.env restart rest
+curl -fsS "$PUBLIC_URL/health"
+```
+
+The explicit restart is required even though the migration runner sends Postgres's
+schema-reload notification; PostgREST has occasionally missed that notification.

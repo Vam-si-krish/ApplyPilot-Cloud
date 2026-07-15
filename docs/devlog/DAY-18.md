@@ -48,3 +48,7 @@
   passed. Backend 2/2, worker 7/7, and documentation checks passed (107 Markdown files,
   73 ADRs). Public gateway health passed and worker `/version` advertised
   `score-company-parity` after restart.
+- After the manual migration, PostgREST retained a stale schema cache and rejected run
+  creation with a missing `runs.apify_api_key_id` cache error. Restarted the REST
+  container and proved that column through a public-gateway insert/read/delete probe.
+  Added the mandatory manual-migration REST restart to the backend runbook.
