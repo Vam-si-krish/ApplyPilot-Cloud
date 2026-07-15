@@ -87,7 +87,7 @@ export default function BaseResumeEditor() {
 
       <ResumeFields value={d} onChange={setDoc} />
 
-      <div className="flex items-center gap-3 sticky bottom-0 bg-void/80 backdrop-blur py-3">
+      <div className="sticky bottom-3 z-10 flex items-center gap-3 rounded-xl border border-ink bg-void/90 px-3 py-3 shadow-[0_10px_35px_rgba(0,0,0,0.45)] backdrop-blur-md">
         <button
           onClick={save}
           disabled={saving}

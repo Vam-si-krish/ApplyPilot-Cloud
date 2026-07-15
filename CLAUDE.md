@@ -53,6 +53,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/auth.ts` | Fixed-account credential validation + identity session sign/verify |
 | `lib/workerConfig.ts` | Trusted worker resolution; deployment-only in the multi-user fork |
 | `lib/candidatePreferences.ts` | Normalize and purpose-limit Candidate Profile application/scoring/tailoring preferences |
+| `components/ResumePaper.tsx` | Shared print-like browser canvas for Base/tailored editing and contextual change review |
 | `lib/types.ts` | Shared TS types for jobs/profile/settings/runs |
 | `middleware.ts` | Gates routes and replaces caller identity headers from the signed session |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |

@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0083
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0084
 
 ## Current deployment topology
 
@@ -119,6 +119,9 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   are deterministic and unit-tested. `scoreJob(resume, job)` makes the one LLM call.
 - `lib/candidatePreferences.ts` — normalizes user-managed Candidate Profile preferences
   and exposes purpose-limited projections for scoring, tailoring, and ApplyBuddy.
+- `components/ResumePaper.tsx`, `ResumeFields.tsx`, and `ResumeDiff.tsx` — shared browser
+  résumé presentation for Base/tailored editing and contextual change review. It mirrors
+  the PDF hierarchy but never owns page fitting or generated-file truth.
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
@@ -146,6 +149,11 @@ defaults preserve the reviewed shared behavior. Direct and worker `mergeTailored
 enforce the strict choices that are structurally decidable (preserve titles/headline and
 keep the Base résumé skill list). Score parsing, rubric weights/caps, eligibility proof,
 verified facts/tenure, disclosure, and one-page budgets remain protected shared contracts.
+
+Browser résumé presentation and final PDF rendering are separate boundaries (ADR 0084).
+Candidate Profile and Tailor & Apply share a responsive white-paper editor/review canvas;
+the always-on worker remains the only component that measures, condenses, renders, and
+guarantees the downloadable one-page PDF.
 
 ## Scoring (current v2 contract)
 

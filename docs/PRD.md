@@ -46,6 +46,9 @@ guidance. Its AI Guidance area also exposes validated per-user trade-offs for le
 skills (including a 7/15/30/60-day horizon), title alignment, evidence strictness,
 experience shortfalls, overqualification, and contract roles while keeping score, truth,
 eligibility, and one-page contracts protected (ADRs 0081 and 0083).
+The Base résumé editor and Tailor & Apply editor/change review use the same responsive,
+print-like white document hierarchy as the downloaded résumé. The worker-rendered PDF
+remains the final one-page layout authority (ADR 0084).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
