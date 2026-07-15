@@ -1,5 +1,8 @@
 # ADR 0030 — Tailor & Apply UX: apply tracking, PDF filenames, clearance gate
 
+> **Multi-user amendment:** ADR 0080 makes the clearance/citizenship gate conditional
+> on explicit current-user eligibility facts instead of an original-owner assumption.
+
 ## Status
 Accepted (2026-06-23)
 

@@ -15,7 +15,7 @@
  * background and writes results directly to Supabase; this route responds immediately.
  */
 import { NextResponse } from 'next/server';
-import { getJobsByIds, getScoringResumeText, getSettings } from '@/lib/db';
+import { getJobsByIds, getScoringCandidateContext, getSettings } from '@/lib/db';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import { isSubscriptionProvider } from '@/lib/llm';
 import { workerRequestHeaders } from '@/lib/workerAuth';
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, scored: 0, filtered: 0, skipped });
     }
 
-    const resume = await getScoringResumeText();
+    const resume = await getScoringCandidateContext();
     console.log(tag, `resume=${resume.length}chars`);
 
     const client = await buildScoringClient(settings);

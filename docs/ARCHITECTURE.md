@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0079
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-14 · **Current decisions:** ADRs 0072–0080
 
 ## Current deployment topology
 
@@ -57,7 +57,8 @@ compatibility, but their real primary key is `user_id`, so each account has its 
 
 First login leads to PDF résumé onboarding. Netlify extracts PDF text, makes one bounded
 anti-fabrication parse through the owner's subscription worker, and initializes only that
-user's structured résumé, profile facts, skills, roles, and locations. Normal work uses
+user's structured résumé, explicit résumé-stated work authorization, profile facts, skills,
+roles, and locations. It never infers immigration/citizenship/clearance facts. Normal work uses
 keys from that user's vault or that user's UUID-isolated Claude subscription connection;
 deployment-level LLM/Apify fallback is disabled in the fork.
 
@@ -145,6 +146,14 @@ contract lives in `lib/scoring.ts` and its tests/evals:
 5. Parse and clamp the structured response. Parse/provider failure produces a visible
    score of 0; the application never fabricates a score.
 
+The rubric is shared and owner-neutral; the candidate context is per user (ADR 0080).
+`getScoringCandidateContext()` combines the RLS-scoped structured Base résumé with that
+user's explicit `profile.work_authorization`. Eligibility is a hard block only when those
+facts prove the candidate cannot meet the posting's condition. Missing facts stay unknown.
+`getScoringResumeText()` deliberately excludes authorization JSON because local ATS,
+prefilter, and keyword matching must operate on résumé content only. The worker mirrors the
+same candidate-context assembly for subscription scoring.
+
 `status='scored'` and `fit_score` are one persistence invariant: scored always has a
 numeric 0–10 result, enforced by migration 0047. Dashboards and delegated progress use
 the numeric field as proof of completion, not status alone. Manual Tailor & Apply rows
@@ -187,7 +196,8 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   score_reasoning, status (unscored|scored|archived), is_shortlisted, discovered_at,
   scored_at, source.
 - **profile**: one row per user — personal, experience, compensation, work_authorization,
-  skills_boundary, resume_text (scoring reads this), resume_pdf_path.
+  skills_boundary, `base_resume` (the current résumé source for scoring/tailoring/ApplyBuddy),
+  legacy `resume_text` fallback, and resume_pdf_path.
 - **settings**: one row per user — schedule/search configuration plus legacy `llm_*` and the three task pairs:
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,

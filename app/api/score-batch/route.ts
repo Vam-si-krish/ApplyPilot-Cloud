@@ -19,7 +19,7 @@ import { runAsUser } from '@/lib/userContext';
 import { buildScoringClient, scoreJobRows } from '@/lib/scoreRunner';
 import {
   getSettings,
-  getScoringResumeText,
+  getScoringCandidateContext,
   getUnscoredBatch,
   countUnscored,
   getLatestRunningRun,
@@ -102,7 +102,7 @@ async function handleForUser(req: Request) {
     return NextResponse.json({ ok: true, done: true });
   }
 
-  const resume = await getScoringResumeText();
+  const resume = await getScoringCandidateContext();
   let client;
   try {
     client = await buildScoringClient(settings);

@@ -6,18 +6,18 @@
 
 export const SCORE_PROMPT = `You are a senior technical recruiter with 15+ years of experience screening candidates. Your task: predict how likely THIS candidate is to be SHORTLISTED for THIS role if they applied — i.e. whether it is worth their time to apply. Judge the resume↔posting fit the way an expert recruiter would, semantically, not by literal keyword overlap.
 
-ANTI-FABRICATION (critical, read twice): Use ONLY facts the RESUME actually states. Never invent or inflate experience, titles, years, skills, or education. Crucially, a requirement in the POSTING is NOT evidence about the candidate — if the job says "8+ years" that tells you nothing about how many years the candidate has. Do not echo the posting's numbers back as if they were the candidate's. If the resume does not show something, treat it as absent and say so plainly.
+ANTI-FABRICATION (critical, read twice): Use ONLY facts the CANDIDATE CONTEXT actually states. It contains the candidate's résumé and may contain user-maintained profile facts such as work authorization. Never invent or inflate experience, titles, years, skills, education, citizenship, residency, clearance, or sponsorship needs. Crucially, a requirement in the POSTING is NOT evidence about the candidate — if the job says "8+ years" that tells you nothing about how many years the candidate has. Do not echo the posting's numbers back as if they were the candidate's. If the context does not show something, treat it as unknown and say so plainly.
 
 ### PHASE 1 — VALIDATION (do this first)
 Inspect the JOB POSTING text.
 - If it is NOT a real job description (legal/accessibility disclaimer, login wall, cookie notice, navigation/footer links, an empty or garbled blob), set SCORE to 0 and stop.
-- HARD BLOCK — if the posting requires ANY of the following, set SCORE to 1 and STOP, regardless of how well the skills, seniority, or domain match (skill fit is irrelevant here — the candidate simply cannot be considered):
-  • US Citizenship — "US Citizen", "U.S. citizen", "USC", "must be a US citizen", "citizenship required".
-  • Lawful permanent residency / Green Card — "Green Card holder", "permanent resident required".
-  • An active or obtainable Security Clearance — "Secret", "Top Secret", "TS/SCI", "Public Trust", "Q clearance", "DoD/active clearance", "ability to obtain a clearance".
-  • Citizenship-restricted authorization — e.g. ITAR/EAR "US Persons only".
-  • No visa sponsorship, EVER — the posting states it will not sponsor an employment visa now OR in the future: "we do not (and will not) sponsor", "no visa sponsorship", "unable to sponsor", "sponsorship is not available", "must not now or in the future require sponsorship", "must have permanent work authorization that does not require sponsorship". The candidate is on F1 OPT/EAD: they can work NOW without sponsorship, but WILL need H-1B/visa sponsorship later, so a role that categorically will not sponsor is a dead end. IMPORTANT — do NOT block a posting that merely requires the candidate to be currently authorized to work in the US, or asks "are you legally authorized to work?" (they are, on OPT/EAD) — only block explicit refusals to EVER sponsor a visa.
-  Set SCORE to 1, note the blocker, and stop. (Do NOT use 0 — that is reserved for invalid/non-job content.)
+- HARD BLOCK — set SCORE to 1 and STOP only when BOTH are true: (a) the posting has a non-negotiable eligibility requirement and (b) the CANDIDATE CONTEXT explicitly proves this candidate cannot satisfy it. Relevant requirements include:
+  • US citizenship, lawful permanent residency / Green Card, or ITAR/EAR "US Persons only" restrictions.
+  • An active or obtainable security clearance (Secret, Top Secret, TS/SCI, Public Trust, Q, DoD, etc.).
+  • Current legal work authorization.
+  • No visa sponsorship, now or in the future ("we do not/will not sponsor", "unable to sponsor", "must not now or in the future require sponsorship", etc.). This is a blocker only when the candidate context explicitly says the candidate requires sponsorship now or in the future.
+  Never assume every candidate has the same immigration, citizenship, residency, or clearance status. A missing/blank profile field means UNKNOWN, not "no". If eligibility is unknown, continue to Phase 2 and mention exactly what the candidate should confirm in NOTE; do not hard-block. Likewise, a posting that merely asks whether the candidate is currently authorized is not a blocker when the context says they are currently authorized.
+  When a hard block is proven, note the candidate-specific blocker and stop. (Do NOT use 0 — that is reserved for invalid/non-job content.)
 - Otherwise continue to Phase 2.
 
 ### PHASE 2 — ANALYSIS
@@ -152,7 +152,7 @@ function stripHtml(html) {
  *  the 15000-char cut; the résumé rides as a SECOND system message carrying the cache
  *  breakpoint. The Agent-SDK path (this worker's /score-jobs and /llm) folds every system
  *  role into its auto-cached systemPrompt but flattens user parts — so the résumé must be a
- *  system message to cache. `resumeText` is the enriched dossier from getScoringResumeText,
+ *  system message to cache. `resumeText` is the enriched dossier from getScoringCandidateContext,
  *  sized to clear Haiku's 4096-token minimum cacheable prefix. */
 export function buildScoreMessages(resumeText, job) {
   const description = stripHtml(job.full_description || job.description || '').slice(0, 15000);
@@ -165,7 +165,7 @@ export function buildScoreMessages(resumeText, job) {
   return [
     { role: 'system', content: SCORE_PROMPT },
     // Stable prefix (cached across every job in a run).
-    { role: 'system', content: [{ text: `RESUME:\n${resumeText}\n\n---`, cache: true }] },
+    { role: 'system', content: [{ text: `CANDIDATE CONTEXT:\n${resumeText}\n\n---`, cache: true }] },
     // Volatile tail — the per-job posting, after the cache breakpoint.
     { role: 'user', content: [{ text: `JOB POSTING:\n${jobText}` }] },
   ];

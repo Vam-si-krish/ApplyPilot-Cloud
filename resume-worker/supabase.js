@@ -164,22 +164,26 @@ export function resumeToScoringText(resume) {
  * The resume text used for scoring — the enriched dossier (ADR 0066): rendered text PLUS
  * the structured base_resume JSON, so the cached scoring prefix clears Haiku's 4096-token
  * minimum and the scorer gets authoritative structured grounding. Mirrors lib/db.ts
- * getScoringResumeText / composeScoringResume. Falls back to raw resume_text when there is
- * no structured base.
+ * getScoringCandidateContext / composeScoringCandidateContext. This worker path is AI
+ * scoring only, so it also includes explicit user-maintained eligibility facts.
  */
-export async function getScoringResumeText() {
-  const { data, error } = await client().from('profile').select('base_resume, resume_text').eq('id', 1).single();
+export async function getScoringCandidateContext() {
+  const { data, error } = await client().from('profile').select('base_resume, resume_text, work_authorization').eq('id', 1).single();
   if (error) throw new Error(`load resume: ${error.message}`);
   const base = data?.base_resume ?? null;
-  const text = resumeToScoringText(base);
-  if (base && text) {
-    return (
-      `${text}\n\n---\n` +
-      `STRUCTURED RÉSUMÉ (JSON — authoritative employers, titles, dates, and education):\n` +
-      JSON.stringify(base)
+  const text = resumeToScoringText(base) || (data?.resume_text || '');
+  if (!text) return '';
+  const parts = [text];
+  if (base) {
+    parts.push(
+      `STRUCTURED RÉSUMÉ (JSON — authoritative employers, titles, dates, and education):\n${JSON.stringify(base)}`,
     );
   }
-  return text || (data?.resume_text || '');
+  parts.push(
+    `USER-MAINTAINED PROFILE FACTS (JSON — authoritative only for fields explicitly present; missing means unknown):\n` +
+      JSON.stringify({ work_authorization: data?.work_authorization ?? {} }),
+  );
+  return parts.join('\n\n---\n');
 }
 
 /** Write score fields onto a job row. */

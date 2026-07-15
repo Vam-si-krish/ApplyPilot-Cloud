@@ -1,0 +1,12 @@
+{
+  "name": "clearance-eligible-not-blocked",
+  "description": "The scorer must not apply a previous owner's citizenship/clearance assumption when this candidate explicitly meets the posting's eligibility requirement (ADR 0080).",
+  "resume": "Morgan Chen — Senior Backend Engineer, U.S. citizen with an active TS/SCI clearance. 8 years building distributed systems in Go and Python, Kubernetes, AWS, gRPC, and high-throughput data pipelines. Led platform teams and on-call.",
+  "job": {
+    "title": "Senior Backend Engineer",
+    "company": "DefenseGrid Systems",
+    "location": "Reston, VA",
+    "full_description": "We are hiring a Senior Backend Engineer to build mission-critical services in Go and Python on Kubernetes/AWS. 7+ years required. U.S. Citizenship and an active TS/SCI security clearance are non-negotiable. Strong distributed-systems and gRPC experience expected."
+  },
+  "expect": { "minScore": 7, "maxScore": 10 }
+}

@@ -37,8 +37,8 @@ describe('normalizeResume — defensive coercion of arbitrary JSON', () => {
   });
 
   it('parses education aliases (school→institution, degree→studyType, gpa→score)', () => {
-    const out = normalizeResume({ education: [{ school: 'Hult', degree: 'MS', area: 'Business Analytics', gpa: '3.9' }] });
-    expect(out.education[0]).toMatchObject({ institution: 'Hult', studyType: 'MS', area: 'Business Analytics', score: '3.9' });
+    const out = normalizeResume({ education: [{ school: 'Example University', degree: 'MS', area: 'Business Analytics', gpa: '3.9' }] });
+    expect(out.education[0]).toMatchObject({ institution: 'Example University', studyType: 'MS', area: 'Business Analytics', score: '3.9' });
   });
 
   it('returns the empty shape for junk input — never throws', () => {

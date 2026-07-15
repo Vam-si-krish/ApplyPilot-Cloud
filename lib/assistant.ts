@@ -87,6 +87,16 @@ export function buildAssistantSystem(profile: Profile): ChatMessage {
   // Résumé comes from the single source of truth — the structured base résumé (ADR 0036),
   // serialized to text. Fall back to the legacy resume_text only if no base résumé exists.
   const resumeText = profile.base_resume ? resumeToText(profile.base_resume).trim() : '';
+  if (profile.base_resume) {
+    // Onboarding stores a snapshot in assistant_profile. Base-résumé edits made later
+    // must replace every résumé-derived snapshot so the prompt cannot see stale facts.
+    facts.resume_facts = profile.base_resume;
+    facts.work_history = profile.base_resume.work;
+    facts.education = profile.base_resume.education;
+    facts.projects = profile.base_resume.projects;
+    facts.skills = [...new Set(profile.base_resume.skills.flatMap((group) => group.keywords))];
+    facts.professional_summary = profile.base_resume.basics.summary || '';
+  }
   if (resumeText) facts.resume = resumeText;
   else if (profile.resume_text) facts.resume_text = profile.resume_text;
 

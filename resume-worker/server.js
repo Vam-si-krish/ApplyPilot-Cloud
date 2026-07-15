@@ -21,7 +21,7 @@ import {
   getActiveApiKey,
   getJobsByIds,
   getQueuedApplications,
-  getScoringResumeText,
+  getScoringCandidateContext,
   updateJob,
   updateApplication,
   uploadPdf,
@@ -209,7 +209,7 @@ app.post('/score-jobs', async (req, res) => {
   const client = resolved.client;
 
   (async () => {
-    const [jobs, resumeText] = await Promise.all([getJobsByIds(ids), getScoringResumeText()]);
+    const [jobs, resumeText] = await Promise.all([getJobsByIds(ids), getScoringCandidateContext()]);
     // Only score jobs not yet AI-scored; to re-score, the user deletes the fit score first
     // (Jobs tab, ADR 0048), which resets the job to 'unscored'.
     const toScore = jobs.filter((j) => j.fit_score == null && j.status !== 'archived');

@@ -80,19 +80,11 @@ const KEYWORD_SUGGESTIONS = [
   'Software Engineer', 'Backend Engineer', 'Frontend Engineer', 'Full Stack Engineer',
   'Data Engineer', 'Machine Learning Engineer', 'DevOps Engineer', 'Platform Engineer',
 ];
-// Location suggestions grouped by area around Boston (ADR 0040). The point is to surface
-// the quieter suburban tech belts (Route 128 / I-495 / North Shore) — where postings get
-// far fewer applicants than "Boston, MA" — alongside the obvious core. All are real
-// software/tech hubs (Waltham, Burlington, Natick/MathWorks, Westford, Marlborough, …) and
-// recognized LinkedIn locations. Click any to add it to your saved + selected locations.
+// Owner-neutral location suggestions. Onboarding seeds each account's own résumé
+// location; these are only broad shortcuts and never override that per-user list.
 const LOCATION_SUGGESTION_GROUPS: { label: string; items: string[] }[] = [
-  { label: 'Boston core · most competition', items: ['Boston, MA', 'Cambridge, MA', 'Somerville, MA', 'Watertown, MA'] },
-  { label: 'Route 128 · inner suburbs', items: ['Waltham, MA', 'Newton, MA', 'Needham, MA', 'Burlington, MA', 'Woburn, MA', 'Lexington, MA', 'Bedford, MA', 'Quincy, MA', 'Dedham, MA'] },
-  { label: 'I-495 / MetroWest · quieter, less competition', items: ['Marlborough, MA', 'Westborough, MA', 'Natick, MA', 'Framingham, MA', 'Hopkinton, MA', 'Maynard, MA', 'Acton, MA', 'Hudson, MA'] },
-  { label: 'North & Merrimack Valley · quieter', items: ['Westford, MA', 'Chelmsford, MA', 'Billerica, MA', 'Wilmington, MA', 'Tewksbury, MA', 'Andover, MA', 'North Andover, MA', 'Lowell, MA', 'Peabody, MA', 'Danvers, MA'] },
-  { label: 'South of Boston', items: ['Braintree, MA', 'Canton, MA', 'Norwood, MA', 'Mansfield, MA', 'Foxborough, MA'] },
-  { label: 'Worcester & NH border', items: ['Worcester, MA', 'Shrewsbury, MA', 'Nashua, NH', 'Manchester, NH', 'Portsmouth, NH'] },
-  { label: 'Broader / remote', items: ['Providence, RI', 'Portland, ME', 'Hartford, CT', 'Stamford, CT', 'New York, NY', 'Remote, US', 'United States'] },
+  { label: 'Remote / nationwide', items: ['Remote, US', 'United States'] },
+  { label: 'Major US markets', items: ['New York, NY', 'San Francisco Bay Area', 'Seattle, WA', 'Austin, TX', 'Chicago, IL', 'Washington, DC'] },
 ];
 const SKILL_SUGGESTIONS = [
   'React', 'TypeScript', 'JavaScript', 'Node.js', 'Next.js', 'Python', 'SQL', 'AWS', 'GraphQL', 'Docker',

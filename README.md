@@ -19,7 +19,7 @@ evolved into the weighted v2 rubric documented in
 ## Stack
 - **Next.js 14 (App Router)** on Netlify — React UI + API routes in one deploy
 - **PostgreSQL on the server laptop** — jobs, profile, settings, runs
-- **Apify** — daily job fetch (configurable actor, default `bebity~linkedin-jobs-scraper`)
+- **Apify** — daily job fetch (configurable actor, default `cheap_scraper~linkedin-job-scraper`)
 - **LLM scoring** — Gemini `gemini-2.0-flash` by default (OpenAI / DeepSeek / Anthropic supported)
 - **Netlify scheduled functions** — trigger the daily run
 - Auth: three fixed usernames/passwords → signed identity session cookie
@@ -62,6 +62,21 @@ cp .env.example .env.local      # then fill in the values (see below)
    ```
 4. Upload a résumé PDF in onboarding, then add that account's Apify and LLM keys in
    **Settings**. Hit **Run now** on the Dashboard to kick a run.
+
+### Where each user updates AI context
+
+- **Tailor & Apply → Base résumé** is the source of truth for experience, titles, dates,
+  education, projects, skills, and contact details. New job scores, tailored résumés,
+  cover letters, and ApplyBuddy answers use the saved version.
+- **Profile → Work Auth** stores current authorization, sponsorship need, permit type,
+  citizenship/residency, and clearance. Only explicitly filled fields affect eligibility
+  scoring; blank means unknown.
+- **Settings → Search criteria** controls which roles, locations, and scraper skill terms
+  are fetched. It does not rewrite résumé facts.
+
+Onboarding initializes these from the uploaded PDF where possible. Existing job scores and
+generated files are not automatically rewritten after an edit; delete/re-run a score or
+regenerate the application document when you want the new context applied.
 
 To use a Claude subscription instead of an Anthropic API key, open **Settings →
 Claude connection**, authenticate on Anthropic's website, paste the one-time
@@ -108,7 +123,9 @@ authenticates their calls into the app.
 
 The current scorer in [`lib/scoring.ts`](lib/scoring.ts) uses a recruiter-style weighted
 rubric: must-have skills 60%, role relevance 25%, and experience/seniority 15%, with
-explicit blockers and a cap when a core hard requirement is genuinely missing. It sends
+candidate-specific blockers and a cap when a core hard requirement is genuinely missing.
+The shared prompt contains no owner's résumé/status: it receives the authenticated user's
+Base résumé and explicitly maintained Work Auth context at call time (ADR 0080). It sends
 up to 15,000 characters of cleaned job description, uses one model call per job at
 temperature 0.1 and a 1,000-token response limit, and returns company assessment in that
 same response. Provider or parse failure is stored visibly as score 0.

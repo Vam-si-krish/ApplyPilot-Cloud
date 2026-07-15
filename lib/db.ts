@@ -143,25 +143,61 @@ export async function getScoringResumeText(): Promise<string> {
   if (error) throw new Error(`Failed to load resume: ${error.message}`);
   const base = (data?.base_resume as ResumeDoc | null) ?? null;
   const text = base ? resumeToText(base).trim() : '';
-  return composeScoringResume(base, text) || ((data?.resume_text as string) || '');
+  const rendered = text || ((data?.resume_text as string) || '');
+  return composeScoringResume(base, rendered);
+}
+
+/** The AI scorer's per-user context: résumé plus explicitly maintained eligibility facts. */
+export async function getScoringCandidateContext(): Promise<string> {
+  const { data, error } = await supabaseAdmin()
+    .from('profile')
+    .select('base_resume, resume_text, work_authorization')
+    .eq('id', 1)
+    .single();
+  if (error) throw new Error(`Failed to load candidate context: ${error.message}`);
+  const base = (data?.base_resume as ResumeDoc | null) ?? null;
+  const text = base ? resumeToText(base).trim() : '';
+  const rendered = text || ((data?.resume_text as string) || '');
+  return composeScoringCandidateContext(
+    base,
+    rendered,
+    (data?.work_authorization as Record<string, unknown> | null) ?? {},
+  );
 }
 
 /**
- * Enriched scoring dossier (ADR 0066): the plain-text résumé PLUS the structured
+ * Enriched résumé context (ADR 0066): the plain-text résumé PLUS the structured
  * base_resume JSON. Both are per-candidate constants, so together they form the STABLE,
  * cached scoring prefix across every job in a run — and the added bulk lifts that prefix
  * over Haiku's 4,096-token minimum cacheable prefix (a plain-text-only résumé is too short
  * to cache on Haiku). The JSON also gives the scorer authoritative structured grounding
- * (exact dates, every bullet, education). Returns the rendered text unchanged when there's
- * no structured base to add.
+ * (exact dates, every bullet, education). Eligibility facts are deliberately added only
+ * by composeScoringCandidateContext so local ATS/skill matching remains résumé-only.
  */
-export function composeScoringResume(base: ResumeDoc | null, renderedText: string): string {
-  if (!base || !renderedText) return renderedText;
-  return (
-    `${renderedText}\n\n---\n` +
-    `STRUCTURED RÉSUMÉ (JSON — authoritative employers, titles, dates, and education):\n` +
-    JSON.stringify(base)
-  );
+export function composeScoringResume(
+  base: ResumeDoc | null,
+  renderedText: string,
+): string {
+  if (!renderedText) return '';
+  const parts = [renderedText];
+  if (base) {
+    parts.push(
+      `STRUCTURED RÉSUMÉ (JSON — authoritative employers, titles, dates, and education):\n${JSON.stringify(base)}`,
+    );
+  }
+  return parts.join('\n\n---\n');
+}
+
+export function composeScoringCandidateContext(
+  base: ResumeDoc | null,
+  renderedText: string,
+  workAuthorization: Record<string, unknown> = {},
+): string {
+  const resume = composeScoringResume(base, renderedText);
+  if (!resume) return '';
+  return resume + '\n\n---\n' +
+    `USER-MAINTAINED PROFILE FACTS (JSON — authoritative only for fields explicitly present; missing means unknown):\n` +
+    JSON.stringify({ work_authorization: workAuthorization });
 }
 
 // ── Base résumé + Applications (ADR 0024) ────────────────────────────────────

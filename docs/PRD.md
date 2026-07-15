@@ -37,7 +37,9 @@ first for three environment-configured username/password accounts. Public signup
 password reset remain disabled. Each account uploads a résumé PDF for AI-assisted initial
 profile/search setup, then supplies its own Apify/LLM API keys or connects its own
 UUID-isolated Claude subscription for normal work. The owner's server subscription is
-permitted only for the bounded onboarding parse.
+permitted only for the bounded onboarding parse. Shared AI instructions are owner-neutral:
+each call receives only the authenticated user's Base résumé/profile context, and onboarding
+copies work-authorization facts only when the PDF states them explicitly (ADR 0080).
 
 **Phase 2B — public-account readiness (next):** replace fixed credentials with account
 creation, verified recovery, session controls, and operational account lifecycle. Encrypt
@@ -85,7 +87,8 @@ must never be publicly readable — a single shared password gates everything (A
 2. On each run, **fetch the last 24h** of postings matching saved keywords × locations,
    via Apify (not local scraping). `hours_old` defaults to 24, configurable.
 3. **Score every fetched job 1–10** for shortlist fit using the current weighted rubric
-   and parser in `lib/scoring.ts` (see ARCHITECTURE §Scoring).
+   and parser in `lib/scoring.ts` against that account's Base résumé and explicit
+   eligibility facts (see ARCHITECTURE §Scoring).
 4. **Present results**: a shortlist sorted by `fit_score` desc, with filters
    (score range, search, status) and a shortlist toggle. Fresh/unscored results are
    visible without silently active score/company/run constraints; “Clear all” removes

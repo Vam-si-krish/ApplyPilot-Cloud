@@ -13,7 +13,7 @@ import {
   atsMatchScores,
 } from './prefilter';
 
-const RESUME = `Vamsi K
+const RESUME = `Jordan Lee
 Software Engineer
 Full-stack engineer with React, TypeScript, Node.js and AWS.
 

@@ -1,5 +1,9 @@
 # 0067 — Hard-block postings that will never sponsor a visa
 
+> **Multi-user amendment:** ADR 0080 removes the hardcoded owner status. This blocker
+> now applies only when the current user's candidate context explicitly says they need
+> sponsorship; missing facts are unknown, not a rejection.
+
 ## Context
 
 The candidate is on **F1 OPT/EAD**: authorized to work in the US *now* without sponsorship, but

@@ -22,7 +22,7 @@ is current.
 | Output | Trusted on | Verified by |
 |---|---|---|
 | Next/Tailwind/TS config, boilerplate | `build` + `typecheck` pass | typecheck, build |
-| `SCORE_PROMPT` text | accepted scoring decisions | parser tests + labeled eval bands |
+| `SCORE_PROMPT` text | accepted owner-neutral scoring decisions | parser tests + labeled eval bands + explicit per-candidate eligibility cases |
 | `parseScoreResponse` | nothing — core contract | unit tests with hand-computed expectations |
 | LLM provider request shapes (Gemini native, Anthropic Messages) | nothing — external payloads | official provider contract + integration smoke test |
 | Apify dataset field names | nothing — external payload | defensive mapping + confirm against a real run |

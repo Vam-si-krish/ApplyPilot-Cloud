@@ -16,12 +16,13 @@ describe('deriveOnboarding', () => {
         { name: 'Frameworks', keywords: ['React', 'FastAPI'] },
         { name: 'Tools', keywords: ['Docker'] },
       ],
-    }));
+    }), { require_sponsorship: true, work_permit_type: 'F-1 OPT' });
     expect(setup.personal.full_name).toBe('Ada Candidate');
     expect(setup.settings.keywords).toEqual(['Platform Engineer', 'Software Engineer']);
     expect(setup.settings.locations).toEqual(['New York, NY']);
     expect(setup.settings.skills).toContain('TypeScript');
     expect(setup.skillsBoundary.programming_languages).toEqual(['TypeScript', 'Python']);
     expect(setup.resumeText).toContain('Built APIs');
+    expect(setup.workAuthorization).toEqual({ require_sponsorship: true, work_permit_type: 'F-1 OPT' });
   });
 });

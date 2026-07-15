@@ -22,13 +22,14 @@ deploys separately on Netlify; persistent services stay on the server laptop.
 
 ## The rule that matters (scoring discipline)
 **Scoring is deliberate, never fabricated.** As of **ADR 0022** the scorer is a v2 weighted,
-must-have-aware rubric (`SCORE_PROMPT` in `lib/scoring.ts`) — it intentionally **diverges** from the
+must-have-aware, owner-neutral rubric (`SCORE_PROMPT` in `lib/scoring.ts`) — it intentionally **diverges** from the
 ApplyPilot-Lite scorer (the old "copy it byte-for-byte" rule is retired; see ADR 0022). What still
 holds, non-negotiably: **exactly one LLM call per job**; the model scores 0–10 and the threshold/sort
 decides; a parse failure or LLM error yields score `0` (visible), **never a fabricated score**; output
-is line-prefixed and parsed defensively (clamped 0–10, extra fields optional). The user-message is
-still resume + job — description HTML-stripped then truncated to 15000 chars, with the résumé
-segment marked as a prompt-cache breakpoint (ADR 0056). The scorer also reports
+is line-prefixed and parsed defensively (clamped 0–10, extra fields optional). The request is the
+current user's Base résumé + explicit work-authorization facts + job — description HTML-stripped
+then truncated to 15000 chars, with the candidate context marked as a prompt-cache breakpoint
+(ADRs 0056 and 0080). Missing eligibility facts remain unknown. The scorer also reports
 `employment_type` (so contract roles are flagged, not demoted) and a sub-score `breakdown`. Eval cases
 (`evals/cases/`) are the regression net — keep them green when touching scoring.
 

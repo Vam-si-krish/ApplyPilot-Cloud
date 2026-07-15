@@ -6,12 +6,12 @@ import type { ResumeDoc } from './types';
 
 function base(): ResumeDoc {
   return {
-    basics: { name: 'Vamsi', label: 'Senior Frontend Engineer', email: 'v@x.com', location: 'Boston, MA', summary: 'Frontend engineer.' },
+    basics: { name: 'Jordan', label: 'Senior Frontend Engineer', email: 'jordan@example.com', location: 'Denver, CO', summary: 'Frontend engineer.' },
     work: [
-      { name: 'JPMorgan', position: 'Senior Frontend Dev', startDate: '2021', endDate: 'Present', highlights: ['Built React apps', 'Led migration'] },
-      { name: 'Yash', position: 'Frontend Dev', startDate: '2018', endDate: '2021', highlights: ['Maintained Angular app'] },
+      { name: 'Northwind', position: 'Senior Frontend Dev', startDate: '2021', endDate: 'Present', highlights: ['Built React apps', 'Led migration'] },
+      { name: 'Contoso', position: 'Frontend Dev', startDate: '2018', endDate: '2021', highlights: ['Maintained Angular app'] },
     ],
-    education: [{ institution: 'Hult', studyType: 'MS', area: 'Business Analytics' }],
+    education: [{ institution: 'Example University', studyType: 'MS', area: 'Business Analytics' }],
     skills: [{ name: 'Frontend', keywords: ['React', 'TypeScript', 'GraphQL'] }],
     projects: [{ name: 'Proj', description: 'A thing', highlights: ['did x'] }],
   };
@@ -23,11 +23,11 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
       ...base(),
       work: [
         { name: 'Google', position: 'Frontend Engineer', startDate: '2015', endDate: 'Present', highlights: ['Reframed bullet'] },
-        { name: 'Yash', position: '', startDate: '2018', endDate: '2021', highlights: ['Reframed angular'] },
+        { name: 'Contoso', position: '', startDate: '2018', endDate: '2021', highlights: ['Reframed angular'] },
       ],
     };
     const out = mergeTailored(base(), tailored);
-    expect(out.work[0].name).toBe('JPMorgan'); // model's "Google" rejected
+    expect(out.work[0].name).toBe('Northwind'); // model's "Google" rejected
     expect(out.work[0].position).toBe('Frontend Engineer'); // honest title reframe accepted (ADR 0055)
     expect(out.work[0].startDate).toBe('2021');
     expect(out.work[0].highlights).toEqual(['Reframed bullet']); // wording accepted
@@ -38,14 +38,14 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
     const tailored: ResumeDoc = {
       ...base(),
       work: [
-        { name: 'JPMorgan', position: 'Frontend Engineer', startDate: '2021', endDate: 'Present', highlights: [] },
-        { name: 'Yash', position: '', startDate: '2018', endDate: '2021', highlights: [] },
+        { name: 'Northwind', position: 'Frontend Engineer', startDate: '2021', endDate: 'Present', highlights: [] },
+        { name: 'Contoso', position: '', startDate: '2018', endDate: '2021', highlights: [] },
       ],
     };
     const merged = mergeTailored(base(), tailored);
     const changes = titleChanges(base(), merged);
     expect(changes).toHaveLength(1);
-    expect(changes[0]).toContain('JPMorgan');
+    expect(changes[0]).toContain('Northwind');
     expect(changes[0]).toContain('Senior Frontend Dev');
     expect(changes[0]).toContain('Frontend Engineer');
     expect(titleChanges(base(), mergeTailored(base(), base()))).toEqual([]); // no-op tailor → no changes
@@ -88,8 +88,8 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
   it('accepts a reworded summary/label but keeps identity fields', () => {
     const tailored: ResumeDoc = { ...base(), basics: { ...base().basics, name: 'HACKED', email: 'evil@x.com', summary: 'Tailored summary.' } };
     const out = mergeTailored(base(), tailored);
-    expect(out.basics.name).toBe('Vamsi');
-    expect(out.basics.email).toBe('v@x.com');
+    expect(out.basics.name).toBe('Jordan');
+    expect(out.basics.email).toBe('jordan@example.com');
     expect(out.basics.summary).toBe('Tailored summary.');
   });
 
@@ -99,7 +99,7 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
   });
 
   it('keeps base highlights when the model omits an entry', () => {
-    const tailored: ResumeDoc = { ...base(), work: [{ name: 'JPMorgan', highlights: [] }] };
+    const tailored: ResumeDoc = { ...base(), work: [{ name: 'Northwind', highlights: [] }] };
     const out = mergeTailored(base(), tailored);
     expect(out.work[0].highlights).toEqual(base().work[0].highlights); // empty → base
     expect(out.work[1].highlights).toEqual(base().work[1].highlights); // missing → base
@@ -110,18 +110,18 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
     const patch = {
       basics: { summary: 'Tailored.', label: 'Senior FE' },
       work: [
-        { name: 'JPMorgan', highlights: ['New bullet A'] },
-        { name: 'Yash', highlights: ['New bullet B'] },
+        { name: 'Northwind', highlights: ['New bullet A'] },
+        { name: 'Contoso', highlights: ['New bullet B'] },
       ],
       skills: [{ name: 'Frontend', keywords: ['React', 'Next.js'] }],
       projects: [{ name: 'Proj', highlights: ['proj bullet'] }],
       _changes: ['Added Next.js'],
     };
     const out = mergeTailored(base(), normalizeResume(patch));
-    expect(out.basics.name).toBe('Vamsi'); // restored from base (patch omits it)
-    expect(out.basics.email).toBe('v@x.com'); // restored
+    expect(out.basics.name).toBe('Jordan'); // restored from base (patch omits it)
+    expect(out.basics.email).toBe('jordan@example.com'); // restored
     expect(out.basics.summary).toBe('Tailored.'); // taken from patch
-    expect(out.work[0].name).toBe('JPMorgan'); // anchored
+    expect(out.work[0].name).toBe('Northwind'); // anchored
     expect(out.work[0].highlights).toEqual(['New bullet A']);
     expect(out.education).toEqual(base().education); // restored (patch omits education entirely)
     expect(out.skills[0].keywords).toContain('Next.js');
@@ -148,8 +148,8 @@ describe('mergeTailored — deterministic one-page caps (ADR 0031)', () => {
     const tailored: ResumeDoc = {
       ...base(),
       work: [
-        { name: 'JPMorgan', highlights: ['Built cross-browser UIs — cutting latency 20% — across modules', 'Led migration'] },
-        { name: 'Yash', highlights: ['Maintained Angular app'] },
+        { name: 'Northwind', highlights: ['Built cross-browser UIs — cutting latency 20% — across modules', 'Led migration'] },
+        { name: 'Contoso', highlights: ['Maintained Angular app'] },
       ],
     };
     const out = mergeTailored(base(), tailored);

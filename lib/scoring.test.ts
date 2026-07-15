@@ -122,7 +122,7 @@ describe('buildScoreMessages', () => {
     expect(msgs[1].role).toBe('system');
     const rb = resumeBlock(msgs);
     expect(rb[0].cache).toBe(true); // the résumé is the cache breakpoint
-    expect(rb[0].text).toContain('RESUME:\nRES');
+    expect(rb[0].text).toContain('CANDIDATE CONTEXT:\nRES');
     expect(rb[0].text).not.toContain('JOB POSTING'); // per-job content must not poison the cached prefix
     expect(msgs[2].role).toBe('user');
     expect(jobText(msgs)).toContain('JOB POSTING:');
@@ -140,7 +140,7 @@ describe('buildScoreMessages', () => {
     expect(job).toContain('x'.repeat(15000));
     expect(job).not.toContain('x'.repeat(15001));
     // résumé stays in the cached system block, not the job tail
-    expect(resumeBlock(msgs)[0].text).toContain('RESUME:\nRES');
+    expect(resumeBlock(msgs)[0].text).toContain('CANDIDATE CONTEXT:\nRES');
   });
 
   it('strips HTML from the description before truncation (ADR 0056)', () => {
@@ -162,5 +162,11 @@ describe('buildScoreMessages', () => {
     const job = jobText(msgs);
     expect(job).toContain('LOCATION: N/A');
     expect(job).toContain('DESCRIPTION:\nfallback');
+  });
+
+  it('keeps the rubric owner-neutral and requires candidate-specific eligibility facts', () => {
+    expect(SCORE_PROMPT).not.toMatch(/candidate is on F1|they are, on OPT|will need H-1B/i);
+    expect(SCORE_PROMPT).toContain('Never assume every candidate has the same immigration');
+    expect(SCORE_PROMPT).toContain('missing/blank profile field means UNKNOWN');
   });
 });

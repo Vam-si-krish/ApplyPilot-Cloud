@@ -3,7 +3,7 @@ import pdf from 'pdf-parse/lib/pdf-parse.js';
 import { currentUserId } from '@/lib/userContext';
 import { supabaseAdmin } from '@/lib/supabase';
 import { makeWorkerClient } from '@/lib/llm';
-import { parseResumeText } from '@/lib/resumeParse';
+import { parseResumeSetup } from '@/lib/resumeParse';
 import { deriveOnboarding } from '@/lib/onboarding';
 
 export const runtime = 'nodejs';
@@ -57,8 +57,9 @@ export async function POST(req: Request) {
     const provider = process.env.ONBOARDING_SUBSCRIPTION_PROVIDER || 'chatgpt_subscription';
     const model = process.env.ONBOARDING_SUBSCRIPTION_MODEL || 'gpt-5.4';
     const client = makeWorkerClient(workerUrl, workerSecret, model, provider, userId, 'onboarding');
-    const doc = await parseResumeText(resumeText, client);
-    const setup = deriveOnboarding(doc);
+    const parsed = await parseResumeSetup(resumeText, client);
+    const doc = parsed.resume;
+    const setup = deriveOnboarding(doc, parsed.workAuthorization);
     const resumePath = 'base/original.pdf';
 
     const { error: uploadError } = await db.storage.from('resumes').upload(resumePath, buffer, {
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
       personal: setup.personal,
       experience: setup.experience,
       skills_boundary: setup.skillsBoundary,
+      work_authorization: setup.workAuthorization,
       assistant_profile: setup.assistantProfile,
       updated_at: new Date().toISOString(),
     }).eq('id', 1);

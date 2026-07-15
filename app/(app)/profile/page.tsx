@@ -76,8 +76,8 @@ export default function ProfilePage() {
         <div>
           <h1 className="page-title text-2xl">Profile</h1>
           <p className="page-sub">
-            Extra application data for the Assistant. Your résumé lives in{' '}
-            <a href="/applications" className="text-sky hover:underline">Tailor &amp; Apply → Base résumé</a> and drives scoring, tailoring, and cover letters.
+            Your résumé lives in{' '}
+            <a href="/applications" className="text-sky hover:underline">Tailor &amp; Apply → Base résumé</a> and drives scoring, tailoring, cover letters, and ApplyBuddy. Work Auth below is also included in eligibility scoring.
           </p>
         </div>
         {saved && (
@@ -128,21 +128,34 @@ export default function ProfilePage() {
 
         {tab === 'work' && (
           <div className="space-y-4">
+            <p className="text-[12px] text-slate-muted">
+              These are candidate-specific AI facts. Fill them in truthfully; blank fields mean unknown, never an automatic rejection.
+            </p>
             <div className="card p-5 space-y-4">
-              <Toggle
+              <TriState
                 label="Legally authorized to work in US"
-                value={!!form.work_authorization?.legally_authorized_to_work}
+                value={form.work_authorization?.legally_authorized_to_work}
                 onChange={(v) => set('work_authorization.legally_authorized_to_work', v)}
               />
-              <Toggle
+              <TriState
                 label="Requires visa sponsorship"
-                value={!!form.work_authorization?.require_sponsorship}
+                value={form.work_authorization?.require_sponsorship}
                 onChange={(v) => set('work_authorization.require_sponsorship', v)}
               />
               <Field
                 label="Work Permit Type (leave blank if none)"
                 value={form.work_authorization?.work_permit_type}
                 onChange={(v) => set('work_authorization.work_permit_type', v)}
+              />
+              <Field
+                label="Citizenship / Residency (optional)"
+                value={form.work_authorization?.citizenship_or_residency}
+                onChange={(v) => set('work_authorization.citizenship_or_residency', v)}
+              />
+              <Field
+                label="Security Clearance (optional)"
+                value={form.work_authorization?.security_clearance}
+                onChange={(v) => set('work_authorization.security_clearance', v)}
               />
             </div>
             <SaveBtn onClick={save} loading={saving} />
@@ -172,21 +185,19 @@ function Field({ label, value, onChange }: { label: string; value: unknown; onCh
   );
 }
 
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function TriState({ label, value, onChange }: { label: string; value: unknown; onChange: (v: boolean | null) => void }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer">
-      <div
-        onClick={() => onChange(!value)}
-        className={`w-10 h-5 rounded-full border transition-all relative ${value ? 'bg-sky/25 border-sky/50' : 'bg-raised border-ink'}`}
+    <label className="block">
+      <span className="label">{label}</span>
+      <select
+        className="input"
+        value={value === true ? 'yes' : value === false ? 'no' : 'unknown'}
+        onChange={(event) => onChange(event.target.value === 'yes' ? true : event.target.value === 'no' ? false : null)}
       >
-        <div
-          className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${
-            value ? 'left-5 bg-gradient-to-br from-sky to-iris shadow-glow-sky' : 'left-0.5 bg-slate-dim'
-          }`}
-        />
-      </div>
-      <span className="text-[13px] text-slate-text">{label}</span>
-      <span className={`text-[11px] font-mono ${value ? 'text-emerald' : 'text-rose'}`}>{value ? 'YES' : 'NO'}</span>
+        <option value="unknown">Not specified</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
     </label>
   );
 }

@@ -65,7 +65,7 @@ export default function BaseResumeEditor() {
         <p className="text-[13px] text-slate-text font-medium">Base résumé</p>
         <p className="text-slate-muted text-[12px]">
           Your one résumé — it drives scoring, per-job tailoring, and cover letters. Never fabricated, always your real
-          experience. Edit it here; this is the only place it lives.
+          experience. Edit it here; every new score or generated résumé uses the saved version. Existing scores and generated files are not recalculated automatically.
         </p>
       </div>
 

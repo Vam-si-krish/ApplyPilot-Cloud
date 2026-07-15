@@ -22,7 +22,7 @@ function experienceYears(doc: ResumeDoc): number | null {
   return Math.max(0, last - first);
 }
 
-export function deriveOnboarding(doc: ResumeDoc) {
+export function deriveOnboarding(doc: ResumeDoc, workAuthorization: Record<string, unknown> = {}) {
   const allSkills = unique(doc.skills.flatMap((group) => [group.name, ...group.keywords]));
   const languages: string[] = [];
   const frameworks: string[] = [];
@@ -60,6 +60,7 @@ export function deriveOnboarding(doc: ResumeDoc) {
       frameworks: unique(frameworks),
       tools: unique(tools),
     },
+    workAuthorization,
     assistantProfile: {
       resume_facts: doc,
       professional_summary: doc.basics.summary || '',

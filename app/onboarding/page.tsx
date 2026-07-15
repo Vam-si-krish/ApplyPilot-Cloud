@@ -67,7 +67,7 @@ export default function OnboardingPage() {
             <form onSubmit={submit} className="space-y-5">
               <div>
                 <h2 className="font-semibold">Upload your résumé PDF</h2>
-                <p className="mt-1 text-sm text-slate-muted">Your PDF is stored in your private file namespace. The server subscription is used once to faithfully structure it—no facts are invented.</p>
+                <p className="mt-1 text-sm text-slate-muted">Your PDF is stored in your private file namespace. The server subscription is used once to faithfully structure it—no facts are invented. Work authorization is copied only when the PDF states it explicitly; review it later under Profile → Work Auth.</p>
               </div>
               <label className="flex cursor-pointer flex-col items-center rounded-xl border border-dashed border-ink p-8 text-center hover:border-sky/50">
                 <Upload className="mb-3 text-sky" />
