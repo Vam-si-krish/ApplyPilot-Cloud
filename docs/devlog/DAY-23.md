@@ -31,5 +31,7 @@
 
 ## Deployment
 
-- Pending implementation commit/push. No worker restart is required because this is a
-  browser presentation-only change; the existing PDF renderer is unchanged.
+- Implementation commit `953b977` was pushed to `multi-user-fork`, handing the browser
+  update to the configured Netlify branch deployment.
+- No worker restart was required because this is a browser presentation-only change; the
+  existing PDF renderer and backend services are unchanged.
