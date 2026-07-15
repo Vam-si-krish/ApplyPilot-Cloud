@@ -23,8 +23,9 @@
 - [x] **AI Apply Navigator Phase 2 foundation: ApplyPilot plugin + MCP.** Bundle the
   queue workflow as a repo-local Codex plugin with five narrow MCP tools, revocable
   two-hour UUID-scoped runs, extension-first Chrome instructions, and a copied-prompt
-  fallback (ADR 0096). This is implemented on `develop` for review, not yet installed or
-  deployed.
+  fallback (ADR 0096). The development migration/APIs are live, the repo-local marketplace
+  is installed as `applypilot@personal`, and an authenticated five-tool queue smoke test
+  passes against `applydev.vamsikrish.com` (ADR 0098).
 - [ ] **AI Apply Navigator Phase 2 hardening: durable native invocation.** Replace the
   temporary environment-token setup with OAuth/device authorization, add run leases and
   per-step audit evidence, evaluate success detection and prompt-injection handling, and

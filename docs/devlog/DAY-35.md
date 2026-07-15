@@ -92,3 +92,15 @@
 - Final gates pass: 223 application tests with 9 credentialed evals skipped, 19 backend
   tests, 20 worker tests, TypeScript, plugin validation, documentation validation across
   146 Markdown files and 91 ADRs, and the production-mode Next.js build.
+
+## Development plugin installation and live smoke
+
+- Confirmed local `develop`, `origin/develop`, and the isolated development server are all
+  at `0030b62`; `applydev.vamsikrish.com` and the gateway/worker are healthy.
+- Verified migration 0051 is live and both AI-agent route families return their expected
+  unauthenticated 401 responses.
+- Added the repo-local `personal` marketplace, registered it with Codex, and installed
+  `applypilot@personal` version `0.1.0` as enabled.
+- Ran an authenticated end-to-end MCP smoke against development: initialization passed,
+  all five tools loaded, and the queue tool returned four assigned jobs. The dedicated
+  smoke token was revoked immediately. Production remained untouched.

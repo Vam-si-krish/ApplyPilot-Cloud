@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0097
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0098
 
 ## Current deployment topology
 
@@ -191,7 +191,9 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   `supabaseAdmin(userId)` gateway client; they expose only active queue listing, one-row
   grounded context, and start/Needs-review/submitted transitions. The local stdio MCP
   process never receives a backend service key, database credential, app cookie, or
-  another user's identity (ADR 0096).
+  another user's identity. Development distributes this source through the repo-local
+  `personal` marketplace and installs it as `applypilot@personal`; production packaging
+  remains deferred (ADRs 0096 and 0098).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;

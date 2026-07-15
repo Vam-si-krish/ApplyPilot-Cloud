@@ -7,16 +7,20 @@ Codex should read the live ApplyPilot queue, use the existing Chrome profile and
 extension, fill only missed fields from grounded candidate information, submit, record the
 outcome, and continue. One failed job must not stop the batch.
 
-## Phase 1 — foundation (implemented on `develop`, awaiting review)
+## Phase 1 — foundation (implemented and live-tested in development)
 
 - Repo-local plugin manifest, Apply jobs skill, and local stdio MCP server.
 - Five least-privilege queue/context/lifecycle tools.
 - Revocable, signed, user-bound two-hour run tokens with forced-RLS storage.
 - One-click creation of the temporary local environment setup from Assign to AI.
 - Existing copied twenty-row prompt retained as a fallback.
+- Repo-local `personal` marketplace entry, locally installed as `applypilot@personal`.
+- Live MCP smoke test against `applydev.vamsikrish.com`, including all five tools and a
+  user-scoped queue read; the smoke credential was revoked afterward.
 
-Exit gate: manifest validation, MCP handshake, token/route tests, full app tests,
-TypeScript, documentation check, build, and manual development-site review.
+Exit gate met: manifest validation, MCP handshake, token/route tests, full app tests,
+TypeScript, documentation check, build, deployed development APIs/migration, marketplace
+installation, and authenticated live queue read.
 
 ## Phase 2 — remove setup friction
 
