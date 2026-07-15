@@ -483,6 +483,9 @@ export interface TailorChanges {
 /** Application lifecycle (ADR 0024): queued → generating → ready → applied; failed = render/AI error. */
 export type ApplicationStatus = 'queued' | 'generating' | 'ready' | 'applied' | 'failed';
 
+/** Supervised application-assistant lifecycle (ADR 0093). */
+export type AiApplyStatus = 'assigned' | 'in_progress' | 'ready_to_submit' | 'blocked' | 'submitted';
+
 /** Token usage of one tailor call (ADR 0064), as the provider reported it. */
 export interface TailorUsage {
   input_tokens: number | null;
@@ -542,6 +545,12 @@ export interface Application {
   /** "Set Aside" tab (ADR 0061): true = parked out of the working Queue (keeps all
    *  state; skipped by the overnight drain until moved back). */
   parked: boolean;
+  /** Supervised browser-application lifecycle (ADR 0093). Orthogonal to tailoring
+   *  status and restricted to verified external applications in Phase 1. */
+  ai_apply_status: AiApplyStatus | null;
+  ai_assigned_at: string | null;
+  ai_apply_updated_at: string | null;
+  ai_block_reason: string | null;
   /** Token usage of the LAST tailor call (ADR 0064) — what this résumé cost.
    *  Null = generated before tracking / provider didn't report usage. */
   tailor_usage: TailorUsage | null;

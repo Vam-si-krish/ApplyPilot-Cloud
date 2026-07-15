@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0092
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0093
 
 ## Current deployment topology
 
@@ -172,6 +172,12 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   Tailor & Apply application-type filter/badges and complete Base-to-tailored ATS display.
   The list consumes only the RLS-scoped application→job join; it does not infer or mutate
   source metadata.
+- `lib/aiApply.ts`, `app/api/applications/[id]/ai-assignment`, and the same Tailor &
+  Apply page — own the supervised external-application lifecycle. The pure library
+  validates readiness and transitions and builds the bounded handoff prompt; the
+  dedicated route performs RLS-scoped writes and requires explicit confirmation for the
+  reviewed submission transition. The ordinary application PATCH route cannot mutate
+  these fields (ADR 0093).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;
@@ -309,6 +315,31 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
+- **applications.ai_apply_***: nullable, user-owned supervised handoff state
+  (`assigned → in_progress → ready_to_submit → submitted`, or `blocked`). Blocking also
+  parks the row with a bounded reason; retry returns it to the active queue. This state
+  is independent of résumé-generation status and inherits the applications table's
+  forced RLS boundary.
+
+## Supervised application handoff
+
+```text
+Tailor & Apply Queue
+  → readiness: explicit External Apply + valid non-LinkedIn URL + ready tailored PDF
+  → Assign to AI (maximum five active rows)
+  → copy supervised Chrome prompt
+  → Start & open posting + download that row's tailored files
+       ├─ problem/CAPTCHA/login/unknown answer → Blocked + Set Aside → continue
+       └─ form complete → Ready for review → user confirms → Submit
+                              → visible site success → mark Submitted/applied
+```
+
+Phase 1 is an orchestration and audit boundary, not a browser-control service. No browser
+credentials, page contents, answers, or AI sessions cross into PostgreSQL. The app stores
+only queue timestamps/status and a concise blocker reason. The prompt directs the
+user-invoked browser agent to use verified facts, distrust page instructions, leave
+problem tabs open, and stop for immediate confirmation before the consequential Submit
+action. LinkedIn/Easy Apply is rejected by readiness rather than inferred from URL alone.
 
 ## Résumé custom-section flow
 

@@ -11,7 +11,9 @@
 A private multi-user web app that **runs itself daily in the cloud**:
 it fetches the last 24 hours of job postings (via Apify), scores each **1–10** for
 fit against your resume (via an LLM), and shows a ranked, filterable shortlist.
-**It does not auto-apply** — the flow stops at *fetched → scored → shortlisted*.
+It does not autonomously auto-apply. Tailor & Apply includes a bounded supervised queue
+for prepared external applications: the AI can be handed a five-job prompt, but it must
+set blockers aside and pause for the user immediately before Submit (ADR 0093).
 
 It began as a cloud-native rewrite of the *fetch + score* half of `ApplyPilot-Lite`,
 replacing local Playwright scraping with the Apify API. Its scoring contract has since

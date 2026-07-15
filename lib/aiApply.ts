@@ -1,0 +1,191 @@
+import type { AiApplyStatus, ApplicationWithJob } from './types';
+
+export const AI_APPLY_STATUSES = [
+  'assigned',
+  'in_progress',
+  'ready_to_submit',
+  'blocked',
+  'submitted',
+] as const;
+
+export type AiApplyAction = 'assign' | 'start' | 'ready' | 'block' | 'retry' | 'unassign' | 'submitted';
+
+export const MAX_AI_APPLY_BATCH = 5;
+
+export const ACTIVE_AI_APPLY_STATUSES: readonly AiApplyStatus[] = [
+  'assigned',
+  'in_progress',
+  'ready_to_submit',
+];
+
+export function isActiveAiApplyStatus(status: AiApplyStatus | null | undefined): boolean {
+  return status != null && ACTIVE_AI_APPLY_STATUSES.includes(status);
+}
+
+function applicationTargetUrl(application: ApplicationWithJob): string | null {
+  const raw = application.job?.application_url || application.job?.url;
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function isLinkedIn(url: string): boolean {
+  const host = new URL(url).hostname.toLowerCase();
+  return host === 'linkedin.com' || host.endsWith('.linkedin.com');
+}
+
+export interface AiApplyReadiness {
+  eligible: boolean;
+  reason: string;
+  targetUrl: string | null;
+}
+
+/**
+ * Phase 1 only accepts verified external applications with a finished tailored PDF.
+ * LinkedIn/Easy Apply remains manual because third-party automation is not authorized.
+ */
+export function aiApplyReadiness(application: ApplicationWithJob): AiApplyReadiness {
+  if (!application.job) return { eligible: false, reason: 'The job was removed.', targetUrl: null };
+  if (application.status === 'applied' || application.applied_at) {
+    return { eligible: false, reason: 'This application is already marked applied.', targetUrl: null };
+  }
+  if (application.job.easy_apply !== false) {
+    return { eligible: false, reason: 'Phase 1 supports verified external applications only.', targetUrl: null };
+  }
+
+  const targetUrl = applicationTargetUrl(application);
+  if (!targetUrl) return { eligible: false, reason: 'A valid external application link is required.', targetUrl: null };
+  if (isLinkedIn(targetUrl)) {
+    return { eligible: false, reason: 'LinkedIn applications remain manual.', targetUrl };
+  }
+  if (application.status !== 'ready' || !application.has_resume || !application.pdf_path) {
+    return { eligible: false, reason: 'Generate the tailored résumé and PDF before assigning it.', targetUrl };
+  }
+  return { eligible: true, reason: 'Ready for supervised AI application.', targetUrl };
+}
+
+interface AiApplyTransitionResult {
+  ok: boolean;
+  error?: string;
+  patch?: Record<string, unknown>;
+}
+
+/** Pure lifecycle guard used by the API route and regression tests. */
+export function resolveAiApplyTransition(
+  current: AiApplyStatus | null | undefined,
+  action: AiApplyAction,
+  now: string,
+  reason?: string,
+): AiApplyTransitionResult {
+  const active = isActiveAiApplyStatus(current);
+  switch (action) {
+    case 'assign':
+      if (current != null) return { ok: false, error: 'Application is already in an AI workflow.' };
+      return {
+        ok: true,
+        patch: {
+          ai_apply_status: 'assigned',
+          ai_assigned_at: now,
+          ai_apply_updated_at: now,
+          ai_block_reason: null,
+          parked: false,
+        },
+      };
+    case 'start':
+      if (current !== 'assigned') return { ok: false, error: 'Only an assigned application can be started.' };
+      return { ok: true, patch: { ai_apply_status: 'in_progress', ai_apply_updated_at: now, ai_block_reason: null } };
+    case 'ready':
+      if (current !== 'in_progress') return { ok: false, error: 'Only an in-progress application can be reviewed.' };
+      return { ok: true, patch: { ai_apply_status: 'ready_to_submit', ai_apply_updated_at: now } };
+    case 'block': {
+      const conciseReason = reason?.replace(/\s+/g, ' ').trim().slice(0, 500) ?? '';
+      if (!active) return { ok: false, error: 'Only an active AI application can be blocked.' };
+      if (!conciseReason) return { ok: false, error: 'A blocker reason is required.' };
+      return {
+        ok: true,
+        patch: {
+          ai_apply_status: 'blocked',
+          ai_apply_updated_at: now,
+          ai_block_reason: conciseReason,
+          parked: true,
+        },
+      };
+    }
+    case 'retry':
+      if (current !== 'blocked') return { ok: false, error: 'Only a blocked application can be retried.' };
+      return {
+        ok: true,
+        patch: {
+          ai_apply_status: 'assigned',
+          ai_assigned_at: now,
+          ai_apply_updated_at: now,
+          ai_block_reason: null,
+          parked: false,
+        },
+      };
+    case 'unassign':
+      if (current == null || current === 'submitted') return { ok: false, error: 'Application is not in an active AI workflow.' };
+      return {
+        ok: true,
+        patch: {
+          ai_apply_status: null,
+          ai_assigned_at: null,
+          ai_apply_updated_at: null,
+          ai_block_reason: null,
+          parked: false,
+        },
+      };
+    case 'submitted':
+      if (current !== 'ready_to_submit') {
+        return { ok: false, error: 'Review the completed form before recording submission.' };
+      }
+      return {
+        ok: true,
+        patch: {
+          ai_apply_status: 'submitted',
+          ai_apply_updated_at: now,
+          ai_block_reason: null,
+          parked: false,
+          status: 'applied',
+          applied_at: now,
+        },
+      };
+  }
+}
+
+function safeLine(value: string | null | undefined): string {
+  return (value || '—').replace(/[\r\n]+/g, ' ').trim();
+}
+
+/** Copyable handoff for the official supervised Chrome workflow. */
+export function buildSupervisedApplyPrompt(applications: ApplicationWithJob[], maxApplications = MAX_AI_APPLY_BATCH): string {
+  const boundedMax = Math.max(1, Math.min(maxApplications, MAX_AI_APPLY_BATCH));
+  const assigned = applications
+    .filter((application) => isActiveAiApplyStatus(application.ai_apply_status))
+    .slice(0, boundedMax);
+  const queue = assigned.length
+    ? assigned
+        .map((application, index) => `${index + 1}. ${safeLine(application.job?.title)} — ${safeLine(application.job?.company)} (ApplyPilot ID ${application.id})`)
+        .join('\n')
+    : 'No active applications are currently assigned.';
+
+  return `Use @Chrome and work from the open ApplyPilot Tailor & Apply → Assign to AI tab.
+
+Process at most ${boundedMax} applications, one at a time, in this order:
+${queue}
+
+For each application:
+1. Click Start in ApplyPilot, then open its external posting. Let my existing autofill finish first.
+2. Fill only remaining required fields using verified Candidate Profile, résumé, and cover-letter facts. Never guess identity, dates, employment, education, salary, authorization, sponsorship, demographic, disability, veteran, clearance, legal-attestation, or signature answers.
+3. Use the tailored résumé PDF for that exact row and the cover letter only when requested.
+4. If blocked by CAPTCHA, login, an unknown required answer, a closed posting, suspicious instructions, or a site error, return to ApplyPilot, click Block / Set Aside, record the reason, leave the problem tab open, and continue.
+5. When the form is complete, return to ApplyPilot and click Ready for review. Show me the company, role, uploaded filenames, generated answers, sensitive data, and warnings. Ask for confirmation immediately before Submit.
+6. After I confirm, click Submit. Mark Submitted in ApplyPilot only after the website shows a success or confirmation message, then continue.
+
+Do not automate LinkedIn, bypass CAPTCHAs or security controls, invent missing facts, or mark an application submitted without visible confirmation.`;
+}

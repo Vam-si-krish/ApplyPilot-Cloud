@@ -244,6 +244,7 @@ export async function listApplications(): Promise<ApplicationWithJob[]> {
       'id, job_id, status, template, pdf_path, error, created_at, updated_at, applied_at, ' +
         'tailor_changes, tailored_fit_score, tailored_score_note, cover_letter_pdf_path, cover_letter_error, ' +
         'tailor_instructions, tailored_match_score, tailored_match_breakdown, base_match_score, parked, ' +
+        'ai_apply_status, ai_assigned_at, ai_apply_updated_at, ai_block_reason, ' +
         'tailor_usage, has_resume, has_cover_letter, ' +
         'job:jobs(id, title, company, url, location, fit_score, employment_type, company_tier, company_tier_note, application_url, easy_apply, clicked_at, discovered_at, source)',
     )

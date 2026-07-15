@@ -73,6 +73,13 @@ dedicated column. It remains available from the fit-score tooltip, while complet
 reasoning stays in the expanded job details. On desktop, role type, apply type, company
 assessment, duplicate locations, ATS match, skill match, and opened state each retain a
 stable column, and row actions retain fixed icon slots (ADR 0092).
+Tailor & Apply also provides Supervised Apply Phase 1. A user may assign no more than
+five prepared, explicitly External Apply jobs to a separate AI queue, copy a bounded
+Chrome handoff prompt, start/open each posting with its exact tailored files, record a
+blocker into Set Aside, retry it later, and confirm a visibly successful submission.
+LinkedIn/Easy Apply, CAPTCHAs, login barriers, unknown required answers, silent browser
+control, and submission without an immediate user review remain outside this phase
+(ADR 0093).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
@@ -123,8 +130,9 @@ ApplyPilot-Lite scrapes job boards locally with Playwright, which forces it to r
 on the user's machine. Replacing local scraping with the **Apify API** turns the app
 into two HTTP calls (fetch + score), so it can be **fully serverless** and self-running.
 
-**Non-goal:** no auto-apply. The flow stops at *fetched → scored → shortlisted*.
-(The original full ApplyPilot auto-applied; Lite and Cloud deliberately do not.)
+**Historical non-goal:** the original baseline had no auto-apply and stopped at
+*fetched → scored → shortlisted*. ADR 0093 narrowly amends that baseline with a
+supervised external-application handoff; autonomous browser control remains a non-goal.
 
 ## Users
 One person (the owner). The app exposes the user's resume and personal data, so it

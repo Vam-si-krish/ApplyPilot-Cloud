@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput, Bot, Copy, Play, ShieldCheck, CircleX, RotateCcw } from 'lucide-react';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ResumeDiff from '@/components/ResumeDiff';
 import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
+import AiApplyQueueHeader from '@/components/AiApplyQueueHeader';
+import AiApplyStatusBadge from '@/components/AiApplyStatusBadge';
 import { useProgress } from '@/components/ProgressContext';
 import type { ApplicationWithJob, ApplicationStatus, ResumeDoc } from '@/lib/types';
 import { scoreUsageCostUsd } from '@/lib/pricing';
@@ -17,8 +19,15 @@ import {
   matchesApplicationApplyType,
   type ApplicationApplyTypeFilter,
 } from '@/lib/applicationPresentation';
+import {
+  aiApplyReadiness,
+  buildSupervisedApplyPrompt,
+  isActiveAiApplyStatus,
+  MAX_AI_APPLY_BATCH,
+  type AiApplyAction,
+} from '@/lib/aiApply';
 
-type View = 'list' | 'parked' | 'manual';
+type View = 'list' | 'ai' | 'parked' | 'manual';
 
 const STATUS_STYLE: Record<ApplicationStatus, string> = {
   queued: 'bg-raised border-ink text-slate-muted',
@@ -209,6 +218,58 @@ export default function ApplicationsPage() {
     load(true);
   }
 
+  async function sendAiAction(id: string, action: AiApplyAction, reason?: string, confirmed = false) {
+    const response = await fetch(`/api/applications/${id}/ai-assignment`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, reason, confirmed }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not update the AI application queue.');
+    return result;
+  }
+
+  async function updateAiApplication(a: ApplicationWithJob, action: AiApplyAction) {
+    let reason: string | undefined;
+    let confirmed = false;
+    if (action === 'block') {
+      reason = window.prompt('What stopped this application? The AI will leave that tab open and continue.')?.trim();
+      if (!reason) return;
+    }
+    if (action === 'submitted') {
+      confirmed = window.confirm(
+        `Confirm that you reviewed the final form and ${a.job?.company || 'the employer'} showed a successful submission message.`,
+      );
+      if (!confirmed) return;
+    }
+    setBulkBusy(true);
+    setMsg(null);
+    try {
+      await sendAiAction(a.id, action, reason, confirmed);
+      const message: Partial<Record<AiApplyAction, string>> = {
+        assign: 'Assigned to AI. Open the Assign to AI tab when you are ready.',
+        start: 'Application started. The tailored files are downloading now.',
+        ready: 'Ready for your final review.',
+        block: 'Problem recorded and moved to Set Aside. Continue with the next application.',
+        retry: 'Returned to the supervised AI queue.',
+        unassign: 'Removed from the AI queue and returned to the working Queue.',
+        submitted: 'Submission confirmed and recorded as applied.',
+      };
+      setMsg(message[action] || 'AI application updated.');
+      setSelected((previous) => {
+        const next = new Set(previous);
+        next.delete(a.id);
+        return next;
+      });
+      await load(true);
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : 'Could not update the AI application queue.');
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setMsg(null), 6000);
+    }
+  }
+
   // Record that the user opened this application's posting (ADR 0063), so the row can
   // flag "opened, but you haven't logged whether you applied". Stored as the JOB's
   // clicked_at (same field the Jobs tab uses — opening from either tab stays in sync).
@@ -269,13 +330,17 @@ export default function ApplicationsPage() {
     setBulkBusy(true);
     try {
       await Promise.all(
-        ids.map((id) =>
-          fetch(`/api/applications/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ parked }),
-          }),
-        ),
+        ids.map((id) => {
+          const application = apps.find((item) => item.id === id);
+          if (!parked && application?.ai_apply_status === 'blocked') {
+            return sendAiAction(id, 'unassign');
+          }
+          return fetch(`/api/applications/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ parked }),
+            });
+        }),
       );
       if (expanded && ids.includes(expanded)) {
         expandedRef.current = null;
@@ -290,6 +355,63 @@ export default function ApplicationsPage() {
       setBulkBusy(false);
       setTimeout(() => setMsg(null), 5000);
     }
+  }
+
+  async function assignSelectedToAi() {
+    if (bulkBusy) return;
+    const remaining = MAX_AI_APPLY_BATCH - apps.filter((a) => isActiveAiApplyStatus(a.ai_apply_status)).length;
+    const candidates = [...selected]
+      .map((id) => apps.find((a) => a.id === id))
+      .filter((a): a is ApplicationWithJob => !!a && aiApplyReadiness(a).eligible && a.ai_apply_status == null)
+      .slice(0, Math.max(0, remaining));
+    if (candidates.length === 0) {
+      setMsg(remaining <= 0 ? `The supervised queue already has ${MAX_AI_APPLY_BATCH} active applications.` : 'Select ready external applications with a tailored PDF.');
+      return;
+    }
+    setBulkBusy(true);
+    setMsg(null);
+    let assigned = 0;
+    let failed = 0;
+    for (const application of candidates) {
+      try {
+        await sendAiAction(application.id, 'assign');
+        assigned += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setSelected(new Set());
+    await load(true);
+    setBulkBusy(false);
+    setMsg(`Assigned ${assigned} application${assigned === 1 ? '' : 's'} to AI${failed ? `; ${failed} could not be assigned` : ''}.`);
+    setTimeout(() => setMsg(null), 6000);
+  }
+
+  async function blockSelectedAi() {
+    const active = [...selected]
+      .map((id) => apps.find((a) => a.id === id))
+      .filter((a): a is ApplicationWithJob => !!a && isActiveAiApplyStatus(a.ai_apply_status));
+    if (bulkBusy || active.length === 0) return;
+    const reason = window.prompt('What problem affected these applications? They will move to Set Aside.')?.trim();
+    if (!reason) return;
+    setBulkBusy(true);
+    const results = await Promise.allSettled(active.map((a) => sendAiAction(a.id, 'block', reason)));
+    const moved = results.filter((result) => result.status === 'fulfilled').length;
+    setSelected(new Set());
+    await load(true);
+    setBulkBusy(false);
+    setMsg(`Set aside ${moved} AI application${moved === 1 ? '' : 's'} with the blocker reason.`);
+    setTimeout(() => setMsg(null), 6000);
+  }
+
+  async function copyAiPrompt() {
+    try {
+      await navigator.clipboard.writeText(buildSupervisedApplyPrompt(apps));
+      setMsg('Supervised Apply prompt copied. Paste it into ChatGPT with Chrome connected.');
+    } catch {
+      setMsg('The browser blocked clipboard access. Select the page and try again.');
+    }
+    setTimeout(() => setMsg(null), 6000);
   }
 
   // Trigger the overnight tailoring drain right now (same pipeline the 4am cron runs).
@@ -407,12 +529,21 @@ export default function ApplicationsPage() {
   }
   // Visible (filtered) applications — the list, select-all, and bulk actions all
   // operate on this set, not the full one. Mirrors the Jobs tab's filtering.
-  // Queue shows unparked rows; Set Aside shows parked ones (ADR 0061).
+  // Queue, supervised AI, and Set Aside are mutually exclusive work surfaces. The AI
+  // lifecycle remains orthogonal to tailoring status (ADR 0093).
+  const inAi = view === 'ai';
   const inParked = view === 'parked';
   const parkedCount = apps.filter((a) => a.parked).length;
+  const aiCount = apps.filter((a) => !a.parked && isActiveAiApplyStatus(a.ai_apply_status)).length;
   const q = search.trim().toLowerCase();
   const filtered = apps.filter((a) => {
-    if (!!a.parked !== inParked) return false;
+    if (inAi) {
+      if (a.parked || !isActiveAiApplyStatus(a.ai_apply_status)) return false;
+    } else if (inParked) {
+      if (!a.parked) return false;
+    } else if (a.parked || isActiveAiApplyStatus(a.ai_apply_status)) {
+      return false;
+    }
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     if (
       applyTypeFilter !== 'all' &&
@@ -434,6 +565,10 @@ export default function ApplicationsPage() {
   const selectedGeneratable = [...selected].filter((id) => {
     const a = apps.find((x) => x.id === id);
     return a?.job && !a.has_resume;
+  }).length;
+  const selectedAiEligible = [...selected].filter((id) => {
+    const a = apps.find((x) => x.id === id);
+    return !!a && a.ai_apply_status == null && aiApplyReadiness(a).eligible;
   }).length;
   // Applications waiting to be tailored — what the overnight drain (and "Run queue now")
   // acts on. Set-aside rows are deliberately excluded (the drain skips them too).
@@ -784,18 +919,28 @@ export default function ApplicationsPage() {
       <div className="flex gap-1 mb-5 border-b border-ink">
         {([
           { id: 'list' as View, label: 'Queue' },
+          { id: 'ai' as View, label: 'Assign to AI' },
           { id: 'parked' as View, label: 'Set Aside' },
           { id: 'manual' as View, label: 'Quick Generate' },
         ]).map((t) => (
           <button
             key={t.id}
-            onClick={() => setView(t.id)}
-            title={t.id === 'parked' ? 'Applications you moved out of the way (e.g. Easy Apply, or ones you couldn’t finish) — everything is kept; move them back anytime' : undefined}
+            onClick={() => { setView(t.id); setSelected(new Set()); }}
+            title={
+              t.id === 'ai'
+                ? 'A supervised queue for prepared external applications. You review before every final submission.'
+                : t.id === 'parked'
+                  ? 'Applications you moved out of the way (e.g. Easy Apply, or ones you couldn’t finish) — everything is kept; move them back anytime'
+                  : undefined
+            }
             className={`relative px-4 py-2 text-[13px] font-medium -mb-px transition-all ${
               view === t.id ? 'text-sky' : 'text-slate-muted hover:text-slate-text'
             }`}
           >
             {t.label}
+            {t.id === 'ai' && aiCount > 0 && (
+              <span className="ml-1.5 rounded-md bg-violet-500/15 px-1.5 py-px font-mono text-[10px] text-violet-300">{aiCount}</span>
+            )}
             {t.id === 'parked' && parkedCount > 0 && (
               <span className="ml-1.5 rounded-md bg-sky/15 px-1.5 py-px font-mono text-[10px] text-sky">{parkedCount}</span>
             )}
@@ -809,6 +954,8 @@ export default function ApplicationsPage() {
           {msg}
         </div>
       )}
+
+      {inAi && <AiApplyQueueHeader applications={apps} />}
 
       {view === 'list' && (
         <div className="mb-4">
@@ -983,8 +1130,15 @@ export default function ApplicationsPage() {
 
         {filtered.length === 0 ? (
           <div className="card px-6 py-12 text-center">
-            {inParked ? <FolderInput size={20} className="mx-auto text-slate-dim mb-2" /> : <FileText size={20} className="mx-auto text-slate-dim mb-2" />}
-            {inParked && parkedCount === 0 ? (
+            {inAi ? <Bot size={20} className="mx-auto text-slate-dim mb-2" /> : inParked ? <FolderInput size={20} className="mx-auto text-slate-dim mb-2" /> : <FileText size={20} className="mx-auto text-slate-dim mb-2" />}
+            {inAi && aiCount === 0 ? (
+              <>
+                <p className="text-[13px] text-slate-text mb-1">Nothing assigned to AI yet.</p>
+                <p className="text-[12px] text-slate-muted max-w-lg mx-auto">
+                  In Queue, select a prepared External Apply row with a tailored PDF, then choose <span className="text-violet-300">Assign to AI</span>. Easy Apply and LinkedIn remain manual in Phase 1.
+                </p>
+              </>
+            ) : inParked && parkedCount === 0 ? (
               <>
                 <p className="text-[13px] text-slate-text mb-1">Nothing set aside yet.</p>
                 <p className="text-[12px] text-slate-muted max-w-md mx-auto">
@@ -1028,45 +1182,71 @@ export default function ApplicationsPage() {
               Clear
             </button>
           )}
-          <button
-            onClick={runQueueNow}
-            disabled={bulkBusy || bulkRunning || !!genId || queuedCount === 0}
-            title="Tailor, score, and render every queued application now (the same pipeline the overnight schedule runs)"
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
-          >
-            <Clock size={13} /> Run queue now{queuedCount > 0 ? ` (${queuedCount})` : ''}
-          </button>
-          <button
-            onClick={generateSelected}
-            disabled={bulkBusy || bulkRunning || !!genId || selectedGeneratable === 0}
-            title="Generate a tailored résumé for every selected application that doesn't have one yet (rows with a résumé are skipped — use a row's Regenerate to redo one)"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
-          >
-            {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {bulkBusy ? 'Generating…' : `Generate selected${selectedGeneratable > 0 ? ` (${selectedGeneratable})` : ''}`}
-          </button>
-          <button
-            onClick={atsCheckSelected}
-            disabled={bulkBusy || bulkRunning || !!genId || selected.size === 0}
-            title="Re-run the local ATS match (base → tailored) for every selected application that already has a tailored résumé. No AI, instant."
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
-          >
-            <Gauge size={13} /> ATS check selected
-          </button>
-          <button
-            onClick={() => setParkedSelected(!inParked)}
-            disabled={bulkBusy || selected.size === 0}
-            title={
-              inParked
-                ? 'Move the selected applications back to the working Queue'
-                : 'Move the selected applications to the Set Aside tab (e.g. Easy Apply, or ones you couldn’t finish) — everything is kept, they just stop taking up space here'
-            }
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
-          >
-            {inParked ? <FolderOutput size={13} /> : <FolderInput size={13} />}
-            {inParked ? 'Move to Queue' : 'Set aside'}
-            {selected.size > 0 ? ` (${selected.size})` : ''}
-          </button>
+          <span className="ml-auto" />
+          {view === 'list' && (
+            <>
+              <button
+                onClick={runQueueNow}
+                disabled={bulkBusy || bulkRunning || !!genId || queuedCount === 0}
+                title="Tailor, score, and render every queued application now (the same pipeline the overnight schedule runs)"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+              >
+                <Clock size={13} /> Run queue now{queuedCount > 0 ? ` (${queuedCount})` : ''}
+              </button>
+              <button
+                onClick={generateSelected}
+                disabled={bulkBusy || bulkRunning || !!genId || selectedGeneratable === 0}
+                title="Generate a tailored résumé for every selected application that doesn't have one yet (rows with a résumé are skipped — use a row's Regenerate to redo one)"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+              >
+                {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {bulkBusy ? 'Generating…' : `Generate selected${selectedGeneratable > 0 ? ` (${selectedGeneratable})` : ''}`}
+              </button>
+              <button
+                onClick={assignSelectedToAi}
+                disabled={bulkBusy || selectedAiEligible === 0 || aiCount >= MAX_AI_APPLY_BATCH}
+                title="Assign selected ready External Apply applications to the supervised AI queue"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+              >
+                <Bot size={13} /> Assign to AI{selectedAiEligible > 0 ? ` (${Math.min(selectedAiEligible, Math.max(0, MAX_AI_APPLY_BATCH - aiCount))})` : ''}
+              </button>
+            </>
+          )}
+          {inAi && (
+            <>
+              <button onClick={copyAiPrompt} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 rounded-lg transition-all">
+                <Copy size={13} /> Copy prompt
+              </button>
+              <button
+                onClick={blockSelectedAi}
+                disabled={bulkBusy || selected.size === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-40 rounded-lg transition-all"
+              >
+                <CircleX size={13} /> Problem / Set Aside{selected.size ? ` (${selected.size})` : ''}
+              </button>
+            </>
+          )}
+          {!inAi && (
+            <button
+              onClick={atsCheckSelected}
+              disabled={bulkBusy || bulkRunning || !!genId || selected.size === 0}
+              title="Re-run the local ATS match (base → tailored) for every selected application that already has a tailored résumé. No AI, instant."
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+            >
+              <Gauge size={13} /> ATS check selected
+            </button>
+          )}
+          {!inAi && (
+            <button
+              onClick={() => setParkedSelected(!inParked)}
+              disabled={bulkBusy || selected.size === 0}
+              title={inParked ? 'Move the selected applications back to the working Queue' : 'Move the selected applications to the Set Aside tab — everything is kept'}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-text bg-card border border-ink hover:bg-raised disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
+            >
+              {inParked ? <FolderOutput size={13} /> : <FolderInput size={13} />}
+              {inParked ? 'Move to Queue' : 'Set aside'}{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          )}
           <button
             onClick={deleteSelected}
             disabled={bulkBusy || selected.size === 0}
@@ -1081,6 +1261,7 @@ export default function ApplicationsPage() {
             const job = a.job;
             const open = expanded === a.id;
             const generating = genId === a.id || a.status === 'generating';
+            const aiReadiness = aiApplyReadiness(a);
             // Opened the posting but never logged an apply (ADR 0063) — needs follow-up.
             const openedNotLogged = !!job?.clicked_at && !a.applied_at && a.status !== 'applied';
             return (
@@ -1143,19 +1324,27 @@ export default function ApplicationsPage() {
                         <ScoreChip label="Job fit" value={job.fit_score} title="Original fit of your base résumé to this job" />
                       )}
                       {job?.company_tier && <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} />}
+                      {a.ai_apply_status && (
+                        <AiApplyStatusBadge status={a.ai_apply_status} reason={a.ai_block_reason} />
+                      )}
+                      {a.ai_apply_status === 'blocked' && a.ai_block_reason && (
+                        <span className="max-w-sm truncate text-[10px] text-amber-400" title={a.ai_block_reason}>
+                          Problem: {a.ai_block_reason}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <button
+                  {!inAi && <button
                     onClick={() => generate(a)}
                     disabled={!!genId || bulkBusy || !job}
                     title="Generate a job-tailored résumé from your base résumé (truthful reframing)"
                     className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg transition-all shrink-0"
                   >
                     <Sparkles size={12} /> {generating ? 'Generating…' : a.has_resume ? 'Regenerate' : 'Generate'}
-                  </button>
+                  </button>}
                   {/* Local ATS check of the TAILORED résumé vs this job (ADR 0053 addendum).
                       Auto-runs after generation; click to re-check (e.g. after edits). */}
-                  {a.has_resume &&
+                  {!inAi && a.has_resume &&
                     (atsId === a.id ? (
                       <span className="flex items-center gap-1 text-[11px] text-slate-muted shrink-0" title="Checking ATS match…">
                         <Loader2 size={12} className="animate-spin" /> <span className="hidden sm:inline">ATS…</span>
@@ -1230,8 +1419,72 @@ export default function ApplicationsPage() {
                   <span className="hidden md:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
                     <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
                   </span>
+                  {view === 'list' && a.ai_apply_status == null && (
+                    <button
+                      onClick={() => updateAiApplication(a, 'assign')}
+                      disabled={bulkBusy || !aiReadiness.eligible || aiCount >= MAX_AI_APPLY_BATCH}
+                      title={aiReadiness.reason}
+                      className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-35 rounded-lg transition-all shrink-0"
+                    >
+                      <Bot size={12} /> Assign AI
+                    </button>
+                  )}
+                  {inAi && isActiveAiApplyStatus(a.ai_apply_status) && (
+                    <div className="flex w-[190px] shrink-0 items-center justify-end gap-1">
+                      {a.ai_apply_status === 'assigned' && aiReadiness.targetUrl && (
+                        <a
+                          href={aiReadiness.targetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            markOpened(a);
+                            void updateAiApplication(a, 'start');
+                            void (async () => {
+                              if (a.pdf_path) await downloadPdf(a.id);
+                              if (a.cover_letter_pdf_path) await downloadCoverPdf(a.id);
+                            })();
+                          }}
+                          title="Start this application, open the external form, and download its prepared files"
+                          className="inline-flex w-[132px] items-center justify-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-[11px] font-medium text-violet-300 hover:bg-violet-500/20"
+                        >
+                          <Play size={12} /> Start &amp; open
+                        </a>
+                      )}
+                      {a.ai_apply_status === 'in_progress' && (
+                        <button
+                          onClick={() => updateAiApplication(a, 'ready')}
+                          disabled={bulkBusy}
+                          title="The form is complete; pause for final review before submission"
+                          className="inline-flex w-[132px] items-center justify-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 disabled:opacity-40"
+                        >
+                          <ShieldCheck size={12} /> Ready for review
+                        </button>
+                      )}
+                      {a.ai_apply_status === 'ready_to_submit' && (
+                        <button
+                          onClick={() => updateAiApplication(a, 'submitted')}
+                          disabled={bulkBusy}
+                          title="After your review and visible website confirmation, record this as submitted"
+                          className="inline-flex w-[132px] items-center justify-center gap-1 rounded-lg border border-emerald/30 bg-emerald/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald hover:bg-emerald/20 disabled:opacity-40"
+                        >
+                          <CheckCircle2 size={12} /> Submitted
+                        </button>
+                      )}
+                      <button onClick={() => updateAiApplication(a, 'block')} disabled={bulkBusy} title="Record a problem, leave its browser tab open, and move to the next application" className="p-1 rounded-md text-slate-muted hover:text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 shrink-0">
+                        <CircleX size={15} />
+                      </button>
+                      <button onClick={() => updateAiApplication(a, 'unassign')} disabled={bulkBusy} title="Remove from AI and return to Queue" className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 disabled:opacity-40 shrink-0">
+                        <RotateCcw size={15} />
+                      </button>
+                    </div>
+                  )}
+                  {inParked && a.ai_apply_status === 'blocked' && (
+                    <button onClick={() => updateAiApplication(a, 'retry')} disabled={bulkBusy || aiCount >= MAX_AI_APPLY_BATCH} title="Retry this application in the supervised AI queue" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-300 border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 rounded-lg shrink-0">
+                      <RotateCcw size={12} /> Retry AI
+                    </button>
+                  )}
                   {/* Applied toggle — also syncs the Jobs-tab row (server-side). */}
-                  <button
+                  {!inAi && <button
                     onClick={() =>
                       a.applied_at
                         ? window.confirm('Un-mark this application as applied?') && patch(a.id, { applied_at: null })
@@ -1241,16 +1494,16 @@ export default function ApplicationsPage() {
                     className={`p-1 rounded-md shrink-0 transition-colors ${a.applied_at ? 'text-emerald bg-emerald/10' : 'text-slate-muted hover:text-emerald hover:bg-emerald/10'}`}
                   >
                     <CheckCircle2 size={15} />
-                  </button>
+                  </button>}
                   {/* Set Aside / bring back (ADR 0061) — everything is kept, just out of the way. */}
-                  <button
-                    onClick={() => patch(a.id, { parked: !a.parked })}
+                  {!inAi && <button
+                    onClick={() => a.ai_apply_status === 'blocked' ? updateAiApplication(a, 'unassign') : patch(a.id, { parked: !a.parked })}
                     title={a.parked ? 'Move back to the Queue tab' : 'Set aside — move to the Set Aside tab (keeps the résumé/PDF/status; just out of the way)'}
                     className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors shrink-0"
                   >
                     {a.parked ? <FolderOutput size={15} /> : <FolderInput size={15} />}
-                  </button>
-                  {job && (
+                  </button>}
+                  {job && !inAi && (
                     <a
                       href={job.application_url || job.url || '#'}
                       target="_blank"

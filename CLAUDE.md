@@ -4,6 +4,9 @@ A private multi-user, password-protected web app that **runs itself daily**:
 it fetches recent job postings through Apify, scores each 0–10 for fit against
 the authenticated user's résumé, and supports shortlisting, tailoring, cover
 letters, inbox tracking, and application tracking. It does **not** auto-apply.
+ADR 0093 adds a bounded **supervised application handoff** for prepared external jobs:
+the app owns queue/readiness state and a copyable browser prompt, while the user reviews
+and confirms immediately before Submit. It is not autonomous browser control.
 
 ## Active branch direction: independent multi-user product
 

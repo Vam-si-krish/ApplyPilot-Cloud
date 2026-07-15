@@ -1,0 +1,69 @@
+'use client';
+
+import { useState } from 'react';
+import { Bot, Copy, ShieldCheck } from 'lucide-react';
+import { buildSupervisedApplyPrompt, isActiveAiApplyStatus } from '@/lib/aiApply';
+import type { ApplicationWithJob } from '@/lib/types';
+
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+}
+
+export default function AiApplyQueueHeader({ applications }: { applications: ApplicationWithJob[] }) {
+  const [copied, setCopied] = useState(false);
+  const active = applications.filter((application) => isActiveAiApplyStatus(application.ai_apply_status));
+  const working = active.filter((application) => application.ai_apply_status === 'in_progress').length;
+  const review = active.filter((application) => application.ai_apply_status === 'ready_to_submit').length;
+
+  async function copyPrompt() {
+    await copyText(buildSupervisedApplyPrompt(active));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-sky/25 bg-gradient-to-br from-sky/10 via-card to-violet-500/[0.06] p-4">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky/30 bg-sky/10 text-sky">
+          <Bot size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[14px] font-semibold text-slate-text">Supervised Apply Assistant · Phase 1</h2>
+            <span className="rounded-md border border-ink bg-base/60 px-2 py-0.5 text-[10px] font-mono text-slate-muted">
+              {active.length} assigned · {working} working · {review} review
+            </span>
+          </div>
+          <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-slate-muted">
+            Copy the bounded @Chrome handoff, then supervise each external application through autofill, missing fields,
+            review, confirmation, and verified submission. A problem is blocked and moved to Set Aside so the batch can continue.
+          </p>
+          <p className="mt-1 text-[11px] text-amber-400/90">
+            External applications only in Phase 1. LinkedIn/Easy Apply, CAPTCHAs, unknown facts, and legal attestations remain manual.
+          </p>
+        </div>
+        <button
+          onClick={copyPrompt}
+          disabled={active.length === 0}
+          title="Copy the supervised prompt for the first five assigned applications"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] font-medium text-sky transition-all hover:bg-sky/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {copied ? <ShieldCheck size={14} /> : <Copy size={14} />}
+          {copied ? 'Prompt copied' : 'Copy AI batch prompt'}
+        </button>
+      </div>
+    </div>
+  );
+}
