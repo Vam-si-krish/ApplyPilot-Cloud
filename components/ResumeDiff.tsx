@@ -111,6 +111,35 @@ export default function ResumeDiff({ base, tailored }: { base: ResumeDoc | null;
         </>
       )}
 
+      {/* User-defined sections follow the same order and entry count as the base. */}
+      {(tailored.customSections ?? []).map((section, sectionIndex) => {
+        const baseSection = matchByName(b?.customSections, section.title, sectionIndex, 'title');
+        return (
+          <div key={sectionIndex}>
+            <SectionHead title={section.title || 'Additional'} />
+            {section.items.map((item, itemIndex) => {
+              const baseItem = matchByName(baseSection?.items, item.name, itemIndex);
+              return (
+                <div key={itemIndex} className="mt-3 first:mt-1.5">
+                  <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                    <span className="text-[13.5px] font-bold text-[#1a1a1a] sm:text-[14px]">{item.name}</span>
+                    {item.date && <span className="whitespace-nowrap text-[12px] font-bold text-[#444] sm:text-[12.5px]">{item.date}</span>}
+                  </div>
+                  <div className="mt-0.5 flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                    <span className="text-[12.5px] italic text-[#1a1a1a] sm:text-[13px]">
+                      <DiffText before={baseItem?.description} after={item.description} />
+                    </span>
+                    {item.location && <span className="whitespace-nowrap text-[12px] italic text-[#444] sm:text-[12.5px]">{item.location}</span>}
+                  </div>
+                  {item.url && <div className="mt-0.5 text-[11px] text-[#1f4e79]">{item.url}</div>}
+                  <BulletDiff before={baseItem?.highlights} after={item.highlights} />
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
       {tailored.education.length > 0 && (
         <>
           <SectionHead title="Education" />
@@ -132,11 +161,16 @@ export default function ResumeDiff({ base, tailored }: { base: ResumeDoc | null;
 }
 
 // ── matching ─────────────────────────────────────────────────────────────────
-function matchByName<T extends { name?: string }>(list: T[] | undefined, name: string | undefined, index: number): T | undefined {
+function matchByName<T extends { name?: string; title?: string }>(
+  list: T[] | undefined,
+  name: string | undefined,
+  index: number,
+  key: 'name' | 'title' = 'name',
+): T | undefined {
   if (!list || list.length === 0) return undefined;
   const n = (name || '').trim().toLowerCase();
   if (n) {
-    const hit = list.find((x) => (x.name || '').trim().toLowerCase() === n);
+    const hit = list.find((x) => String(x[key] || '').trim().toLowerCase() === n);
     if (hit) return hit;
   }
   return list[index]; // same order+count guarantee from the tailor prompt

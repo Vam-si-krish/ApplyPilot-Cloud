@@ -14,6 +14,14 @@ function base(): ResumeDoc {
     education: [{ institution: 'Example University', studyType: 'MS', area: 'Business Analytics' }],
     skills: [{ name: 'Frontend', keywords: ['React', 'TypeScript', 'GraphQL'] }],
     projects: [{ name: 'Proj', description: 'A thing', highlights: ['did x'] }],
+    customSections: [
+      {
+        title: 'Additional Experience',
+        items: [
+          { name: 'Code Club', description: 'Volunteer Mentor', date: '2022–Present', location: 'Boston', url: 'code.example', highlights: ['Mentored junior developers', 'Led workshops'] },
+        ],
+      },
+    ],
   };
 }
 
@@ -146,6 +154,39 @@ describe('mergeTailored — anchor verifiable facts, allow enhancement (ADR 0026
     expect(out.education).toEqual(base().education); // restored (patch omits education entirely)
     expect(out.skills[0].keywords).toContain('Next.js');
   });
+
+  it('anchors custom-section facts while accepting count-capped bullet rewrites', () => {
+    const tailored = normalizeResume({
+      customSections: [
+        {
+          title: 'Fake Section',
+          items: [
+            {
+              name: 'Fake Company',
+              description: 'Fake Role',
+              date: '1900',
+              location: 'Elsewhere',
+              url: 'evil.example',
+              highlights: ['Reframed mentoring for React teams', 'Reframed workshops', 'Invented overflow bullet'],
+            },
+          ],
+        },
+      ],
+    });
+    const out = mergeTailored(base(), tailored);
+    expect(out.customSections[0]).toMatchObject({ title: 'Additional Experience' });
+    expect(out.customSections[0].items[0]).toMatchObject({
+      name: 'Code Club',
+      description: 'Volunteer Mentor',
+      date: '2022–Present',
+      location: 'Boston',
+      url: 'code.example',
+    });
+    expect(out.customSections[0].items[0].highlights).toEqual([
+      'Reframed mentoring for React teams',
+      'Reframed workshops',
+    ]);
+  });
 });
 
 describe('mergeTailored — deterministic one-page caps (ADR 0031)', () => {
@@ -192,6 +233,7 @@ describe('buildTailorMessages', () => {
     expect(basePart.text).toContain('BASE RÉSUMÉ');
     expect(basePart.text).toContain('LENGTH BUDGET');
     expect(basePart.text).toContain('TOTAL PROFESSIONAL EXPERIENCE'); // the true-years ceiling (ADR 0041)
+    expect(basePart.text).toContain('Custom-section bullets per entry');
 
     expect(msgs[2].role).toBe('user');
     const jobPart = (msgs[2].content as ContentPart[])[0];

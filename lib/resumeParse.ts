@@ -46,6 +46,11 @@ Output ONLY a JSON object (no markdown, no commentary) with EXACTLY this shape:
   "projects": [
     { "name": "", "description": "", "url": "", "highlights": [] }
   ],
+  "customSections": [
+    { "title": "Certifications, Leadership, Publications, Awards, or another heading exactly as written", "items": [
+      { "name": "", "description": "", "date": "", "location": "", "url": "", "highlights": [] }
+    ] }
+  ],
   "profile_work_authorization": {
     "legally_authorized_to_work": null,
     "require_sponsorship": null,
@@ -55,7 +60,7 @@ Output ONLY a JSON object (no markdown, no commentary) with EXACTLY this shape:
   }
 }
 
-"label" is the headline/title under the name if present (e.g. "Senior Frontend Engineer"). Use "Present" for a current role's endDate. Group skills the way the résumé groups them; if ungrouped, make sensible groups WITHOUT adding skills that aren't listed.
+"label" is the headline/title under the name if present (e.g. "Senior Frontend Engineer"). Use "Present" for a current role's endDate. Group skills the way the résumé groups them; if ungrouped, make sensible groups WITHOUT adding skills that aren't listed. Preserve any meaningful section that does not map to work, education, skills, or projects under customSections, using its original heading.
 
 For profile_work_authorization, include a field ONLY when the résumé explicitly states it. Do not infer authorization, citizenship, residency, sponsorship needs, permit type, or clearance from a name, location, school, employer, or visa-adjacent wording. If the résumé says nothing about work authorization, output an empty object.`;
 

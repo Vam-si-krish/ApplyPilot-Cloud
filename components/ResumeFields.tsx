@@ -2,7 +2,14 @@
 
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { ResumeDoc, ResumeWork, ResumeEducation, ResumeSkill, ResumeProject } from '@/lib/types';
+import type {
+  ResumeDoc,
+  ResumeWork,
+  ResumeEducation,
+  ResumeSkill,
+  ResumeProject,
+  ResumeCustomItem,
+} from '@/lib/types';
 import { ResumePaperFrame, ResumeSectionHeading } from '@/components/ResumePaper';
 
 /**
@@ -25,6 +32,17 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
   const profiles = d.basics.profiles ?? [];
   function setProfiles(next: { network?: string; url?: string }[]) {
     update({ basics: { ...d.basics, profiles: next } });
+  }
+  const customSections = d.customSections ?? [];
+  function updateCustomSection(sectionIndex: number, next: Partial<(typeof customSections)[number]>) {
+    update({
+      customSections: customSections.map((section, i) => (i === sectionIndex ? { ...section, ...next } : section)),
+    });
+  }
+  function updateCustomItem(sectionIndex: number, itemIndex: number, next: Partial<ResumeCustomItem>) {
+    const section = customSections[sectionIndex];
+    if (!section) return;
+    updateCustomSection(sectionIndex, { items: patch(section.items, itemIndex, next) });
   }
 
   return (
@@ -178,6 +196,108 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
           </Entry>
         ))}
 
+        {/* ── User-defined sections (ADR 0085) ─────────────────────────────── */}
+        {customSections.map((section, sectionIndex) => (
+          <div key={sectionIndex}>
+            <ResumeSectionHeading
+              title={
+                <PaperInline
+                  block
+                  value={section.title}
+                  onChange={(title) => updateCustomSection(sectionIndex, { title })}
+                  placeholder="Section title"
+                  className="text-[13px] font-bold uppercase tracking-[0.055em] text-[#1a1a1a] sm:text-[14px]"
+                />
+              }
+              action={
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => updateCustomSection(sectionIndex, { items: [...section.items, { highlights: [] }] })}
+                    title={`Add entry to ${section.title || 'custom section'}`}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-sans text-[11px] font-medium text-[#1f4e79] transition-colors hover:bg-[#e8f1f8]"
+                  >
+                    <Plus size={13} /> Entry
+                  </button>
+                  <button
+                    onClick={() => update({ customSections: customSections.filter((_, i) => i !== sectionIndex) })}
+                    title="Remove custom section"
+                    className="rounded-md p-1 text-[#9ca3af] transition-colors hover:bg-[#fee2e2] hover:text-[#b42318]"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              }
+            />
+            {section.items.length === 0 && <EmptyLine>No entries yet — click “+ entry” to add one.</EmptyLine>}
+            {section.items.map((item, itemIndex) => (
+              <Entry
+                key={itemIndex}
+                onRemove={() => updateCustomSection(sectionIndex, { items: section.items.filter((_, i) => i !== itemIndex) })}
+                titleLeft={
+                  <PaperInline
+                    value={item.name}
+                    onChange={(name) => updateCustomItem(sectionIndex, itemIndex, { name })}
+                    placeholder="Entry name"
+                    className="text-[13.5px] font-bold text-[#1a1a1a] sm:text-[14px]"
+                  />
+                }
+                titleRight={
+                  <PaperInline
+                    value={item.date}
+                    onChange={(date) => updateCustomItem(sectionIndex, itemIndex, { date })}
+                    placeholder="Date"
+                    className="text-right text-[12px] font-bold text-[#444] sm:text-[12.5px]"
+                  />
+                }
+                subLeft={
+                  <PaperInline
+                    value={item.description}
+                    onChange={(description) => updateCustomItem(sectionIndex, itemIndex, { description })}
+                    placeholder="Role, issuer, organization, or description"
+                    className="text-[12.5px] italic text-[#1a1a1a] sm:text-[13px]"
+                  />
+                }
+                subRight={
+                  <PaperInline
+                    value={item.location}
+                    onChange={(location) => updateCustomItem(sectionIndex, itemIndex, { location })}
+                    placeholder="Location"
+                    className="text-right text-[12px] italic text-[#444] sm:text-[12.5px]"
+                  />
+                }
+              >
+                <div className="mb-1 text-[11px] text-[#1f4e79]">
+                  <PaperInline
+                    value={item.url}
+                    onChange={(url) => updateCustomItem(sectionIndex, itemIndex, { url })}
+                    placeholder="Link (optional)"
+                  />
+                </div>
+                <BulletList
+                  items={item.highlights}
+                  onChange={(highlights) => updateCustomItem(sectionIndex, itemIndex, { highlights })}
+                  placeholder="Add supporting detail…"
+                />
+              </Entry>
+            ))}
+          </div>
+        ))}
+
+        <button
+          onClick={() =>
+            update({
+              customSections: [
+                ...customSections,
+                { title: 'Additional Experience', items: [{ highlights: [] }] },
+              ],
+            })
+          }
+          className="mt-5 w-full rounded-lg border border-dashed border-[#9ca3af] px-4 py-3 text-left font-sans transition-colors hover:border-[#1f4e79] hover:bg-[#f3f7fa]"
+        >
+          <span className="flex items-center gap-2 text-[12px] font-medium text-[#1f4e79]"><Plus size={14} /> Add custom section</span>
+          <span className="mt-0.5 block text-[11px] text-[#6b7280]">Additional Experience, Certifications, Leadership, Publications, Awards, or anything else you need.</span>
+        </button>
+
         {/* ── Education — degree/institution order mirrors the PDF ──────────── */}
         <SectionHead title="Education" onAdd={() => update({ education: [{}, ...d.education] })} />
         {d.education.length === 0 && <EmptyLine>No education yet.</EmptyLine>}
@@ -208,7 +328,7 @@ export default function ResumeFields({ value, onChange }: { value: ResumeDoc; on
 }
 
 // ── shared helpers ───────────────────────────────────────────────────────────
-type Listable = ResumeWork | ResumeEducation | ResumeSkill | ResumeProject;
+type Listable = ResumeWork | ResumeEducation | ResumeSkill | ResumeProject | ResumeCustomItem;
 export function patch<T extends Listable>(list: T[], i: number, p: Partial<T>): T[] {
   return list.map((item, j) => (j === i ? { ...item, ...p } : item));
 }

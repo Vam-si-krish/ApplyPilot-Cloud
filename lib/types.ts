@@ -438,6 +438,27 @@ export interface ResumeProject {
   highlights: string[];
 }
 
+/** One entry inside a user-defined résumé section (ADR 0085). The deliberately
+ * generic labels support Additional Experience, Certifications, Leadership,
+ * Publications, Awards, and similar sections without inventing a new schema for
+ * each heading. */
+export interface ResumeCustomItem {
+  /** Primary line, e.g. company, certification, award, or publication name. */
+  name?: string;
+  /** Secondary line, e.g. role, issuer, organization, or short description. */
+  description?: string;
+  date?: string;
+  location?: string;
+  url?: string;
+  highlights: string[];
+}
+
+/** A user-named, ordered résumé section rendered after Projects and before Education. */
+export interface ResumeCustomSection {
+  title?: string;
+  items: ResumeCustomItem[];
+}
+
 /** The structured base/tailored résumé we edit and (later) render to PDF. */
 export interface ResumeDoc {
   basics: ResumeBasics;
@@ -445,6 +466,7 @@ export interface ResumeDoc {
   education: ResumeEducation[];
   skills: ResumeSkill[];
   projects: ResumeProject[];
+  customSections: ResumeCustomSection[];
 }
 
 /** What the AI added/embellished beyond the base résumé (ADR 0026) — surfaced for the user to review/confirm. */

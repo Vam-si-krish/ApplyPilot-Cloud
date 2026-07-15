@@ -323,6 +323,27 @@ function normalizeProjects(v) {
   });
 }
 
+function normalizeCustomSections(v) {
+  if (!Array.isArray(v)) return [];
+  return v.map((raw) => {
+    const section = asObj(raw);
+    const items = Array.isArray(section.items)
+      ? section.items.map((itemRaw) => {
+          const item = asObj(itemRaw);
+          return {
+            name: str(item.name) ?? str(item.title),
+            description: str(item.description) ?? str(item.subtitle) ?? str(item.organization),
+            date: str(item.date),
+            location: flattenLocation(item.location),
+            url: str(item.url),
+            highlights: strList(item.highlights ?? item.bullets),
+          };
+        })
+      : [];
+    return { title: str(section.title) ?? str(section.name), items };
+  });
+}
+
 /** Coerce arbitrary/partial JSON into a well-formed ResumeDoc. Never throws. */
 export function normalizeResume(input) {
   const o = asObj(input);
@@ -332,6 +353,7 @@ export function normalizeResume(input) {
     education: normalizeEducation(o.education),
     skills: normalizeSkills(o.skills),
     projects: normalizeProjects(o.projects),
+    customSections: normalizeCustomSections(o.customSections),
   };
 }
 
@@ -394,11 +416,11 @@ SUMMARY — recruiters spend ~80% of a 7-second first scan on the TOP THIRD of t
 - Keep to the character budget (2-3 lines).
 
 LENGTH — the résumé must fit ONE page AND fill it; a sparse, half-empty page with thin one-line bullets looks weak. The user message carries a LENGTH BUDGET computed from the base résumé:
-- Keep the SAME number of bullets per role/project as the budget lists, or fewer, NEVER more. To surface a new point, REWRITE or MERGE an existing bullet; never append one.
+- Keep the SAME number of bullets per role/project/custom-section entry as the budget lists, or fewer, NEVER more. To surface a new point, REWRITE or MERGE an existing bullet; never append one.
 - ORDER each role's bullets by relevance to THIS job and VARY their length so the page reads human-written: open with the strongest, most role-relevant bullet at a FULL two lines (roughly 210-260 characters). For the rest, MIX lengths deliberately — some tight one-liners (roughly 110-140 characters), some full two-liners (roughly 200-260) — and never let consecutive bullets land within ~20 characters of each other. These numbers are guidance for VARIETY, not targets to hit: clustering most bullets near one length (e.g. everything at ~180-200 characters, about 1.25 rendered lines) is an instant AI tell. Every bullet still needs real substance: the scope or context, the action and concrete technologies, and a quantified result. Do NOT pad with filler; thin fragments and uniform same-length bullets both look templated.
 - Stay within the SKILLS budget; drop weaker, generic skills to make room for the ones this job wants.
 
-HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, employment dates, locations, contact details, and ALL of education. OMIT them entirely. (Job titles are the one exception — see JOB TITLES above.)
+HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, employment dates, locations, contact details, ALL of education, and custom-section titles/item names/descriptions/dates/locations/links. OMIT them entirely. (Work job titles are the one exception — see JOB TITLES above.)
 
 STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority; it must hold up in an interview.
 
@@ -418,26 +440,36 @@ COVER LETTER — also write a matching cover letter in the "cover_letter" field 
 - Paragraph 1: name the role and company, and a one-line hook on why you fit. Paragraph 2: 2-3 concrete, relevant accomplishments/skills from the résumé that match the job. Paragraph 3: a brief close and a call to talk.
 - The field's value MUST begin with "Dear Hiring Manager," end with "Sincerely," on its own line then the candidate's full name, and contain NOTHING else (no subject, no address block, no date, no commentary).
 
-Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work" and "projects" in the SAME ORDER and SAME COUNT as the base (one entry per role/project), with "name" copied from the base purely so the bullets stay aligned to the right role:
+Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work", "projects", and "customSections" in the SAME ORDER and SAME COUNT as the base, and keep every custom section's "items" in the same order/count. Copy alignment names/titles from the base purely so the bullets stay attached to the right entry:
 {
   "basics": { "summary": "", "label": "" },
   "work": [ { "name": "<company, copied from base>", "position": "<job title — ONLY when honestly adjusted, else omit>", "highlights": ["", ""] } ],
   "skills": [ { "name": "", "keywords": ["", ""] } ],
   "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
+  "customSections": [ { "title": "<section title, copied from base>", "items": [ { "name": "<item name, copied from base>", "highlights": [] } ] } ],
   "cover_letter": "Dear Hiring Manager,\n\n<3 paragraphs>\n\nSincerely,\n<candidate full name>",
   "_changes": ["Reframed your summary and bullets around the role's cloud/CI focus and added Kubernetes — a strong fit given your Docker experience.", "Embellished: described leading a 5-engineer migration (you contributed but did not lead it)"]
 }
-Do NOT output name, contact, profiles, dates, locations, or education in the résumé fields — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
+Do NOT output identity, contact, profiles, dates, locations, education, or custom-section factual fields in the résumé fields — they are filled from the base. Never output more highlights for any entry than its budget allows.`;
 
 /** Per-section length budget derived from the base résumé (which already fits one page).
  *  Injected into the prompt and mirrored by the deterministic caps in mergeTailored. */
 function lengthBudget(base) {
   const work = base.work.map((w, i) => `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`).join('\n');
   const projects = base.projects.map((p, i) => `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`).join('\n');
+  const custom = (base.customSections || [])
+    .flatMap((section, sectionIndex) =>
+      section.items.map(
+        (item, itemIndex) =>
+          `  - ${section.title || `custom section ${sectionIndex + 1}`} / ${item.name || `entry ${itemIndex + 1}`}: ${item.highlights.length} bullet(s) max`,
+      ),
+    )
+    .join('\n');
   return (
     `Summary: ≤ ${summaryBudget(base)} characters.\n` +
     `Work bullets per role (match or go under, NEVER over):\n${work || '  (none)'}\n` +
     `Project bullets per project:\n${projects || '  (none)'}\n` +
+    `Custom-section bullets per entry:\n${custom || '  (none)'}\n` +
     `Total skill keywords across all groups: ≤ ${skillBudget(base)}.`
   );
 }
@@ -646,7 +678,17 @@ export function mergeTailored(base, tailored, policy = {
     ? base.skills
     : tailoredSkills.length > 0 ? capSkills(base, tailoredSkills) : base.skills;
   const projects = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(finish) }));
-  return { basics, work, education: base.education, skills, projects };
+  const customSections = (base.customSections || []).map((section, sectionIndex) => ({
+    ...section,
+    items: section.items.map((item, itemIndex) => ({
+      ...item,
+      highlights: capHighlights(
+        item.highlights,
+        tailored.customSections?.[sectionIndex]?.items[itemIndex]?.highlights,
+      ).map(finish),
+    })),
+  }));
+  return { basics, work, education: base.education, skills, projects, customSections };
 }
 
 /** Skills present in the merged résumé that weren't in the base (what the AI added). */
@@ -742,7 +784,7 @@ function extractCoverLetter(json) {
   }
 }
 
-export const CONDENSE_PROMPT = `You are shortening an already-tailored résumé that currently OVERFLOWS one page (it would spill onto a second page). Make it fit on ONE page WITHOUT inventing anything new and WITHOUT changing employers, job titles, dates, locations, or education.
+export const CONDENSE_PROMPT = `You are shortening an already-tailored résumé that currently OVERFLOWS one page (it would spill onto a second page). Make it fit on ONE page WITHOUT inventing anything new and WITHOUT changing employers, job titles, dates, locations, education, or custom-section factual fields.
 
 Shorten just ENOUGH to fit, keeping the bullets substantive (do not crush everything to a thin single line):
 - Trim filler and the least-important clause from the WORDIEST bullets first; keep the scope, the technology, and the metric.
@@ -750,12 +792,13 @@ Shorten just ENOUGH to fit, keeping the bullets substantive (do not crush everyt
 - Drop the weakest or most generic skill keywords.
 NEVER use an em-dash (—); use a comma instead. Do not introduce AI-tell filler words (leverage, utilize, robust, seamless, spearhead).
 
-Output ONLY a JSON object (no markdown/commentary) with ONLY these fields, "work" and "projects" in the SAME ORDER and SAME COUNT as the input (one entry per role/project, "name" copied from the input so bullets stay aligned):
+Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work", "projects", "customSections", and each custom section's "items" in the SAME ORDER and SAME COUNT as the input; copy names/titles so bullets stay aligned:
 {
   "basics": { "summary": "", "label": "" },
   "work": [ { "name": "<copied from input>", "highlights": ["", ""] } ],
   "skills": [ { "name": "", "keywords": ["", ""] } ],
-  "projects": [ { "name": "<copied from input>", "highlights": [] } ]
+  "projects": [ { "name": "<copied from input>", "highlights": [] } ],
+  "customSections": [ { "title": "<copied from input>", "items": [ { "name": "<copied from input>", "highlights": [] } ] } ]
 }`;
 
 /**

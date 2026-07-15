@@ -34,10 +34,10 @@ export function ResumePaperFrame({
 }
 
 /** Section rule and typography mirror `resume-worker/templates.js`. */
-export function ResumeSectionHeading({ title, action }: { title: string; action?: ReactNode }) {
+export function ResumeSectionHeading({ title, action }: { title: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-2 mt-5 flex items-center gap-2 border-b border-[#1a1a1a] pb-0.5 first:mt-0">
-      <h2 className="text-[13px] font-bold uppercase tracking-[0.055em] text-[#1a1a1a] sm:text-[14px]">{title}</h2>
+      <h2 className="min-w-0 flex-1 text-[13px] font-bold uppercase tracking-[0.055em] text-[#1a1a1a] sm:text-[14px]">{title}</h2>
       {action ? <div className="ml-auto print:hidden">{action}</div> : null}
     </div>
   );

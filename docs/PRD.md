@@ -52,6 +52,11 @@ remains the final one-page layout authority (ADR 0084).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
+Each user's structured base résumé may also contain ordered, user-named sections such as
+Additional Experience, Certifications, Leadership, Publications, and Awards. Those
+sections use the same white document hierarchy and participate in scoring, tailoring,
+review, and the downloaded PDF without crossing the user's existing row/file boundary
+(ADR 0085).
 
 **Phase 2B — public-account readiness (next):** replace fixed credentials with account
 creation, verified recovery, session controls, and operational account lifecycle. Encrypt
@@ -105,6 +110,10 @@ must never be publicly readable — a single shared password gates everything (A
    (score range, search, status) and a shortlist toggle. Fresh/unscored results are
    visible without silently active score/company/run constraints; “Clear all” removes
    every filter. "Run now" button for manual runs.
+5. **Maintain one complete résumé:** the Base résumé editor supports both the standard
+   résumé fields and user-defined sections. Custom sections remain editable in a tailored
+   copy, are included in AI/local scoring context, preserve user-entered facts during AI
+   rewriting, and render as semantic single-column sections in the one-page PDF.
 
 ## Success criteria
 - Labeled résumé/job evals remain within their expected score bands and every real

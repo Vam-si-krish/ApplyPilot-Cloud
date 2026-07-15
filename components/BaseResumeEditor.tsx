@@ -12,7 +12,7 @@ import type { ResumeDoc } from '@/lib/types';
  */
 
 function emptyDoc(): ResumeDoc {
-  return { basics: {}, work: [], education: [], skills: [], projects: [] };
+  return { basics: {}, work: [], education: [], skills: [], projects: [], customSections: [] };
 }
 
 export default function BaseResumeEditor() {

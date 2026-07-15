@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import ws from 'ws';
 import { currentUserId } from './userContext.js';
 import { scoringPreferences } from './candidatePreferences.js';
+import { normalizeResume } from './tailor.js';
 
 const BUCKET = process.env.RESUMES_BUCKET || 'resumes';
 
@@ -30,6 +31,7 @@ function client() {
 export async function getApplication(id) {
   const { data, error } = await client().from('applications').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(`load application: ${error.message}`);
+  if (data?.tailored_resume) data.tailored_resume = normalizeResume(data.tailored_resume);
   return data;
 }
 
@@ -37,6 +39,7 @@ export async function getApplication(id) {
 export async function getApplicationWithJob(id) {
   const { data, error } = await client().from('applications').select('*, job:jobs(*)').eq('id', id).maybeSingle();
   if (error) throw new Error(`load application: ${error.message}`);
+  if (data?.tailored_resume) data.tailored_resume = normalizeResume(data.tailored_resume);
   return data;
 }
 
@@ -72,7 +75,7 @@ export async function getSettings() {
 export async function getBaseResume() {
   const { data, error } = await client().from('profile').select('base_resume').eq('id', 1).single();
   if (error) throw new Error(`load base résumé: ${error.message}`);
-  return data?.base_resume ?? null;
+  return data?.base_resume ? normalizeResume(data.base_resume) : null;
 }
 
 export async function getCandidatePreferences() {
@@ -162,6 +165,19 @@ export function resumeToScoringText(resume) {
     for (const p of resume.projects) {
       out.push([p.name, p.description].filter(Boolean).join(' — '));
       for (const h of (p.highlights || [])) out.push(`- ${h}`);
+    }
+  }
+  if (Array.isArray(resume.customSections)) {
+    for (const section of resume.customSections) {
+      if (!section?.title && !(section?.items || []).length) continue;
+      out.push(`\n${String(section.title || 'ADDITIONAL').toUpperCase()}`);
+      for (const item of (section.items || [])) {
+        const head = [item.name, item.description].filter(Boolean).join(' — ');
+        const meta = [item.date, item.location].filter(Boolean).join(' · ');
+        out.push([head, meta].filter(Boolean).join('  '));
+        if (item.url) out.push(item.url);
+        for (const h of (item.highlights || [])) out.push(`- ${h}`);
+      }
     }
   }
   return out.join('\n').trim();

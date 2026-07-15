@@ -1,7 +1,7 @@
 /** Server-side data access helpers over the service-role Supabase client. */
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
-import { resumeToText } from './resume';
+import { normalizeResume, resumeToText } from './resume';
 import { partitionByGeneration, pickCanonical } from './dedupe';
 import { scoringPreferences } from './candidatePreferences';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
@@ -121,7 +121,9 @@ export async function getSettings(): Promise<Settings> {
 export async function getProfile(): Promise<Profile> {
   const { data, error } = await supabaseAdmin().from('profile').select('*').eq('id', 1).single();
   if (error) throw new Error(`Failed to load profile: ${error.message}`);
-  return data as Profile;
+  const profile = data as Profile;
+  if (profile.base_resume) profile.base_resume = normalizeResume(profile.base_resume);
+  return profile;
 }
 
 export async function getCandidatePreferences(): Promise<Record<string, unknown>> {
@@ -148,7 +150,7 @@ export async function getScoringResumeText(): Promise<string> {
     .eq('id', 1)
     .single();
   if (error) throw new Error(`Failed to load resume: ${error.message}`);
-  const base = (data?.base_resume as ResumeDoc | null) ?? null;
+  const base = data?.base_resume ? normalizeResume(data.base_resume) : null;
   const text = base ? resumeToText(base).trim() : '';
   const rendered = text || ((data?.resume_text as string) || '');
   return composeScoringResume(base, rendered);
@@ -215,7 +217,7 @@ export function composeScoringCandidateContext(
 export async function getBaseResume(): Promise<ResumeDoc | null> {
   const { data, error } = await supabaseAdmin().from('profile').select('base_resume').eq('id', 1).single();
   if (error) throw new Error(`Failed to load base résumé: ${error.message}`);
-  return (data?.base_resume as ResumeDoc | null) ?? null;
+  return data?.base_resume ? normalizeResume(data.base_resume) : null;
 }
 
 /** Persist the structured base résumé. */
@@ -316,7 +318,10 @@ export async function getApplicationWithJob(id: string): Promise<ApplicationWith
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(`Failed to load application: ${error.message}`);
-  return (data as ApplicationWithJob) ?? null;
+  if (!data) return null;
+  const application = data as ApplicationWithJob;
+  if (application.tailored_resume) application.tailored_resume = normalizeResume(application.tailored_resume);
+  return application;
 }
 
 /** Patch an application row (stamps updated_at). */

@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0084
+**Current branch:** `multi-user-fork` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0085
 
 ## Current deployment topology
 
@@ -119,9 +119,13 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   are deterministic and unit-tested. `scoreJob(resume, job)` makes the one LLM call.
 - `lib/candidatePreferences.ts` — normalizes user-managed Candidate Profile preferences
   and exposes purpose-limited projections for scoring, tailoring, and ApplyBuddy.
+- `lib/types.ts` + `lib/resume.ts` — own the structured résumé contract and its defensive
+  normalization/text serialization boundary. Standard JSON Resume fields are extended
+  with ordered `customSections`; legacy JSON without that field normalizes to an empty list.
 - `components/ResumePaper.tsx`, `ResumeFields.tsx`, and `ResumeDiff.tsx` — shared browser
   résumé presentation for Base/tailored editing and contextual change review. It mirrors
-  the PDF hierarchy but never owns page fitting or generated-file truth.
+  the PDF hierarchy but never owns page fitting or generated-file truth; custom sections
+  use the same shared canvas and generic entry presentation.
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
@@ -134,6 +138,9 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   callback targets are rejected before starting a billable Apify run (ADR 0077).
 - `lib/supabase.ts` — protocol clients for the gateway/PostgREST compatibility boundary.
 - `app/api/*` — thin HTTP handlers; validate input, call lib, write DB.
+- `resume-worker/tailor.js`, `templates.js`, `render.js`, `supabase.js` — the hand-kept
+  worker copy of résumé normalization/tailoring plus PDF and scoring serialization. Any
+  résumé-shape change must update both the app and worker sides and bump `/version` features.
 
 Settings information architecture is a presentation-only boundary (ADR 0082).
 `app/(app)/settings/page.tsx` groups the existing fields into five goal-oriented views and
@@ -233,10 +240,33 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   `candidate_preferences` (avoidance flags, recurring application answers, constrained AI
   guidance, and validated scoring/tailoring policy), legacy `resume_text` fallback, and resume_pdf_path. Candidate Profile is the
   sole ongoing editor; onboarding is initial setup only.
+- **profile.base_resume / applications.tailored_resume**: user-owned JSONB `ResumeDoc`.
+  Alongside basics/work/education/skills/projects it may contain `customSections[]`, each
+  with a heading and ordered generic entries (`name`, `description`, `date`, `location`,
+  `url`, `highlights`). JSONB makes this additive without a SQL migration; every read/write
+  boundary normalizes older documents. Custom content stays inside the same forced-RLS row.
 - **settings**: one row per user — schedule/search configuration plus legacy `llm_*` and the three task pairs:
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
+
+## Résumé custom-section flow
+
+```text
+Base résumé editor
+  → normalizeResume → profile.base_resume JSONB
+  → resumeToText / worker resumeToScoringText → ATS + AI scoring and ApplyBuddy
+  → worker tailor prompt → bullet-only patch
+  → mergeTailored (section/item facts anchored; bullet counts capped)
+  → applications.tailored_resume → editor/change review
+  → semantic HTML section → one-page PDF backstop → user-scoped storage
+```
+
+Custom sections are rendered after Projects and before Education in PDFs. The AI may
+rewrite only their existing highlights; headings, entry names/descriptions, dates,
+locations, and URLs are restored from the base. The condense loop and deterministic
+one-page backstop include custom-entry bullets, so adding a section cannot bypass the
+existing length guarantee. See ADR 0085.
 
 ## Re-trigger mechanism for chunked scoring
 `/api/score-batch` re-invokes itself via a fire-and-forget `fetch` to its own URL

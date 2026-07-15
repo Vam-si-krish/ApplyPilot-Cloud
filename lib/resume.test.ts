@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { emptyResume, normalizeResume, extractJsonObject } from './resume';
+import { emptyResume, normalizeResume, extractJsonObject, resumeToText } from './resume';
 import { buildResumeParseMessages, RESUME_PARSE_PROMPT } from './resumeParse';
 
 describe('emptyResume', () => {
   it('is a well-formed, empty ResumeDoc', () => {
-    expect(emptyResume()).toEqual({ basics: {}, work: [], education: [], skills: [], projects: [] });
+    expect(emptyResume()).toEqual({ basics: {}, work: [], education: [], skills: [], projects: [], customSections: [] });
   });
 });
 
@@ -50,6 +50,49 @@ describe('normalizeResume — defensive coercion of arbitrary JSON', () => {
   it('keeps profiles with a network or url, drops empty ones', () => {
     const out = normalizeResume({ basics: { profiles: [{ network: 'LinkedIn', url: 'x' }, {}, { username: 'gh' }] } });
     expect(out.basics.profiles).toEqual([{ network: 'LinkedIn', url: 'x' }, { network: undefined, url: 'gh' }]);
+  });
+
+  it('normalizes user-defined sections and their generic entries', () => {
+    const out = normalizeResume({
+      customSections: [
+        {
+          name: 'Certifications',
+          items: [
+            { title: 'AWS Developer', organization: 'Amazon', date: 2025, bullets: 'Credential ID 123' },
+          ],
+        },
+      ],
+    });
+    expect(out.customSections).toEqual([
+      {
+        title: 'Certifications',
+        items: [
+          {
+            name: 'AWS Developer',
+            description: 'Amazon',
+            date: '2025',
+            location: undefined,
+            url: undefined,
+            highlights: ['Credential ID 123'],
+          },
+        ],
+      },
+    ]);
+  });
+});
+
+describe('resumeToText', () => {
+  it('includes custom-section facts and bullets in scoring/assistant text', () => {
+    const doc = normalizeResume({
+      basics: { name: 'Candidate' },
+      customSections: [
+        { title: 'Additional Experience', items: [{ name: 'Community Lab', description: 'Mentor', date: '2025', highlights: ['Coached 12 developers'] }] },
+      ],
+    });
+    const text = resumeToText(doc);
+    expect(text).toContain('ADDITIONAL EXPERIENCE');
+    expect(text).toContain('Community Lab — Mentor');
+    expect(text).toContain('- Coached 12 developers');
   });
 });
 

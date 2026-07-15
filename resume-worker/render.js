@@ -119,13 +119,14 @@ export async function renderResumePdf(resume, template = 'classic') {
 
 /**
  * Deterministic backstop (ADR 0031): drop the single least-important bullet — the last
- * highlight of whichever role/project currently has the most — returning a NEW résumé.
+ * highlight of whichever role/project/custom-section entry currently has the most — returning a NEW résumé.
  * Never empties an entry (only trims entries with >1 highlight). Returns null when
  * there's nothing left to trim, so the caller's loop terminates.
  */
 function dropLeastImportantHighlight(resume) {
   const clone = JSON.parse(JSON.stringify(resume));
-  const pools = [...(clone.work || []), ...(clone.projects || [])];
+  const customItems = (clone.customSections || []).flatMap((section) => section.items || []);
+  const pools = [...(clone.work || []), ...(clone.projects || []), ...customItems];
   let target = null;
   for (const e of pools) {
     const n = (e.highlights || []).length;

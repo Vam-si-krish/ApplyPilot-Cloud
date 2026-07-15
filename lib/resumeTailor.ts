@@ -69,11 +69,11 @@ SUMMARY — recruiters spend ~80% of a 7-second first scan on the TOP THIRD of t
 - Keep to the character budget (2-3 lines).
 
 LENGTH — the résumé must fit ONE page AND fill it; a sparse, half-empty page with thin one-line bullets looks weak. The user message carries a LENGTH BUDGET computed from the base résumé:
-- Keep the SAME number of bullets per role/project as the budget lists, or fewer, NEVER more. To surface a new point, REWRITE or MERGE an existing bullet; never append one.
+- Keep the SAME number of bullets per role/project/custom-section entry as the budget lists, or fewer, NEVER more. To surface a new point, REWRITE or MERGE an existing bullet; never append one.
 - ORDER each role's bullets by relevance to THIS job and VARY their length so the page reads human-written: open with the strongest, most role-relevant bullet at a FULL two lines (roughly 210-260 characters). For the rest, MIX lengths deliberately — some tight one-liners (roughly 110-140 characters), some full two-liners (roughly 200-260) — and never let consecutive bullets land within ~20 characters of each other. These numbers are guidance for VARIETY, not targets to hit: clustering most bullets near one length (e.g. everything at ~180-200 characters, about 1.25 rendered lines) is an instant AI tell. Every bullet still needs real substance: the scope or context, the action and concrete technologies, and a quantified result. Do NOT pad with filler; thin fragments and uniform same-length bullets both look templated.
 - Stay within the SKILLS budget; drop weaker, generic skills to make room for the ones this job wants.
 
-HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, employment dates, locations, contact details, and ALL of education. OMIT them entirely. (Job titles are the one exception — see JOB TITLES above.)
+HARD LIMITS — these verifiable facts (a background check would catch them) are restored from the base no matter what you send, so DON'T spend output tokens on them: employer/company names, employment dates, locations, contact details, ALL of education, and custom-section titles/item names/descriptions/dates/locations/links. OMIT them entirely. (Work job titles are the one exception — see JOB TITLES above.)
 
 STAY PLAUSIBLE: only add skills/claims a person with THIS candidate's background and seniority could believably have or quickly acquire. No wildly unrelated skills, no absurd seniority; it must hold up in an interview.
 
@@ -88,15 +88,16 @@ WRITE LIKE A HUMAN, NOT AN AI — recruiters and reviewers spot AI-written résu
 
 DISCLOSURE — include a top-level "_changes" array. Keep it SHORT (token budget): the FIRST entry is ONE sentence (≤ 200 chars) summarizing what you changed and why this candidate is a good fit for the role. Then add one short entry ONLY for each point/scenario you genuinely INVENTED or significantly embellished (something a background check or interview could expose) — omit routine rewording, reordering, and added skills (those are detected automatically). If you invented nothing, return just the single summary sentence.
 
-Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work" and "projects" in the SAME ORDER and SAME COUNT as the base (one entry per role/project), with "name" copied from the base purely so the bullets stay aligned to the right role:
+Output ONLY a JSON object (no markdown/commentary) with ONLY these fields. Keep "work", "projects", and "customSections" in the SAME ORDER and SAME COUNT as the base, and keep every custom section's "items" in the same order/count. Copy alignment names/titles from the base purely so the bullets stay attached to the right entry:
 {
   "basics": { "summary": "", "label": "" },
   "work": [ { "name": "<company, copied from base>", "position": "<job title — ONLY when honestly adjusted, else omit>", "highlights": ["", ""] } ],
   "skills": [ { "name": "", "keywords": ["", ""] } ],
   "projects": [ { "name": "<project name, copied from base>", "highlights": [] } ],
+  "customSections": [ { "title": "<section title, copied from base>", "items": [ { "name": "<item name, copied from base>", "highlights": [] } ] } ],
   "_changes": ["Reframed your summary and bullets around the role's cloud/CI focus and added Kubernetes — a strong fit given your Docker experience.", "Embellished: described leading a 5-engineer migration (you contributed but did not lead it)"]
 }
-Do NOT output name, contact, profiles, dates, locations, or education — they are filled from the base. Never output more highlights for a role/project than its budget allows.`;
+Do NOT output identity, contact, profiles, dates, locations, education, or custom-section factual fields — they are filled from the base. Never output more highlights for any entry than its budget allows.`;
 
 /** Per-section length budget derived from the base résumé (which already fits one page).
  *  Injected into the prompt so the model aims for the right size, and mirrored by the
@@ -105,10 +106,19 @@ function lengthBudget(base: ResumeDoc): string {
   const summary = summaryBudget(base);
   const work = base.work.map((w, i) => `  - ${w.name || `role ${i + 1}`}: ${w.highlights.length} bullet(s) max`).join('\n');
   const projects = base.projects.map((p, i) => `  - ${p.name || `project ${i + 1}`}: ${p.highlights.length} bullet(s) max`).join('\n');
+  const custom = (base.customSections ?? [])
+    .flatMap((section, sectionIndex) =>
+      section.items.map(
+        (item, itemIndex) =>
+          `  - ${section.title || `custom section ${sectionIndex + 1}`} / ${item.name || `entry ${itemIndex + 1}`}: ${item.highlights.length} bullet(s) max`,
+      ),
+    )
+    .join('\n');
   return (
     `Summary: ≤ ${summary} characters.\n` +
     `Work bullets per role (match or go under, NEVER over):\n${work || '  (none)'}\n` +
     `Project bullets per project:\n${projects || '  (none)'}\n` +
+    `Custom-section bullets per entry:\n${custom || '  (none)'}\n` +
     `Total skill keywords across all groups: ≤ ${skillBudget(base)}.`
   );
 }
@@ -338,8 +348,22 @@ export function mergeTailored(
   // projects: anchor name/url to base; take enhanced (count-capped, em-dash-cleaned) highlights.
   const projects: ResumeProject[] = base.projects.map((b, i) => ({ ...b, highlights: capHighlights(b.highlights, tailored.projects[i]?.highlights).map(finish) }));
 
+  // Custom headings and item metadata are user-authored facts. Keep them verbatim,
+  // while allowing the AI to reframe only their existing bullets under the same
+  // count cap as work/projects (ADR 0085).
+  const customSections = (base.customSections ?? []).map((section, sectionIndex) => ({
+    ...section,
+    items: section.items.map((item, itemIndex) => ({
+      ...item,
+      highlights: capHighlights(
+        item.highlights,
+        tailored.customSections?.[sectionIndex]?.items[itemIndex]?.highlights,
+      ).map(finish),
+    })),
+  }));
+
   // education: verifiable — copy verbatim from base.
-  return { basics, work, education: base.education, skills, projects };
+  return { basics, work, education: base.education, skills, projects, customSections };
 }
 
 /** Skills present in the merged résumé that weren't in the base (what the AI added). */

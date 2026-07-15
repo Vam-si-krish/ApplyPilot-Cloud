@@ -7,11 +7,19 @@
  * (LLM output, older stored rows, a hand-edited blob) into a well-formed ResumeDoc
  * so the rest of the app can trust the shape. Same discipline as the score parser.
  */
-import type { ResumeDoc, ResumeBasics, ResumeWork, ResumeEducation, ResumeSkill, ResumeProject } from './types';
+import type {
+  ResumeDoc,
+  ResumeBasics,
+  ResumeWork,
+  ResumeEducation,
+  ResumeSkill,
+  ResumeProject,
+  ResumeCustomSection,
+} from './types';
 
 /** A blank, well-formed résumé. */
 export function emptyResume(): ResumeDoc {
-  return { basics: {}, work: [], education: [], skills: [], projects: [] };
+  return { basics: {}, work: [], education: [], skills: [], projects: [], customSections: [] };
 }
 
 function str(v: unknown): string | undefined {
@@ -137,6 +145,27 @@ function normalizeProjects(v: unknown): ResumeProject[] {
   });
 }
 
+function normalizeCustomSections(v: unknown): ResumeCustomSection[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((raw) => {
+    const section = asObj(raw);
+    const items = Array.isArray(section.items)
+      ? section.items.map((itemRaw) => {
+          const item = asObj(itemRaw);
+          return {
+            name: str(item.name) ?? str(item.title),
+            description: str(item.description) ?? str(item.subtitle) ?? str(item.organization),
+            date: str(item.date),
+            location: flattenLocation(item.location),
+            url: str(item.url),
+            highlights: strList(item.highlights ?? item.bullets),
+          };
+        })
+      : [];
+    return { title: str(section.title) ?? str(section.name), items };
+  });
+}
+
 /** Coerce arbitrary/partial JSON into a well-formed ResumeDoc. Never throws. */
 export function normalizeResume(input: unknown): ResumeDoc {
   const o = asObj(input);
@@ -146,6 +175,7 @@ export function normalizeResume(input: unknown): ResumeDoc {
     education: normalizeEducation(o.education),
     skills: normalizeSkills(o.skills),
     projects: normalizeProjects(o.projects),
+    customSections: normalizeCustomSections(o.customSections),
   };
 }
 
@@ -192,6 +222,18 @@ export function resumeToText(doc: ResumeDoc): string {
     for (const p of doc.projects) {
       out.push([p.name, p.description].filter(Boolean).join(' — '));
       for (const h of p.highlights) out.push(`- ${h}`);
+    }
+  }
+
+  for (const section of doc.customSections ?? []) {
+    if (!section.title && section.items.length === 0) continue;
+    out.push(`\n${(section.title || 'ADDITIONAL').toUpperCase()}`);
+    for (const item of section.items) {
+      const head = [item.name, item.description].filter(Boolean).join(' — ');
+      const meta = [item.date, item.location].filter(Boolean).join(' · ');
+      out.push([head, meta].filter(Boolean).join('  '));
+      if (item.url) out.push(item.url);
+      for (const h of item.highlights) out.push(`- ${h}`);
     }
   }
 

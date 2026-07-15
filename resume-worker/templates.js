@@ -122,6 +122,21 @@ function projectEntry(p) {
     </div>`;
 }
 
+/** Generic entry used by user-defined sections (ADR 0085). */
+function customEntry(item) {
+  const bullets = (item.highlights || []).filter(Boolean).map((h) => `<li>${esc(h)}</li>`).join('');
+  const right = [item.date, item.location].filter(Boolean).join(' · ');
+  return `
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-title">${esc(item.name || '')}</span>
+        <span class="entry-meta">${esc(right)}</span>
+      </div>
+      ${(item.description || item.url) ? `<div class="entry-sub"><span class="entry-role">${esc(item.description || '')}</span><span class="entry-loc">${item.url ? link(item.url) : ''}</span></div>` : ''}
+      ${bullets ? `<ul>${bullets}</ul>` : ''}
+    </div>`;
+}
+
 function eduEntry(e) {
   const right = [e.startDate, e.endDate].filter(Boolean).join(' – ');
   const degree = [e.studyType, e.area].filter(Boolean).join(', ');
@@ -151,12 +166,16 @@ export function renderHtml(resume, { template = 'classic', scale = 1 } = {}) {
   const projects = (resume.projects || []).map(projectEntry).join('');
   const edu = (resume.education || []).map(eduEntry).join('');
   const skills = skillsBlock(resume.skills || []);
+  const customSections = (resume.customSections || [])
+    .map((custom) => section(custom.title || 'Additional', (custom.items || []).map(customEntry).join('')))
+    .join('');
 
   const body = [
     section('Summary', b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''),
     section('Technical Skills', skills),
     section('Professional Experience', work),
     section('Projects', projects),
+    customSections,
     section('Education', edu),
   ].join('');
 
