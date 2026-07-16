@@ -5,7 +5,7 @@
       "args": ["./scripts/applypilot-mcp.mjs"],
       "cwd": ".",
       "env": {
-        "APPLYPILOT_URL": "https://applydev.vamsikrish.com"
+        "APPLYPILOT_URL": "https://apply.vamsikrish.com"
       }
     }
   }
