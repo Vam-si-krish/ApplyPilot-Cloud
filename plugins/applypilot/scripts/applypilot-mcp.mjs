@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 
 const SERVER = { name: 'applypilot-mcp', version: '0.1.0' };
-const baseUrl = (process.env.APPLYPILOT_URL || 'http://localhost:3000').replace(/\/+$/, '');
-const token = process.env.APPLYPILOT_AI_TOKEN || '';
+const baseUrl = (process.env.APPLYPILOT_URL || 'https://applydev.vamsikrish.com').replace(/\/+$/, '');
+let token = '';
 
 const tools = [
+  {
+    name: 'connect_applypilot',
+    description: 'Pair this Codex session with ApplyPilot using the single-use code shown in the AI Apply tab. The access token stays in this MCP process.',
+    inputSchema: {
+      type: 'object',
+      properties: { pairing_code: { type: 'string', description: 'The 12-character single-use pairing code.' } },
+      required: ['pairing_code'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'list_assigned_jobs',
     description: 'List active jobs assigned to the signed-in user’s ApplyPilot AI queue, in queue order.',
@@ -76,7 +86,7 @@ function toolText(value, isError = false) {
 }
 
 async function callApi(path, init = {}) {
-  if (!token) throw new Error('APPLYPILOT_AI_TOKEN is not configured. Create a short-lived plugin run in ApplyPilot first.');
+  if (!token) throw new Error('ApplyPilot is not connected. Open AI Apply, choose Pair Codex, then call connect_applypilot with the one-time code.');
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
@@ -91,6 +101,18 @@ async function callApi(path, init = {}) {
   return body;
 }
 
+async function connect(pairingCode) {
+  const response = await fetch(`${baseUrl}/api/ai-agent/mcp/pair`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify({ code: pairingCode, clientName: 'Codex MCP' }),
+  });
+  const body = await response.json().catch(() => ({ error: `ApplyPilot returned HTTP ${response.status}` }));
+  if (!response.ok || !body.token) throw new Error(body.error || `ApplyPilot returned HTTP ${response.status}`);
+  token = body.token;
+  return { connected: true, expiresAt: body.expiresAt, message: 'ApplyPilot is connected. The access token is held only in this MCP process.' };
+}
+
 function requiredString(args, name) {
   const value = args?.[name];
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`);
@@ -98,6 +120,7 @@ function requiredString(args, name) {
 }
 
 async function callTool(name, args) {
+  if (name === 'connect_applypilot') return connect(requiredString(args, 'pairing_code'));
   if (name === 'list_assigned_jobs') {
     const requested = Number(args?.limit ?? 20);
     const limit = Number.isFinite(requested) ? Math.max(1, Math.min(Math.floor(requested), 50)) : 20;
@@ -124,7 +147,7 @@ async function handle(message) {
       protocolVersion: params?.protocolVersion || '2025-06-18',
       capabilities: { tools: { listChanged: false } },
       serverInfo: SERVER,
-      instructions: 'Use the ApplyPilot tools with the bundled apply-jobs skill and Chrome. Never invent candidate facts.',
+      instructions: 'Pair with connect_applypilot when needed, then use the ApplyPilot tools with the bundled apply-jobs skill and Chrome. Never invent candidate facts or expose access tokens.',
     });
     return;
   }

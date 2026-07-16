@@ -21,16 +21,18 @@
   use when available, extension-first autofill, and AI fallback for missed fields backed
   by saved candidate facts (ADRs 0093–0095).
 - [x] **AI Apply Navigator Phase 2 foundation: ApplyPilot plugin + MCP.** Bundle the
-  queue workflow as a repo-local Codex plugin with five narrow MCP tools, revocable
+  queue workflow as a repo-local Codex plugin with six narrow MCP tools, revocable
   two-hour UUID-scoped runs, extension-first Chrome instructions, and a copied-prompt
   fallback (ADR 0096). The development migration/APIs are live, the repo-local marketplace
-  is installed as `applypilot@personal`, and an authenticated five-tool queue smoke test
+  is installed as `applypilot@personal`, and an authenticated queue smoke test
   passes against `applydev.vamsikrish.com` (ADR 0098).
 - [ ] **AI Apply Navigator Phase 2 hardening: durable native invocation.** Replace the
-  temporary environment-token setup with OAuth/device authorization, add run leases and
+  local one-time pairing bridge with a remote Streamable HTTP MCP server and native
+  OAuth, add run leases and
   per-step audit evidence, evaluate success detection and prompt-injection handling, and
   package/install the reviewed plugin. Keep unknown-answer and visible-success evidence
-  explicit; see `docs/APPLYPILOT-PLUGIN-PLAN.md`.
+  explicit; the unsafe environment-token setup is already removed (ADR 0099). See
+  `docs/APPLYPILOT-PLUGIN-PLAN.md`.
 
 A living, do-it-one-by-one checklist from a full-codebase review (token efficiency,
 performance, correctness, UX). Work top-to-bottom unless priorities change.

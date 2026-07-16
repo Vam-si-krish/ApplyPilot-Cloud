@@ -8,8 +8,12 @@ function text(relative: string): string {
 }
 
 const migration = text('../supabase/migrations/0051_ai_agent_runs.sql');
+const pairingMigration = text('../supabase/migrations/0052_ai_agent_pairings.sql');
 const middleware = text('../middleware.ts');
 const runRoute = text('../app/api/ai-agent/runs/route.ts');
+const pairingRoute = text('../app/api/ai-agent/pairings/route.ts');
+const pairExchangeRoute = text('../app/api/ai-agent/mcp/pair/route.ts');
+const queueHeader = text('../components/AiApplyQueueHeader.tsx');
 const queueRoute = text('../app/api/ai-agent/mcp/queue/route.ts');
 const contextRoute = text('../app/api/ai-agent/mcp/applications/[id]/route.ts');
 const pluginRoot = fileURLToPath(new URL('../plugins/applypilot/', import.meta.url));
@@ -22,7 +26,20 @@ describe('ApplyPilot plugin boundary', () => {
     expect(migration).toContain('user_id = public.request_user_id()');
     expect(migration).toContain('revoked_at');
     expect(runRoute).toContain('currentUserId()');
-    expect(runRoute).toContain('AI_AGENT_RUN_TTL_MS');
+    expect(runRoute).not.toContain('createAiAgentToken');
+    expect(runRoute).not.toContain('export async function POST');
+  });
+
+  it('pairs through a forced-RLS, single-use code without showing a bearer token in the UI', () => {
+    expect(pairingMigration).toContain('create table if not exists public.ai_agent_pairings');
+    expect(pairingMigration).toContain('alter table public.ai_agent_pairings force row level security');
+    expect(pairingMigration).toContain('consumed_at');
+    expect(pairingRoute).toContain('currentUserId()');
+    expect(pairingRoute).not.toContain('createAiAgentToken');
+    expect(pairExchangeRoute).toContain(".is('consumed_at', null)");
+    expect(pairExchangeRoute).toContain('createAiAgentToken');
+    expect(queueHeader).not.toContain('APPLYPILOT_AI_TOKEN');
+    expect(queueHeader).not.toContain('export APPLYPILOT');
   });
 
   it('self-authenticates only the MCP prefix and re-enters the UUID-scoped gateway', () => {
@@ -34,7 +51,7 @@ describe('ApplyPilot plugin boundary', () => {
     expect(contextRoute).not.toContain('api_keys');
   });
 
-  it('advertises the five queue tools through a dependency-free MCP handshake', () => {
+  it('advertises pairing plus five queue tools through a dependency-free MCP handshake', () => {
     const input = [
       JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }),
       JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
@@ -45,6 +62,7 @@ describe('ApplyPilot plugin boundary', () => {
     const messages = result.stdout.trim().split('\n').map((line) => JSON.parse(line));
     expect(messages.find((message) => message.id === 1)?.result.serverInfo.name).toBe('applypilot-mcp');
     expect(messages.find((message) => message.id === 2)?.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'connect_applypilot',
       'list_assigned_jobs',
       'get_application_context',
       'start_application',

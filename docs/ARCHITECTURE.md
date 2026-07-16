@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-15 · **Current decisions:** ADRs 0072–0098
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-16 · **Current decisions:** ADRs 0072–0099
 
 ## Current deployment topology
 
@@ -184,16 +184,18 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   handoff; the dedicated route performs RLS-scoped writes and permits submission only from an
   active/legacy-ready row. The ordinary application PATCH route cannot mutate these
   fields (ADRs 0093–0095).
-- `lib/aiAgentAuth.ts`, `lib/aiApplyServer.ts`, `app/api/ai-agent/*`, and
-  `plugins/applypilot/` — own the Codex plugin boundary. A signed-in browser can mint a
-  purpose-bound two-hour run token backed by a revocable, forced-RLS `ai_agent_runs`
-  row. Bearer-authenticated MCP routes recover that token's UUID and create an explicit
+- `lib/aiAgentAuth.ts`, `lib/aiAgentPairing.ts`, `lib/aiApplyServer.ts`,
+  `app/api/ai-agent/*`, and `plugins/applypilot/` — own the Codex plugin boundary. A
+  signed-in browser can mint a ten-minute single-use pairing code, but never sees a
+  bearer token. The local MCP process exchanges that code for a purpose-bound two-hour
+  run backed by a revocable, forced-RLS `ai_agent_runs` row. Bearer-authenticated MCP
+  routes recover that token's UUID and create an explicit
   `supabaseAdmin(userId)` gateway client; they expose only active queue listing, one-row
   grounded context, and start/Needs-review/submitted transitions. The local stdio MCP
   process never receives a backend service key, database credential, app cookie, or
   another user's identity. Development distributes this source through the repo-local
   `personal` marketplace and installs it as `applypilot@personal`; production packaging
-  remains deferred (ADRs 0096 and 0098).
+  remains deferred (ADRs 0096, 0098, and 0099).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;
@@ -340,6 +342,9 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
 - **ai_agent_runs**: revocable authorization records for local ApplyPilot MCP sessions.
   The raw bearer token is not stored; signed purpose/user/run claims expire after two
   hours and are accepted only while the matching forced-RLS row remains unrevoked.
+- **ai_agent_pairings**: forced-RLS, user-owned hashes of ten-minute, single-use pairing
+  codes. A successful exchange atomically consumes the row before creating a run; raw
+  codes and bearer tokens are never persisted.
 
 ## Extension-autofill application navigation
 
@@ -347,7 +352,8 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
 Tailor & Apply Queue
   → readiness: unapplied + valid HTTP(S) application/job link
   → Assign to AI (uncapped queue)
-  → Connect ApplyPilot plugin (signed-in session mints revocable two-hour run)
+  → Pair Codex (signed-in session shows a single-use ten-minute code)
+  → plugin connect_applypilot consumes code and holds a revocable two-hour token in memory
   → plugin list_assigned_jobs reads the live UUID-scoped queue
   → Start & open posting + use tailored files when available
        → installed extension fills first
@@ -365,8 +371,8 @@ PostgreSQL. The app stores the queue lifecycle, concise blocker reason, and revo
 record. Candidate context is fetched only for an active row and only when autofill misses
 a field. Unknown-answer tabs remain open in Needs review, and visible site success is
 required before recording Applied. The existing twenty-row copied prompt remains a
-temporary fallback while plugin installation and later OAuth/device authorization are
-evaluated (ADRs 0095–0096).
+temporary fallback while remote Streamable HTTP MCP and native OAuth are evaluated
+(ADRs 0095–0096 and 0099).
 
 ## Résumé custom-section flow
 

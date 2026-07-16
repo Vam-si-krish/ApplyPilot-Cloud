@@ -10,10 +10,11 @@ from saved candidate facts, click through, submit, verify visible success, and l
 unknown-answer tabs in Needs review while continuing. The app does not silently launch a
 browser run or invent absent candidate information.
 
-ADR 0096 begins the long-term ApplyPilot Codex plugin path. `plugins/applypilot/` bundles
+ADRs 0096 and 0099 establish the long-term ApplyPilot Codex plugin path. `plugins/applypilot/` bundles
 the Chrome workflow and a local stdio MCP server. Its API access is a revocable two-hour
 run tied to the signed-in user's UUID; it never uses database credentials, backend
-service keys, or app session cookies. The copied twenty-row prompt remains a rollout
+service keys, app session cookies, or browser-displayed bearer tokens. A ten-minute,
+single-use pairing code connects the local process and remains harmless after use. The copied twenty-row prompt remains a rollout
 fallback.
 
 ## Active branch direction: independent multi-user product
@@ -90,7 +91,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/resume.ts` | Defensive résumé normalization and scoring/assistant text serialization |
 | `middleware.ts` | Gates routes and replaces caller identity headers from the signed session |
 | `plugins/applypilot/` | Codex plugin manifest, Apply jobs skill, and dependency-free stdio MCP server |
-| `lib/aiAgentAuth.ts` + `app/api/ai-agent/*` | Short-lived MCP run authorization and purpose-limited user-scoped tools |
+| `lib/aiAgentAuth.ts` + `lib/aiAgentPairing.ts` + `app/api/ai-agent/*` | Single-use pairing, short-lived MCP authorization, and purpose-limited user-scoped tools |
 | `supabase/migrations/` | SQL schema (jobs, profile, settings, runs) |
 | `backend/` | `multi-user-fork` server API, storage, migrations, launchd/autopull/watchdog/backup |
 | `scripts/jobpilot-server` | Personal-laptop bootstrap, deploy, status, restart, logs, and backup CLI |
