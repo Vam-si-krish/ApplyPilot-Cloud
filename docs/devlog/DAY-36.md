@@ -68,3 +68,20 @@ is assigned, what Codex is doing, what needs review, and whether Codex is connec
   production build, and `git diff --check`.
 - Refreshed and reinstalled `applypilot@personal` at
   `0.1.0+codex.20260716083627`; a new Codex thread is required to load the renamed tool.
+
+## Risk-proportionate development workflow
+
+- Reworked `AGENTS.md` and `docs/DEVELOPMENT.md` around Review, Tiny, Standard, and
+  High-risk change classes. Small/read-only work no longer inherits full builds,
+  documentation churn, or deployment steps; security, RLS, ownership, migration,
+  external-request, worker, and deployment changes retain the strictest gates.
+- Added `docs/DECISIONS.md` as a compact module-to-ADR router. Standard/High-risk sessions
+  now read only the relevant PRD, Architecture, and accepted-decision sections instead of
+  loading complete living documents or scanning every ADR.
+- Targeted tests are used during iteration and each applicable final gate runs once.
+  Routine deployment results belong in the final handoff, preventing a second docs-only
+  commit and duplicate Netlify build; material deployment lessons still enter the next
+  implementation devlog.
+- Documentation validation passes across 151 Markdown files and all links in the new
+  decision router; `git diff --check` passes. No application build or service sync is
+  required because this slice changes repository workflow documentation only.

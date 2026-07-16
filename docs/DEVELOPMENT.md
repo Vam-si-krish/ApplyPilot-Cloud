@@ -1,106 +1,87 @@
 # Development and documentation protocol
 
-This is the required loop for human and AI-assisted changes:
+The repository uses a risk-proportionate loop:
 
 ```text
-orient → architecture check → decision/spec → implement → verify → document → commit/deploy
+classify → orient only as needed → implement → targeted verify → document impact → commit/deploy
 ```
 
-## 1. Orient
+## Change classes and gates
 
-- Confirm the branch and working tree with `git status`; read recent `git log`.
-- Read the latest `docs/devlog/DAY-*.md` and the relevant PRD section.
-- For any change beyond a tiny copy/style fix, read the relevant Architecture
-  sections and ADRs before editing code.
+| Class | Typical work | Required final gates |
+|---|---|---|
+| Review | Explanation, diagnosis, status | None; remain read-only |
+| Tiny | Copy/style/comment/docs with no behavior or contract change | Directly relevant check; `npm run docs:check` for Markdown |
+| Standard | Product behavior, app logic, API contract, reusable UI | Relevant tests, `npm run typecheck`, `npm run build`, `npm run docs:check` |
+| High-risk | Auth/RLS, ownership, secrets, migration/storage, worker/external boundary, deployment | Standard gates plus affected backend/worker/migration/isolation/health checks |
 
-## 2. Architecture check
+During implementation, run the narrowest useful test. Run each applicable final gate once
+before commit. A final documentation-only correction requires `docs:check`, not another
+full application suite or build.
 
-Write down, at least mentally, the affected boundaries:
-
-- Who owns the data? Which `user_id` and storage namespace must apply?
-- Is the caller a browser, Netlify route, cron/webhook, gateway, or worker?
-- Does the work fit a serverless request, or must it run on the always-on worker?
-- Is the target endpoint deployment-managed or user-configurable?
-- Which secret is used, and can it reach the browser or another account?
-- Does the change preserve the separate `jobpilot_multi` database, file tree,
-  ports, Funnel path, and services?
-
-If the implementation would contradict an accepted ADR, stop and add an ADR that
-amends or supersedes it. Do not silently let code and architecture diverge.
-
-## 3. Implement and verify
-
-Validate external inputs and add proportionate regression coverage. Use the gates
-that apply:
+Available gates:
 
 ```bash
-npm run docs:check
 npm run test
 npm test --prefix backend
 npm test --prefix resume-worker
 npm run typecheck
 npm run build
+npm run docs:check
 ```
 
-Also run syntax checks, migration/fresh-database tests, live isolation probes,
-worker health checks, or backup/restore checks when those surfaces changed.
-`npm run lint` is not currently a gate because this repository has no committed
-ESLint configuration; do not accept the interactive setup prompt during automation.
+`npm run lint` is not configured; do not accept its interactive setup prompt.
 
-### Personal-laptop deploy loop
+## Task-scoped orientation
 
-After the one-time restricted-key/bootstrap steps in the
-[backend runbook](../backend/README.md#personal-laptop-development-and-operations), normal
-development does not require opening or screen-sharing the server laptop:
+For Standard and High-risk work:
 
-```bash
-npm run test && npm test --prefix backend && npm test --prefix resume-worker
-npm run typecheck && npm run docs:check && npm run build
-git add <files> && git commit
-./scripts/jobpilot-server deploy
-```
+1. Check branch, working tree, and recent history.
+2. Read the orientation and module map in `CLAUDE.md` plus the latest devlog.
+3. Locate only the affected PRD/Architecture headings with `rg`, then read those sections.
+4. Use `docs/DECISIONS.md` to route to the current ADRs for the affected surface.
+5. Identify data owner, caller, trust boundary, long-running/serverless owner, secrets,
+   and deployment target. High-risk changes must state these explicitly in the devlog.
 
-Feature work uses a separate `develop` worktree and isolated backend:
+Do not load complete living documents or the entire ADR directory unless the requested
+change genuinely spans them.
 
-```bash
-git -C <production-clone> worktree add ../ApplyPilot-Cloud-dev develop
-cd ../ApplyPilot-Cloud-dev
-./scripts/jobpilot-dev-server bootstrap
-./scripts/jobpilot-dev-server deploy
-```
+## Documentation impact
 
-After development end-to-end checks pass, merge `develop` into `multi-user-fork`, rerun
-the gates, and deploy with `scripts/jobpilot-server`. Never copy development data into
-production or point a feature branch at production secrets.
-
-The deploy command requires a clean `multi-user-fork`, pushes it, requests the server's
-allowlisted fast-forward path, and waits for `/worker/version` to report the commit. The
-push is also the Netlify frontend handoff. Use `status`, bounded `logs`, or a targeted
-`restart` through the same CLI; do not edit the live server checkout.
-
-## 4. Documentation impact review
-
-Every development session must explicitly consider each living document:
-
-| Change | Required documentation |
+| Impact | Update |
 |---|---|
-| Product scope, phase, user behavior, acceptance rule | `docs/PRD.md` |
-| Component, data flow, trust boundary, persistence, deployment, module owner | `docs/ARCHITECTURE.md` |
-| Durable choice, trade-off, exception, or reversal | new/amended `docs/adr/NNNN-*.md` |
-| Setup, environment variable, operator action, public endpoint | README/runbook and `.env.example` |
-| Deferred risk, follow-up, or completed roadmap item | `docs/BACKLOG.md` |
-| Any implemented slice | latest `docs/devlog/DAY-N.md` |
+| Product behavior, scope, phase, acceptance rule | `docs/PRD.md` |
+| Component, data flow, trust boundary, persistence, deployment, ownership | `docs/ARCHITECTURE.md` |
+| Durable choice, exception, reversal, or meaningful trade-off | new/amended ADR and `docs/DECISIONS.md` |
+| Setup, environment, operator action, public endpoint | README/runbook and `.env.example` as applicable |
+| Deferred/completed roadmap item or changed risk | `docs/BACKLOG.md` |
+| Standard or High-risk implemented slice | latest `docs/devlog/DAY-N.md` |
 
-Historical ADRs and old devlogs are evidence, not living specifications. Do not
-rewrite their original context; add a clear amendment/superseding link. Living docs
-(`CLAUDE.md`, PRD, Architecture, README, Backlog, runbooks) must describe current reality.
+Review and Tiny tasks do not require a devlog unless they reveal a durable decision or
+material operational fact. Historical ADRs/devlogs are evidence: amend or supersede them;
+do not rewrite their original context. Living documents must describe current reality.
 
-## 5. Definition of done
+Record implementation and pre-deployment verification before committing. Git history,
+the deploy command, and the final user handoff record a routine successful deployment;
+avoid a second documentation-only commit. If deployment exposes a failure, risk, or new
+decision, document that material result in the next implementation commit.
 
-A change is complete only when:
+## Branch and deployment path
 
-1. code and tests pass the relevant gates;
-2. current Architecture and PRD do not contradict the implementation;
-3. the devlog records what changed and how it was verified;
-4. operational instructions and environment examples are usable;
-5. the commit is pushed and affected server services are restarted/verified when needed.
+- Feature work: `develop` worktree, isolated development database/services, and
+  `./scripts/jobpilot-dev-server`.
+- Production: `multi-user-fork` and `./scripts/jobpilot-server`, only after explicit user
+  approval and development acceptance.
+- Never copy development data into production or point development at production secrets.
+- Use the guarded CLI for sync, status, bounded logs, restart, and backup. Never edit the
+  live server checkout.
+
+The push is the Netlify handoff. Netlify commonly takes about five minutes; once code,
+tests, build, push, and affected backend sync are healthy, hand control back to the user
+for frontend acceptance instead of repeatedly polling an expected build window.
+
+## Definition of done
+
+A change is complete when applicable gates pass, living docs do not contradict the
+implementation, Standard/High-risk work has a concise devlog entry, the commit is pushed
+when requested, and affected services are verified in proportion to risk.

@@ -1,42 +1,49 @@
 # Repository working agreement
 
-These instructions apply to every development session in this repository.
+Use the smallest safe workflow for the requested change. Feature work defaults to the
+`develop` worktree and isolated development services. Change `multi-user-fork` or deploy
+production only when the user explicitly asks.
 
-## Before changing code
+## Classify first
 
-1. Read `CLAUDE.md`, the latest file in `docs/devlog/`, and the relevant part of
-   `docs/PRD.md`.
-2. Read `docs/ARCHITECTURE.md` before any non-trivial change. Identify the trust
-   boundary, data owner, deployment process, and long-running/serverless boundary
-   affected by the change.
-3. Read the relevant accepted ADRs. If the requested behavior conflicts with an
-   accepted decision, write a superseding/amending ADR before implementing it.
-4. Check `git status` and `git log`; preserve unrelated user work.
+- **Review:** read-only explanation, diagnosis, or status. Inspect only what is relevant;
+  do not edit, test, build, deploy, or update documentation.
+- **Tiny:** copy, styling, comments, or documentation with no behavior, contract, data,
+  or operational change. Check `git status` and the touched files; run only a directly
+  relevant check (`npm run docs:check` for docs). No devlog or full build by default.
+- **Standard:** product behavior, application logic, API contracts, or reusable UI.
+  Follow the task-scoped orientation, tests, documentation-impact review, and devlog
+  requirements in `docs/DEVELOPMENT.md`.
+- **High-risk:** authentication, authorization/RLS, user ownership, secrets, migrations,
+  storage, worker routing, external/billable requests, deployment, backup, or production
+  isolation. Use the Standard workflow plus the relevant backend/worker, migration,
+  isolation, operational, and live health checks.
 
-## While developing
+Escalate when uncertain. A small diff touching a high-risk boundary remains High-risk.
 
-- Keep the implementation inside the documented module boundaries. If reality
-  requires a different boundary, update Architecture and record the decision.
-- Treat `multi-user-fork` as a private multi-user product: preserve forced RLS,
-  UUID-scoped files/worker calls, deployment-managed infrastructure, and the
-  separation from ApplyPilot production.
-- Add regression coverage for changed behavior, especially authentication,
-  ownership, worker routing, scoring, and external request boundaries.
+## Task-scoped orientation
 
-## Before declaring work complete
+1. Check `git status`, branch, and recent `git log`; preserve unrelated user work.
+2. For Standard/High-risk work, read the orientation and module map in `CLAUDE.md`, the
+   latest devlog, and only the relevant PRD/Architecture sections.
+3. Use `docs/DECISIONS.md` to find relevant accepted ADRs; do not scan every ADR. If the
+   request conflicts with one, add an amending/superseding ADR before implementation.
 
-Follow `docs/DEVELOPMENT.md` and perform a documentation-impact review:
+## Non-negotiable boundaries
 
-- update `docs/ARCHITECTURE.md` when components, data flow, trust boundaries,
-  deployment topology, or module ownership changed;
-- update `docs/PRD.md` when product behavior, scope, phase, or acceptance criteria changed;
-- add or amend an ADR for a durable decision or reversal;
-- update README/runbooks/env examples when setup or operations changed;
-- update `docs/BACKLOG.md` when a risk or deferred task changed;
-- always append the implementation and verification result to the latest devlog
-  (create the next `DAY-N.md` when appropriate).
+- Preserve forced RLS, UUID-scoped files and worker calls, deployment-managed
+  infrastructure, and complete separation from ApplyPilot production.
+- Keep changes inside documented module boundaries or update Architecture and record the
+  new boundary.
+- Validate external inputs and add regression coverage proportionate to the risk.
 
-Run `npm run docs:check`, relevant tests, `npm run typecheck`, and `npm run build`.
-Documentation is part of the definition of done; do not leave current-state docs
-describing superseded behavior. Preserve historical ADRs/devlogs and point to the
-superseding decision instead of rewriting history.
+## Completion
+
+Follow the gate matrix and documentation-impact matrix in `docs/DEVELOPMENT.md`. Run
+targeted checks while iterating and each applicable final gate once. Do not rerun full
+suites after a docs-only final edit.
+
+Record pre-deployment implementation and verification in the devlog for Standard and
+High-risk slices. Report deployment results in the final handoff; do not create a second
+docs-only commit solely to record a successful deployment. Update a later devlog only
+when deployment reveals a material issue, decision, or operational lesson.

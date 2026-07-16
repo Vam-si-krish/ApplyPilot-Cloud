@@ -120,16 +120,17 @@ npm run docs:check   # Markdown links + required living-document workflow
   webhook; scoring is chunked (`SCORE_BATCH_SIZE` jobs/invocation) and re-triggers
   until the unscored queue is empty.
 - Conventional commits with the *why* in the body (`feat(scope): …`).
-- **Architecture and documentation are gates.** Follow `AGENTS.md` and
-  `docs/DEVELOPMENT.md`: read Architecture before non-trivial changes, update living
-  docs when reality changes, and record every implemented slice in the devlog.
+- **Architecture and documentation are risk-proportionate gates.** Follow `AGENTS.md`
+  and `docs/DEVELOPMENT.md`: use task-scoped context, update living docs when reality
+  changes, and record Standard/High-risk implemented slices in the devlog.
 
-## Context docs (read before non-trivial changes)
-- `docs/devlog/` — **start here in a new session**: latest DAY-N holds current state
-  + open questions. Append before ending a session.
-- `docs/PRD.md` — what we're building and why.
-- `docs/ARCHITECTURE.md` — pipeline + data flow + module boundaries.
-- `docs/adr/` — decisions with trade-offs; add an ADR when you make or reverse one.
+## Context docs (task-scoped for Standard/High-risk changes)
+- `docs/devlog/` — latest DAY-N holds current state and open questions.
+- `docs/DECISIONS.md` — route from the affected surface to current ADRs without scanning
+  the directory.
+- `docs/PRD.md` — read the relevant product section only.
+- `docs/ARCHITECTURE.md` — read the relevant boundary/data-flow section only.
+- `docs/adr/` — read routed decisions; add an ADR when making or reversing a durable choice.
 - `docs/AI_WORKFLOW.md` — how AI assistance is used and verified here.
 - `docs/DEVELOPMENT.md` — mandatory architecture/documentation definition of done.
 - `git log` — every change carries its *why* in the body.
