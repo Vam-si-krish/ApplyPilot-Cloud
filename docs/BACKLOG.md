@@ -13,6 +13,9 @@
   worker call, API key, onboarding flow, password reset, and rate/spend boundary.
 - [x] **Phase 2A: implement and verify fixed-account multi-user isolation.** Add
   cross-user denial tests, migrate singleton rows, and keep public signup disabled.
+- [x] **Phase 2A: provision Rishab as the fourth production-only fixed account.** Retain
+  all baseline UUIDs, add isolated singleton rows, and keep development at three accounts
+  unless it explicitly needs the optional identity (ADR 0103).
 - [ ] **Phase 2B: complete public-account security gates.** Add self-service signup,
   verified password recovery, session controls, credential encryption at rest, encrypted
   off-host backup handling, and abuse/rate/spend controls before enabling public access.

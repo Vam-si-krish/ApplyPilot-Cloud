@@ -49,7 +49,7 @@ Phase 2A. Public account creation, password reset/session controls, encryption a
 and abuse/rate/spend controls remain Phase 2B gates before public access.
 
 **Phase 2A — fixed private accounts (current):** ship the ownership and onboarding model
-first for three environment-configured username/password accounts. Public signup and
+for four production environment-configured username/password accounts. Public signup and
 password reset remain disabled. Each account uploads a résumé PDF for AI-assisted initial
 profile/search setup, then supplies its own Apify/LLM API keys or connects its own
 UUID-isolated Claude or ChatGPT subscription for normal work. The owner's server subscription is

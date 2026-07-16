@@ -6,6 +6,7 @@ const USERS = JSON.stringify([
   { id: '00000000-0000-4000-8000-000000000002', username: 'surya', password: 'surya-test-password' },
   { id: '00000000-0000-4000-8000-000000000003', username: 'samitha', password: 'samitha-test-password' },
 ]);
+const RISHAB = { id: '578fcb56-5900-4d0d-be20-6b6c191554b7', username: 'rishab', password: 'rishab-test-password', displayName: 'Rishab' };
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -16,6 +17,25 @@ describe('fixed account auth', () => {
     expect(authenticateUser('surya', 'owner-password')).toBeNull();
     expect(authenticateUser('SAMITHA', 'samitha-test-password')?.id).toBe('00000000-0000-4000-8000-000000000003');
     expect(configuredUsers()).toHaveLength(3);
+  });
+
+  it('accepts the production-only fourth account without requiring it in development', () => {
+    vi.stubEnv('APP_USERS_JSON', JSON.stringify([...JSON.parse(USERS), RISHAB]));
+    expect(authenticateUser('Rishab', 'rishab-test-password')?.id).toBe(RISHAB.id);
+    expect(configuredUsers()).toHaveLength(4);
+  });
+
+  it('rejects replacing a baseline account with the optional fourth identity', () => {
+    vi.stubEnv('APP_USERS_JSON', JSON.stringify([...JSON.parse(USERS).slice(0, 2), RISHAB]));
+    expect(() => configuredUsers()).toThrow('retain all three baseline accounts');
+  });
+
+  it('rejects an unprovisioned fourth UUID', () => {
+    vi.stubEnv('APP_USERS_JSON', JSON.stringify([
+      ...JSON.parse(USERS),
+      { ...RISHAB, id: '11111111-1111-4111-8111-111111111111' },
+    ]));
+    expect(() => configuredUsers()).toThrow('provisioned account migrations');
   });
 
   it('signs the user identity and rejects tampered or expired sessions', async () => {

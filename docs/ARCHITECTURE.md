@@ -95,12 +95,14 @@ excluded; and the source remained read-only. Nine legacy jobs marked `scored` wi
 numeric result were reset to `unscored`, and active scoring state was cleared rather than
 resumed. There is no ongoing synchronization or runtime dependency on production.
 
-Phase 2A is implemented per ADR 0073. Three fixed server-side accounts carry stable UUIDs
+Phase 2A is implemented per ADRs 0073 and 0103. Four fixed production server-side accounts carry stable UUIDs
 in signed sessions. Middleware injects the verified UUID; the gateway converts it into a
 short-lived PostgREST JWT. Forced PostgreSQL RLS then scopes every domain table even when
 application code omits a filter. Files are physically namespaced by UUID and worker calls
 carry the same identity. `profile.id=1` and similar singleton selectors remain for code
 compatibility, but their real primary key is `user_id`, so each account has its own row.
+Development may retain the three baseline accounts; the validator accepts the provisioned
+fourth UUID only as an addition and never permits replacing a baseline identity.
 
 First login leads to PDF résumé onboarding. Netlify extracts PDF text, makes one bounded
 anti-fabrication parse through the owner's subscription worker, and initializes only that
