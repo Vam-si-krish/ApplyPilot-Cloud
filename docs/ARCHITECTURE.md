@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-16 · **Current decisions:** ADRs 0072–0099
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-16 · **Current decisions:** ADRs 0072–0100
 
 ## Current deployment topology
 
@@ -360,8 +360,10 @@ Tailor & Apply Queue
        → only on a missed field: plugin reads this row's saved candidate context
        → AI completes the missed field from saved profile/answer/résumé/cover facts
        ├─ answer unavailable → Needs review + Set Aside; leave tab open → next new tab
+       ├─ exact job visibly says already applied → do not resubmit
+       │                                        → plugin marks Applied → continue
        └─ final page → AI clicks Submit → visible site success
-                                      → plugin marks Submitted/applied → continue
+                                      → plugin marks Applied → continue
 ```
 
 The plugin is an orchestration and least-privilege data boundary, not a remote
@@ -370,7 +372,9 @@ and extension; browser credentials, page contents, and extension state do not en
 PostgreSQL. The app stores the queue lifecycle, concise blocker reason, and revocable run
 record. Candidate context is fetched only for an active row and only when autofill misses
 a field. Unknown-answer tabs remain open in Needs review, and visible site success is
-required before recording Applied. The existing twenty-row copied prompt remains a
+required before recording Applied. Visible Already applied/You applied status for the
+exact job is also valid completion evidence and prevents a duplicate submission; an
+uncertain match goes to Needs review (ADR 0100). The existing twenty-row copied prompt remains a
 temporary fallback while remote Streamable HTTP MCP and native OAuth are evaluated
 (ADRs 0095–0096 and 0099).
 

@@ -25,7 +25,9 @@
   two-hour UUID-scoped runs, extension-first Chrome instructions, and a copied-prompt
   fallback (ADR 0096). The development migration/APIs are live, the repo-local marketplace
   is installed as `applypilot@personal`, and an authenticated queue smoke test
-  passes against `applydev.vamsikrish.com` (ADR 0098).
+  passes against `applydev.vamsikrish.com` (ADR 0098). Visible already-applied employer
+  status is reconciled without duplicate submission; uncertain rows go to Needs review
+  (ADR 0100).
 - [ ] **AI Apply Navigator Phase 2 hardening: durable native invocation.** Replace the
   local one-time pairing bridge with a remote Streamable HTTP MCP server and native
   OAuth, add run leases and

@@ -62,7 +62,7 @@ describe('AI navigation with extension-owned autofill', () => {
     expect(aiApplyReadiness(application({ status: 'applied', applied_at: '2026-07-15T01:00:00.000Z' })).reason).toContain('already');
   });
 
-  it('records direct visible-success submission and blockers without changing tailoring readiness', () => {
+  it('records a visibly confirmed applied outcome and blockers without changing tailoring readiness', () => {
     const now = '2026-07-15T01:00:00.000Z';
     expect(resolveAiApplyTransition(null, 'assign', now)).toMatchObject({
       ok: true,
@@ -107,6 +107,9 @@ describe('AI navigation with extension-owned autofill', () => {
     expect(prompt).toContain('Process at most 20 applications');
     expect(prompt).toContain('fill only those fields from information already available');
     expect(prompt).toContain('mark the job Needs review');
+    expect(prompt).toContain('Already applied');
+    expect(prompt).toContain('do not submit it again');
+    expect(prompt).toContain('Mark that job Applied');
     expect(prompt).toContain('continue with the next job in a new tab');
     expect(prompt).toContain('Never invent an answer');
   });

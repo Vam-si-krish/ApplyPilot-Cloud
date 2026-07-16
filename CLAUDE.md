@@ -9,6 +9,9 @@ installed extension fills first, then a user-invoked Chrome agent may fill misse
 from saved candidate facts, click through, submit, verify visible success, and leave
 unknown-answer tabs in Needs review while continuing. The app does not silently launch a
 browser run or invent absent candidate information.
+When the employer site visibly identifies the exact job as already applied, the agent
+must not submit it again; it records that application and its linked job as Applied.
+Uncertain completion or human-judgment blockers go to Needs review (ADR 0100).
 
 ADRs 0096 and 0099 establish the long-term ApplyPilot Codex plugin path. `plugins/applypilot/` bundles
 the Chrome workflow and a local stdio MCP server. Its API access is a revocable two-hour

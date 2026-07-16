@@ -58,12 +58,19 @@ const tools = [
     },
   },
   {
-    name: 'mark_application_submitted',
-    description: 'Record an in-progress application as submitted only after the employer site visibly confirms submission success.',
+    name: 'mark_application_applied',
+    description: 'Mark an in-progress application Applied after the site visibly confirms either a new submission or that the user already applied previously.',
     inputSchema: {
       type: 'object',
-      properties: { application_id: { type: 'string' } },
-      required: ['application_id'],
+      properties: {
+        application_id: { type: 'string' },
+        confirmation: {
+          type: 'string',
+          enum: ['submitted_now', 'already_applied'],
+          description: 'Whether this run submitted it now or the site says the user had already applied.',
+        },
+      },
+      required: ['application_id', 'confirmation'],
       additionalProperties: false,
     },
   },
@@ -130,10 +137,16 @@ async function callTool(name, args) {
   if (name === 'get_application_context') return callApi(`/api/ai-agent/mcp/applications/${applicationId}`);
   const action = name === 'start_application' ? 'start'
     : name === 'mark_application_needs_review' ? 'block'
-      : name === 'mark_application_submitted' ? 'submitted'
+      : name === 'mark_application_applied' ? 'submitted'
         : null;
   if (!action) throw new Error(`Unknown tool: ${name}`);
   const reason = action === 'block' ? requiredString(args, 'reason').slice(0, 500) : undefined;
+  if (action === 'submitted') {
+    const confirmation = requiredString(args, 'confirmation');
+    if (!['submitted_now', 'already_applied'].includes(confirmation)) {
+      throw new Error('confirmation must be submitted_now or already_applied');
+    }
+  }
   return callApi(`/api/ai-agent/mcp/applications/${applicationId}`, {
     method: 'PATCH',
     body: JSON.stringify({ action, ...(reason ? { reason } : {}) }),

@@ -42,6 +42,8 @@ secret is copied through chat, source control, logs, or plugin configuration.
   do not store page contents, browser credentials, or sensitive form answers.
 - Evaluate Easy Apply and common external ATS flows with repeatable fixtures and measured
   completion/blocker rates.
+- Reconcile exact-job visible Already applied/You applied status as Applied without a
+  duplicate submission; keep uncertain matches in Needs review (ADR 0100).
 
 Exit gate: interrupted/restarted runs resume without double submission, concurrent runs do
 not collide, and reported Submitted always has visible-success evidence.

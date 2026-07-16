@@ -52,6 +52,8 @@ describe('AI assignment persistence boundary', () => {
     expect(applicationsPage).toContain("updateAiApplication(a, 'retry')");
     expect(applicationsPage).toContain('<AiApplyStatusBadge');
     expect(applicationsPage).toContain('Needs review');
+    expect(applicationsPage).toContain('already applied, record this as Applied');
+    expect(applicationsPage).toContain('<CheckCircle2 size={12} /> Applied');
     expect(applicationsPage).not.toContain('MAX_AI_APPLY_BATCH');
     expect(applicationsPage).not.toContain('Ready for review');
   });

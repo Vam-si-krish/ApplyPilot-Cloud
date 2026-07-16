@@ -77,7 +77,9 @@ Tailor & Apply also provides AI Apply Navigator. Every unapplied job with a vali
 web link may enter the AI queue regardless of Easy Apply/External type or document
 readiness. The extension fills first; AI completes missed fields from Candidate Profile,
 saved application answers, résumé, or cover letter, navigates and submits, then records
-visible success. If the answer is not available, the job becomes Needs review, its tab
+visible success. If the exact employer-site job visibly says the user already applied,
+AI must not resubmit it and instead reconciles the ApplyPilot application and linked job
+to Applied. If the answer or completion state is uncertain, the job becomes Needs review, its tab
 stays open, and AI continues with the next job in a new tab. Assignment is uncapped.
 The preferred development path is now a bundled ApplyPilot Codex plugin: six MCP tools
 read the live assigned queue, retrieve one active row's grounded context only when
@@ -85,7 +87,7 @@ needed, pair the local process without exposing a bearer token, and record lifec
 outcomes. Access is a revocable, user-bound two-hour run obtained through a ten-minute,
 single-use code; the AI Apply header shows queue health and connection state, while
 the existing next-twenty copied prompt remains a fallback during rollout (ADRs
-0093–0096 and 0099).
+0093–0096 and 0099–0100).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

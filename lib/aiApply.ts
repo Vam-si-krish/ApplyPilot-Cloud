@@ -169,8 +169,9 @@ For each application:
 1. Click Start & open in ApplyPilot. Use the tailored files for that row when they are available.
 2. Let my autofill extension fill the page. If one or more fields remain empty, fill only those fields from information already available in my ApplyPilot Candidate Profile, application answers, résumé, or cover letter.
 3. Click Next, Continue, Review, or the equivalent button and repeat on every page.
-4. If a required answer is not available from those sources, return to ApplyPilot, mark the job Needs review with the missing field in the reason, leave its browser tab open, and continue with the next job in a new tab.
-5. On the final page, click Submit. After the site visibly confirms success, mark Submitted in ApplyPilot and continue.
+4. If the site visibly says Applied, You applied, Application submitted, or Already applied for this exact job, do not submit it again. Mark that job Applied in ApplyPilot and continue.
+5. If a required answer is not available from those sources, needs human judgment, or the application cannot be completed confidently, return to ApplyPilot, mark the job Needs review with the reason, leave its browser tab open, and continue with the next job in a new tab.
+6. On the final page, click Submit. After the site visibly confirms success, mark Applied in ApplyPilot and continue.
 
 Keep moving quickly. Never invent an answer that is not in my saved information.`;
 }

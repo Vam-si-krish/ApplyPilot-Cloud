@@ -49,3 +49,22 @@ is assigned, what Codex is doing, what needs review, and whether Codex is connec
 - A signed-in visual click-through and paired live MCP read remain the owner acceptance
   check once Netlify serves the new build; browser control was unavailable in this
   session.
+
+## Already-applied reconciliation
+
+- Renamed the MCP completion tool to `mark_application_applied` and made it distinguish
+  `submitted_now` from `already_applied`. If LinkedIn or another employer site visibly
+  says this exact job is already applied, Codex now avoids duplicate submission and uses
+  the existing guarded transition to mark both the application and linked job Applied.
+- Kept Needs review as the explicit path for missing answers, human judgment, uncertain
+  completion, or a site that cannot be completed confidently. The blocker reason remains
+  attached to that exact application while the agent continues the queue.
+- Updated the bundled skill, fallback prompt, manual row action, plugin README, PRD,
+  architecture, backlog, and ADR 0100. No schema change was required; the internal
+  `submitted` lifecycle value remains backward compatible.
+- Verification passes: Apply jobs skill validation, plugin validation, 228 frontend
+  tests (9 evaluation cases intentionally skipped), 19 backend tests, 20 résumé-worker
+  tests, TypeScript, documentation validation (150 Markdown files and 94 ADRs), optimized
+  production build, and `git diff --check`.
+- Refreshed and reinstalled `applypilot@personal` at
+  `0.1.0+codex.20260716083627`; a new Codex thread is required to load the renamed tool.

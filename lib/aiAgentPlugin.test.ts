@@ -18,6 +18,7 @@ const queueRoute = text('../app/api/ai-agent/mcp/queue/route.ts');
 const contextRoute = text('../app/api/ai-agent/mcp/applications/[id]/route.ts');
 const pluginRoot = fileURLToPath(new URL('../plugins/applypilot/', import.meta.url));
 const mcpScript = fileURLToPath(new URL('../plugins/applypilot/scripts/applypilot-mcp.mjs', import.meta.url));
+const applyJobsSkill = text('../plugins/applypilot/skills/apply-jobs/SKILL.md');
 
 describe('ApplyPilot plugin boundary', () => {
   it('keeps run authorization revocable and forced-RLS user owned', () => {
@@ -67,7 +68,25 @@ describe('ApplyPilot plugin boundary', () => {
       'get_application_context',
       'start_application',
       'mark_application_needs_review',
-      'mark_application_submitted',
+      'mark_application_applied',
     ]);
+  });
+
+  it('distinguishes a new submission from a visibly already-applied job', () => {
+    expect(applyJobsSkill).toContain('confirmation: "already_applied"');
+    expect(applyJobsSkill).toContain('confirmation: "submitted_now"');
+    expect(applyJobsSkill).toContain('mark_application_needs_review');
+    expect(applyJobsSkill).toContain('for this exact job');
+
+    const input = [
+      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+        name: 'mark_application_applied', arguments: { application_id: 'application-1' },
+      } }),
+      '',
+    ].join('\n');
+    const result = spawnSync(process.execPath, [mcpScript], { cwd: pluginRoot, input, encoding: 'utf8' });
+    const message = JSON.parse(result.stdout.trim());
+    expect(message.result.isError).toBe(true);
+    expect(message.result.content[0].text).toContain('confirmation is required');
   });
 });

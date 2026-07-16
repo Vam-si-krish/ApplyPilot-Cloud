@@ -244,7 +244,7 @@ export default function ApplicationsPage() {
         block: 'Marked Needs review and moved to Set Aside. Continue with the next application.',
         retry: 'Returned to the AI navigation queue.',
         unassign: 'Removed from the AI queue and returned to the working Queue.',
-        submitted: 'Visible submission success recorded as applied.',
+        submitted: 'Visible submitted or already-applied status recorded as Applied.',
       };
       setMsg(message[action] || 'AI application updated.');
       setSelected((previous) => {
@@ -1421,10 +1421,10 @@ export default function ApplicationsPage() {
                         <button
                           onClick={() => updateAiApplication(a, 'submitted')}
                           disabled={bulkBusy}
-                          title="After the external site visibly confirms success, record this as submitted"
+                          title="After the site visibly confirms a new submission or says you already applied, record this as Applied"
                           className="inline-flex w-[132px] items-center justify-center gap-1 rounded-lg border border-emerald/30 bg-emerald/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald hover:bg-emerald/20 disabled:opacity-40"
                         >
-                          <CheckCircle2 size={12} /> Submitted
+                          <CheckCircle2 size={12} /> Applied
                         </button>
                       )}
                       <button onClick={() => updateAiApplication(a, 'block')} disabled={bulkBusy} title="Mark Needs review, leave this browser tab open, and continue with the next job" className="p-1 rounded-md text-slate-muted hover:text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 shrink-0">
