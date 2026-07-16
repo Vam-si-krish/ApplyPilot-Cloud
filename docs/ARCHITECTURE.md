@@ -423,3 +423,10 @@ before AI scoring, External includes an omitted `easy_apply` flag, and AI-derive
 match only populated values. The Apify output adapter owns normalization of source filter
 metadata: actor `contractType` becomes the persisted employment enum and actor `applyType`
 becomes `easy_apply`, so those filters do not wait on the LLM. See ADR 0078.
+
+Applied jobs and jobs already represented in Tailor & Apply are hidden on initial load.
+Those exclusions are UUID-scoped across both representatives and attached duplicate
+locations. If an excluded canonical still has an eligible duplicate, the API promotes
+one eligible duplicate as representative and attaches only other eligible siblings;
+canonical exclusion cannot erase the remaining group. Clear all disables both rules.
+See ADR 0101.

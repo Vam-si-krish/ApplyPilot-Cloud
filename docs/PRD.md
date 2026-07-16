@@ -157,8 +157,10 @@ must never be publicly readable — a single shared password gates everything (A
    eligibility/avoidance/scoring-preference facts (see ARCHITECTURE §Scoring).
 4. **Present results**: a shortlist sorted by `fit_score` desc, with filters
    (score range, search, status) and a shortlist toggle. Fresh/unscored results are
-   visible without silently active score/company/run constraints; “Clear all” removes
-   every filter. "Run now" button for manual runs.
+   visible without silently active score/company/run constraints. Applied jobs and jobs
+   already in Tailor & Apply are hidden by default, posting-by-posting; an eligible
+   duplicate location remains visible even when its original canonical row is hidden.
+   “Clear all” removes every filter. "Run now" button for manual runs.
 5. **Maintain one complete résumé:** the Base résumé editor supports both the standard
    résumé fields and user-defined sections. Custom sections remain editable in a tailored
    copy, are included in AI/local scoring context, preserve user-entered facts during AI

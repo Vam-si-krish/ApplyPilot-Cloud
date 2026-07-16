@@ -83,9 +83,9 @@ export default function JobsPage() {
   const [recomputing, setRecomputing] = useState(false); // "Recompute ATS match" in flight
   const [employmentType, setEmploymentType] = useState(''); // full_time | contract | internship
   const [limit, setLimit] = useState(300); // page size; "Load more" raises it
-  const [hideApplied, setHideApplied] = useState(false);
+  const [hideApplied, setHideApplied] = useState(true);
   const [hideOpened, setHideOpened] = useState(false); // optionally hide ones you've opened but passed on
-  const [hideInApplications, setHideInApplications] = useState(false);
+  const [hideInApplications, setHideInApplications] = useState(true);
   const [showMoreFilters, setShowMoreFilters] = useState(false); // collapsible secondary refinements (declutters the bar)
   const [allowDeleteScores, setAllowDeleteScores] = useState(false); // Settings gate (ADR 0048): when on, show bulk "delete score" actions
 
