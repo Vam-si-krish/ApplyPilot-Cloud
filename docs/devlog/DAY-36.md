@@ -40,5 +40,12 @@ is assigned, what Codex is doing, what needs review, and whether Codex is connec
   validation, `git diff --check`, and the optimized Next.js production build pass.
 - Refreshed the local `applypilot@personal` installation from the repo marketplace at
   version `0.1.0+codex.20260716082507`; it reports installed and enabled.
-- Development migration/deployment and live paired-MCP verification are recorded below
-  after deployment.
+- Pushed commit `40056c6` to `origin/develop` and ran the guarded development sync.
+  Gateway health, worker health, and the clean server checkout all passed at that commit;
+  migration 0052 was applied. Production was not touched.
+- The first public pairing-route probe still reached the previous Netlify build and
+  returned 404 immediately after the push. This is the expected five-minute frontend
+  deployment window, not a backend failure, so no long deployment polling was performed.
+- A signed-in visual click-through and paired live MCP read remain the owner acceptance
+  check once Netlify serves the new build; browser control was unavailable in this
+  session.
