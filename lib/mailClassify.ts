@@ -34,6 +34,7 @@ CATEGORY: [recruiter|applied|shortlisted|action_needed|assessment|rejection|othe
 SOURCE: [easy_apply|company_portal|none]
 SUMMARY: [one short sentence — what it is and any deadline/action]
 EVENT_TYPE: [assessment|interview|none]
+EVENT_ACTION: [active|complete|none]
 EVENT_START: [ISO 8601 timestamp with timezone, or NONE]
 EVENT_END: [ISO 8601 timestamp with timezone, or NONE]
 
@@ -41,6 +42,7 @@ Calendar rules:
 - assessment: populate only when the email explicitly gives an opening/start time or deadline/expiry. START is when it becomes available. END is its deadline. A lone deadline belongs in END.
 - interview: populate only for an explicitly scheduled or confirmed interview date/time. START is the interview time. END is present only when an end time or duration is explicit. An invitation that merely asks the candidate to choose availability has no calendar event yet.
 - none: every other message.
+- EVENT_ACTION active creates/updates a dated event from this email. EVENT_ACTION complete is ONLY for an explicit confirmation that the candidate finished/submitted the assessment, or an explicit post-interview confirmation/follow-up proving the interview happened. A generic invitation, reminder, application confirmation, or "thanks for applying" is never complete. Completion mail may have no event dates; preserve EVENT_TYPE so it can be matched to the earlier event.
 Never invent a date or timezone. You may resolve explicit relative wording such as "tomorrow" from RECEIVED_AT. When a time is stated without a timezone, use USER_TIMEZONE and preserve that offset in the ISO result.`;
 
 // Confirmation senders that pin the source deterministically (ADR 0021, broadened).
@@ -79,6 +81,7 @@ export interface MailClassification {
   calendar_event_kind: 'assessment' | 'interview' | null;
   calendar_start_at: string | null;
   calendar_end_at: string | null;
+  calendar_action: 'active' | 'complete' | null;
 }
 
 function parsedTimestamp(value: string): string | null {
@@ -97,6 +100,7 @@ export function parseMailResponse(response: string): MailClassification {
   let calendar_event_kind: 'assessment' | 'interview' | null = null;
   let calendar_start_at: string | null = null;
   let calendar_end_at: string | null = null;
+  let calendar_action: 'active' | 'complete' | null = null;
   for (const raw of response.split('\n')) {
     const line = raw.trim();
     if (line.toUpperCase().startsWith('CATEGORY:')) {
@@ -118,6 +122,9 @@ export function parseMailResponse(response: string): MailClassification {
       calendar_start_at = parsedTimestamp(line.slice(12));
     } else if (line.toUpperCase().startsWith('EVENT_END:')) {
       calendar_end_at = parsedTimestamp(line.slice(10));
+    } else if (line.toUpperCase().startsWith('EVENT_ACTION:')) {
+      const value = line.slice(13).trim().toLowerCase();
+      if (value === 'active' || value === 'complete') calendar_action = value;
     }
   }
   // Backward-compatible parser support for stored fixtures and older model replies.
@@ -125,16 +132,18 @@ export function parseMailResponse(response: string): MailClassification {
     calendar_event_kind = 'assessment';
     calendar_start_at = assessment_start_at;
     calendar_end_at = assessment_end_at;
+    calendar_action = 'active';
   }
-  const kindMatchesCategory = calendar_event_kind === 'assessment'
+  const kindMatchesCategory = calendar_action === 'complete' ? true : calendar_event_kind === 'assessment'
     ? category === 'assessment'
     : calendar_event_kind === 'interview'
       ? category === 'shortlisted' || category === 'action_needed'
       : true;
-  if (!kindMatchesCategory || (!calendar_start_at && !calendar_end_at) || (calendar_start_at && calendar_end_at && calendar_end_at < calendar_start_at)) {
+  if (!kindMatchesCategory || (calendar_action !== 'complete' && !calendar_start_at && !calendar_end_at) || (calendar_start_at && calendar_end_at && calendar_end_at < calendar_start_at)) {
     calendar_event_kind = null;
     calendar_start_at = null;
     calendar_end_at = null;
+    calendar_action = null;
   }
   if (category !== 'assessment') {
     assessment_start_at = null;
@@ -147,7 +156,8 @@ export function parseMailResponse(response: string): MailClassification {
     assessment_start_at = calendar_start_at;
     assessment_end_at = calendar_end_at;
   }
-  return { category, apply_source, summary, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at };
+  if (calendar_event_kind && !calendar_action) calendar_action = calendar_start_at || calendar_end_at ? 'active' : null;
+  return { category, apply_source, summary, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at, calendar_action };
 }
 
 export function buildMailMessages(email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null; timezone?: string }): ChatMessage[] {
@@ -168,6 +178,6 @@ export async function classifyEmail(
     const response = await llm.chat(buildMailMessages(email), { maxTokens: 340, temperature: 0 });
     return parseMailResponse(response);
   } catch {
-    return { category: 'other', apply_source: null, summary: '', assessment_start_at: null, assessment_end_at: null, calendar_event_kind: null, calendar_start_at: null, calendar_end_at: null };
+    return { category: 'other', apply_source: null, summary: '', assessment_start_at: null, assessment_end_at: null, calendar_event_kind: null, calendar_start_at: null, calendar_end_at: null, calendar_action: null };
   }
 }

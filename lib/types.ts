@@ -369,6 +369,8 @@ export interface MailMessage {
   calendar_event_kind: 'assessment' | 'interview' | null;
   calendar_start_at: string | null;
   calendar_end_at: string | null;
+  calendar_completed_at: string | null;
+  calendar_completion_source: 'user' | 'email' | null;
   /** 'pending' = fetched, awaiting AI; 'classified' = category assigned. */
   status: 'pending' | 'classified';
   created_at: string;

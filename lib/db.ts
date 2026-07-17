@@ -704,6 +704,93 @@ export async function getAssessmentCalendar(): Promise<MailMessage[]> {
   return (data ?? []) as MailMessage[];
 }
 
+/** Manual checklist control. Forced RLS ensures the event belongs to the active user. */
+export async function setCalendarEventCompleted(id: string, completed: boolean): Promise<MailMessage | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .update({
+      calendar_completed_at: completed ? new Date().toISOString() : null,
+      calendar_completion_source: completed ? 'user' : null,
+    })
+    .eq('id', id)
+    .not('calendar_event_kind', 'is', null)
+    .or('calendar_start_at.not.is.null,calendar_end_at.not.is.null')
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`Failed to update calendar task: ${error.message}`);
+  return data as MailMessage | null;
+}
+
+function mailDomain(value: string | null): string {
+  return (value || '').split('@').pop()?.toLowerCase().trim() || '';
+}
+
+const CALENDAR_MATCH_STOP = new Set([
+  'about', 'after', 'assessment', 'calendar', 'candidate', 'complete', 'completed',
+  'confirmation', 'expires', 'interview', 'invitation', 'position', 'received',
+  'scheduled', 'submission', 'submitted', 'thank', 'thanks', 'today', 'tomorrow', 'your',
+]);
+
+function calendarMatchTokens(...values: Array<string | null>): Set<string> {
+  return new Set(values.join(' ').toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length >= 4 && !CALENDAR_MATCH_STOP.has(token)) ?? []);
+}
+
+/**
+ * Complete a prior event only when a confirmation matches its Gmail thread, or has a
+ * strong sender-domain + subject/summary token match. Ambiguous candidates remain active.
+ */
+export async function completeCalendarEventFromConfirmation(
+  confirmation: Pick<MailMessage, 'thread_id' | 'received_at' | 'from_email' | 'subject' | 'summary'>,
+  kind: 'assessment' | 'interview',
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .select('*')
+    .eq('calendar_event_kind', kind)
+    .is('calendar_completed_at', null)
+    .or('calendar_start_at.not.is.null,calendar_end_at.not.is.null')
+    .order('received_at', { ascending: false, nullsFirst: false })
+    .limit(50);
+  if (error) throw new Error(`Failed to match calendar confirmation: ${error.message}`);
+  const candidates = (data ?? []) as MailMessage[];
+  const match = selectCalendarConfirmationMatch(candidates, confirmation);
+  if (!match) return null;
+
+  const { error: updateError } = await supabaseAdmin()
+    .from('mail_messages')
+    .update({
+      calendar_completed_at: confirmation.received_at || new Date().toISOString(),
+      calendar_completion_source: 'email',
+    })
+    .eq('id', match.id)
+    .is('calendar_completed_at', null);
+  if (updateError) throw new Error(`Failed to complete calendar event: ${updateError.message}`);
+  return match.id;
+}
+
+export function selectCalendarConfirmationMatch(
+  candidates: MailMessage[],
+  confirmation: Pick<MailMessage, 'thread_id' | 'from_email' | 'subject' | 'summary'>,
+): MailMessage | null {
+  const threaded = confirmation.thread_id
+    ? candidates.filter((candidate) => candidate.thread_id === confirmation.thread_id)
+    : [];
+  let match = threaded.length === 1 ? threaded[0] : null;
+
+  if (!match && threaded.length === 0) {
+    const confirmationTokens = calendarMatchTokens(confirmation.subject, confirmation.summary);
+    const domain = mailDomain(confirmation.from_email);
+    const scored = candidates.map((candidate) => {
+      const tokens = calendarMatchTokens(candidate.subject, candidate.summary);
+      const overlap = [...confirmationTokens].filter((token) => tokens.has(token)).length;
+      const sameDomain = Boolean(domain && domain === mailDomain(candidate.from_email));
+      return { candidate, score: overlap * 3 + (sameDomain ? 2 : 0) };
+    }).filter(({ score }) => score >= 5).sort((a, b) => b.score - a.score);
+    if (scored.length === 1 || (scored[0] && scored[0].score >= (scored[1]?.score ?? 0) + 2)) match = scored[0].candidate;
+  }
+  return match;
+}
+
 /** Which of these Gmail ids are already stored (so we don't refetch them). Chunked to keep the URL small. */
 export async function existingGmailIds(ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();

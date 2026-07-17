@@ -65,4 +65,20 @@ describe('parseMailResponse', () => {
     const unrelated = parseMailResponse('CATEGORY: recruiter\nEVENT_TYPE: interview\nEVENT_START: 2026-07-21T14:00:00-04:00');
     expect(unrelated.calendar_event_kind).toBeNull();
   });
+
+  it('keeps an explicit completion signal without inventing event dates', () => {
+    const completed = parseMailResponse([
+      'CATEGORY: other',
+      'SOURCE: none',
+      'SUMMARY: Walmart confirms the assessment was submitted.',
+      'EVENT_TYPE: assessment',
+      'EVENT_ACTION: complete',
+      'EVENT_START: NONE',
+      'EVENT_END: NONE',
+    ].join('\n'));
+    expect(completed.calendar_event_kind).toBe('assessment');
+    expect(completed.calendar_action).toBe('complete');
+    expect(completed.calendar_start_at).toBeNull();
+    expect(completed.calendar_end_at).toBeNull();
+  });
 });

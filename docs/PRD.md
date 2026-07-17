@@ -96,7 +96,9 @@ Tailor & Apply opens to Queue and uses Generate selected as its single manual ba
 Candidate Profile can opt newly tailored copies into the job's listed location while
 leaving the Base résumé unchanged. Mail classification records explicit assessment
 windows/deadlines and confirmed interview times in a dedicated month/week calendar;
-undated or unscheduled messages remain in Inbox only (ADRs 0104–0105).
+undated or unscheduled messages remain in Inbox only. Calendar events form a reversible
+Active/Done task ledger; explicit, safely matched completion emails may mark the source
+event done automatically (ADRs 0104–0106).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

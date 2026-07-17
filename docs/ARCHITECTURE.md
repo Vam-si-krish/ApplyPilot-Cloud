@@ -350,6 +350,10 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   characters plus the account timezone; it creates interview events only for explicit
   scheduled times and assessment ranges only from stated openings/deadlines. Month/week
   views read these fields through `/api/calendar` (ADR 0105).
+- **mail_messages.calendar_completed_at / calendar_completion_source**: reversible task
+  completion on the same forced-RLS event row. `/api/calendar/[id]` handles manual state;
+  mail sync may complete a unique thread match or a strong unique sender/subject match.
+  Ambiguous confirmation email never changes an event (ADR 0106).
 - **applications.ai_apply_***: nullable, user-owned AI navigation state
   (`assigned → in_progress → submitted`, or `blocked`; legacy `ready_to_submit` remains
   completion-compatible). Blocking also
