@@ -670,6 +670,9 @@ export async function setMailClassification(
   applySource: string | null = null,
   assessmentStartAt: string | null = null,
   assessmentEndAt: string | null = null,
+  calendarEventKind: 'assessment' | 'interview' | null = null,
+  calendarStartAt: string | null = null,
+  calendarEndAt: string | null = null,
 ): Promise<void> {
   const { error } = await supabaseAdmin()
     .from('mail_messages')
@@ -679,6 +682,9 @@ export async function setMailClassification(
       apply_source: applySource,
       assessment_start_at: category === 'assessment' ? assessmentStartAt : null,
       assessment_end_at: category === 'assessment' ? assessmentEndAt : null,
+      calendar_event_kind: calendarEventKind,
+      calendar_start_at: calendarEventKind ? calendarStartAt : null,
+      calendar_end_at: calendarEventKind ? calendarEndAt : null,
       status: 'classified',
     })
     .eq('id', id);
@@ -691,9 +697,9 @@ export async function getAssessmentCalendar(): Promise<MailMessage[]> {
     .from('mail_messages')
     .select('*')
     .eq('status', 'classified')
-    .eq('category', 'assessment')
-    .or('assessment_start_at.not.is.null,assessment_end_at.not.is.null')
-    .order('assessment_end_at', { ascending: true, nullsFirst: false });
+    .not('calendar_event_kind', 'is', null)
+    .or('calendar_start_at.not.is.null,calendar_end_at.not.is.null')
+    .order('calendar_end_at', { ascending: true, nullsFirst: false });
   if (error) throw new Error(`Failed to load assessment calendar: ${error.message}`);
   return (data ?? []) as MailMessage[];
 }

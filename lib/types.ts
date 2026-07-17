@@ -365,6 +365,10 @@ export interface MailMessage {
   /** Explicit assessment availability/deadline dates extracted by the mail classifier. */
   assessment_start_at: string | null;
   assessment_end_at: string | null;
+  /** Grounded calendar event extracted from a scheduled interview or assessment email. */
+  calendar_event_kind: 'assessment' | 'interview' | null;
+  calendar_start_at: string | null;
+  calendar_end_at: string | null;
   /** 'pending' = fetched, awaiting AI; 'classified' = category assigned. */
   status: 'pending' | 'classified';
   created_at: string;

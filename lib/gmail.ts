@@ -195,5 +195,5 @@ export async function getMessageBodyText(accessToken: string, id: string): Promi
   });
   if (!resp.ok) throw new Error(`Gmail body error: ${resp.status}`);
   const data = await resp.json();
-  return plainTextFromPart((data.payload ?? {}) as GmailPart).replace(/\s{3,}/g, '\n\n').trim().slice(0, 12000);
+  return plainTextFromPart((data.payload ?? {}) as GmailPart).replace(/\s{3,}/g, '\n\n').trim().slice(0, 30000);
 }

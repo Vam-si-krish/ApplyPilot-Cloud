@@ -33,10 +33,15 @@ RESPOND IN EXACTLY THIS FORMAT, nothing else:
 CATEGORY: [recruiter|applied|shortlisted|action_needed|assessment|rejection|other]
 SOURCE: [easy_apply|company_portal|none]
 SUMMARY: [one short sentence — what it is and any deadline/action]
-ASSESSMENT_START: [ISO 8601 timestamp with timezone, or NONE]
-ASSESSMENT_END: [ISO 8601 timestamp with timezone, or NONE]
+EVENT_TYPE: [assessment|interview|none]
+EVENT_START: [ISO 8601 timestamp with timezone, or NONE]
+EVENT_END: [ISO 8601 timestamp with timezone, or NONE]
 
-Only populate assessment dates when CATEGORY is assessment and the email explicitly states them. START is when the assessment opens/becomes available; END is its deadline/expiry. A lone deadline belongs in END. Never invent a date. Use the email received timestamp only to resolve an explicit relative date such as "tomorrow".`;
+Calendar rules:
+- assessment: populate only when the email explicitly gives an opening/start time or deadline/expiry. START is when it becomes available. END is its deadline. A lone deadline belongs in END.
+- interview: populate only for an explicitly scheduled or confirmed interview date/time. START is the interview time. END is present only when an end time or duration is explicit. An invitation that merely asks the candidate to choose availability has no calendar event yet.
+- none: every other message.
+Never invent a date or timezone. You may resolve explicit relative wording such as "tomorrow" from RECEIVED_AT. When a time is stated without a timezone, use USER_TIMEZONE and preserve that offset in the ISO result.`;
 
 // Confirmation senders that pin the source deterministically (ADR 0021, broadened).
 // Job boards / aggregators → you applied within the platform = easy_apply.
@@ -71,11 +76,14 @@ export interface MailClassification {
   summary: string;
   assessment_start_at: string | null;
   assessment_end_at: string | null;
+  calendar_event_kind: 'assessment' | 'interview' | null;
+  calendar_start_at: string | null;
+  calendar_end_at: string | null;
 }
 
 function parsedTimestamp(value: string): string | null {
   const clean = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(clean)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}.*(?:Z|[+-]\d{2}:\d{2})$/.test(clean)) return null;
   const ms = Date.parse(clean);
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
@@ -86,6 +94,9 @@ export function parseMailResponse(response: string): MailClassification {
   let summary = '';
   let assessment_start_at: string | null = null;
   let assessment_end_at: string | null = null;
+  let calendar_event_kind: 'assessment' | 'interview' | null = null;
+  let calendar_start_at: string | null = null;
+  let calendar_end_at: string | null = null;
   for (const raw of response.split('\n')) {
     const line = raw.trim();
     if (line.toUpperCase().startsWith('CATEGORY:')) {
@@ -100,7 +111,30 @@ export function parseMailResponse(response: string): MailClassification {
       assessment_start_at = parsedTimestamp(line.slice(17));
     } else if (line.toUpperCase().startsWith('ASSESSMENT_END:')) {
       assessment_end_at = parsedTimestamp(line.slice(15));
+    } else if (line.toUpperCase().startsWith('EVENT_TYPE:')) {
+      const value = line.slice(11).trim().toLowerCase();
+      if (value === 'assessment' || value === 'interview') calendar_event_kind = value;
+    } else if (line.toUpperCase().startsWith('EVENT_START:')) {
+      calendar_start_at = parsedTimestamp(line.slice(12));
+    } else if (line.toUpperCase().startsWith('EVENT_END:')) {
+      calendar_end_at = parsedTimestamp(line.slice(10));
     }
+  }
+  // Backward-compatible parser support for stored fixtures and older model replies.
+  if (!calendar_event_kind && category === 'assessment' && (assessment_start_at || assessment_end_at)) {
+    calendar_event_kind = 'assessment';
+    calendar_start_at = assessment_start_at;
+    calendar_end_at = assessment_end_at;
+  }
+  const kindMatchesCategory = calendar_event_kind === 'assessment'
+    ? category === 'assessment'
+    : calendar_event_kind === 'interview'
+      ? category === 'shortlisted' || category === 'action_needed'
+      : true;
+  if (!kindMatchesCategory || (!calendar_start_at && !calendar_end_at) || (calendar_start_at && calendar_end_at && calendar_end_at < calendar_start_at)) {
+    calendar_event_kind = null;
+    calendar_start_at = null;
+    calendar_end_at = null;
   }
   if (category !== 'assessment') {
     assessment_start_at = null;
@@ -109,11 +143,15 @@ export function parseMailResponse(response: string): MailClassification {
     assessment_start_at = null;
     assessment_end_at = null;
   }
-  return { category, apply_source, summary, assessment_start_at, assessment_end_at };
+  if (calendar_event_kind === 'assessment') {
+    assessment_start_at = calendar_start_at;
+    assessment_end_at = calendar_end_at;
+  }
+  return { category, apply_source, summary, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at };
 }
 
-export function buildMailMessages(email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null }): ChatMessage[] {
-  const user = `FROM: ${email.from}\nSUBJECT: ${email.subject}\nRECEIVED_AT: ${email.receivedAt || 'unknown'}\nSNIPPET:\n${(email.snippet || '').slice(0, 2000)}\nBODY:\n${(email.body || '').slice(0, 12000)}`;
+export function buildMailMessages(email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null; timezone?: string }): ChatMessage[] {
+  const user = `FROM: ${email.from}\nSUBJECT: ${email.subject}\nRECEIVED_AT: ${email.receivedAt || 'unknown'}\nUSER_TIMEZONE: ${email.timezone || 'UTC'}\nSNIPPET:\n${(email.snippet || '').slice(0, 3000)}\nBODY:\n${(email.body || '').slice(0, 30000)}`;
   return [
     { role: 'system', content: MAIL_CLASSIFY_PROMPT },
     { role: 'user', content: user },
@@ -122,14 +160,14 @@ export function buildMailMessages(email: { from: string; subject: string; snippe
 
 /** Classify one email. One LLM call (temperature 0). Any error → 'other'. */
 export async function classifyEmail(
-  email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null },
+  email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null; timezone?: string },
   client?: LLMClient,
 ): Promise<MailClassification> {
   try {
     const llm = client ?? getClient();
-    const response = await llm.chat(buildMailMessages(email), { maxTokens: 260, temperature: 0 });
+    const response = await llm.chat(buildMailMessages(email), { maxTokens: 340, temperature: 0 });
     return parseMailResponse(response);
   } catch {
-    return { category: 'other', apply_source: null, summary: '', assessment_start_at: null, assessment_end_at: null };
+    return { category: 'other', apply_source: null, summary: '', assessment_start_at: null, assessment_end_at: null, calendar_event_kind: null, calendar_start_at: null, calendar_end_at: null };
   }
 }

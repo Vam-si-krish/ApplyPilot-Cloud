@@ -129,20 +129,21 @@ export async function classifyChunk(): Promise<ClassifyResult> {
     const body = resolved.ctx
       ? await getMessageBodyText(resolved.ctx.accessToken, m.gmail_id).catch(() => '')
       : '';
-    const { category, summary, apply_source, assessment_start_at, assessment_end_at } = await classifyEmail(
+    const { category, summary, apply_source, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at } = await classifyEmail(
       {
         from: `${m.from_name ?? ''} <${m.from_email ?? ''}>`,
         subject: m.subject ?? '',
         snippet: m.snippet ?? '',
         body,
         receivedAt: m.received_at,
+        timezone: settings.timezone,
       },
       client,
     );
     // apply_source only applies to submitted applications. Trust the sender domain
     // first (job board → easy_apply, ATS → company_portal); fall back to the AI.
     const source = category === 'applied' ? domainApplySource(m.from_email) ?? apply_source ?? null : null;
-    await setMailClassification(m.id, category, summary, source, assessment_start_at, assessment_end_at);
+    await setMailClassification(m.id, category, summary, source, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at);
     classified++;
   }
 

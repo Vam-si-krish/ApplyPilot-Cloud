@@ -342,11 +342,14 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
-- **mail_messages.assessment_start_at / assessment_end_at**: nullable timestamps grounded
-  in explicit assessment email text. Classification transiently fetches a bounded full
-  Gmail body, sends it to the selected classifier, then discards it; only headers,
-  snippet, classification, summary, and dates persist. `/api/calendar` reads dated
-  assessment rows through the same request-scoped forced RLS boundary.
+- **mail_messages.assessment_start_at / assessment_end_at**: compatibility fields for
+  explicitly grounded assessment windows and deadlines; generalized calendar reads use
+  the event fields below.
+- **mail_messages.calendar_event_kind / calendar_start_at / calendar_end_at**: generalized
+  assessment/interview projection. The classifier receives at most 30,000 transient body
+  characters plus the account timezone; it creates interview events only for explicit
+  scheduled times and assessment ranges only from stated openings/deadlines. Month/week
+  views read these fields through `/api/calendar` (ADR 0105).
 - **applications.ai_apply_***: nullable, user-owned AI navigation state
   (`assigned → in_progress → submitted`, or `blocked`; legacy `ready_to_submit` remains
   completion-compatible). Blocking also

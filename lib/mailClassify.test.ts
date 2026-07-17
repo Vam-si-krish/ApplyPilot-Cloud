@@ -48,4 +48,21 @@ describe('parseMailResponse', () => {
     expect(reversed.assessment_start_at).toBeNull();
     expect(reversed.assessment_end_at).toBeNull();
   });
+
+  it('creates an interview event only from a scheduled pipeline email', () => {
+    const scheduled = parseMailResponse([
+      'CATEGORY: shortlisted',
+      'SOURCE: none',
+      'SUMMARY: Technical interview confirmed.',
+      'EVENT_TYPE: interview',
+      'EVENT_START: 2026-07-21T14:00:00-04:00',
+      'EVENT_END: 2026-07-21T15:00:00-04:00',
+    ].join('\n'));
+    expect(scheduled.calendar_event_kind).toBe('interview');
+    expect(scheduled.calendar_start_at).toBe('2026-07-21T18:00:00.000Z');
+    expect(scheduled.calendar_end_at).toBe('2026-07-21T19:00:00.000Z');
+
+    const unrelated = parseMailResponse('CATEGORY: recruiter\nEVENT_TYPE: interview\nEVENT_START: 2026-07-21T14:00:00-04:00');
+    expect(unrelated.calendar_event_kind).toBeNull();
+  });
 });

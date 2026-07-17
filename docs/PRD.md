@@ -94,8 +94,9 @@ is an explicit endpoint override.
 Jobs presents Apply as the primary row action and omits the internal Filtered status tab.
 Tailor & Apply opens to Queue and uses Generate selected as its single manual batch action.
 Candidate Profile can opt newly tailored copies into the job's listed location while
-leaving the Base résumé unchanged. Assessment email classification records explicit
-start/end dates in a dedicated calendar; undated assessments remain in Inbox only (ADR 0104).
+leaving the Base résumé unchanged. Mail classification records explicit assessment
+windows/deadlines and confirmed interview times in a dedicated month/week calendar;
+undated or unscheduled messages remain in Inbox only (ADRs 0104–0105).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
