@@ -51,6 +51,7 @@ const LIMIT_RE = /hit your[\s\S]{0,40}limit|usage limit|rate.?limit|quota|credit
 
 export default function ApplicationsPage() {
   const [view, setView] = useState<View>('list');
+  const [aiApplyEnabled, setAiApplyEnabled] = useState(false);
   const [apps, setApps] = useState<ApplicationWithJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -152,7 +153,15 @@ export default function ApplicationsPage() {
 
   useEffect(() => {
     load();
+    fetch('/api/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((settings) => setAiApplyEnabled(settings?.ai_apply_enabled === true))
+      .catch(() => setAiApplyEnabled(false));
   }, [load]);
+
+  useEffect(() => {
+    if (!aiApplyEnabled && view === 'ai') setView('list');
+  }, [aiApplyEnabled, view]);
 
   // Load the base résumé once — the diff target for "Review changes" (ADR 0053).
   useEffect(() => {
@@ -386,33 +395,6 @@ export default function ApplicationsPage() {
     setTimeout(() => setMsg(null), 6000);
   }
 
-  // Trigger the overnight tailoring drain right now (same pipeline the 4am cron runs).
-  // The worker acks immediately and drains every 'queued' application in the background;
-  // rows light up as each finishes via the normal status polling. Use this to test the
-  // queue without waiting for the scheduled time.
-  async function runQueueNow() {
-    if (bulkBusy || bulkRunning || genId) return;
-    setBulkBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch('/api/tailor-queue', { method: 'POST' });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setMsg(d.error || 'Could not start the queue.');
-      } else if ((d.processing ?? 0) === 0) {
-        setMsg('Nothing queued to tailor.');
-      } else {
-        setMsg(`Tailoring ${d.processing} queued résumé${d.processing === 1 ? '' : 's'} in the background — they’ll appear as each finishes.`);
-      }
-      load(true);
-    } catch {
-      setMsg('Could not reach the server to start the queue.');
-    } finally {
-      setBulkBusy(false);
-      setTimeout(() => setMsg(null), 6000);
-    }
-  }
-
   // Fetch a single application's FULL row (including tailored_resume, which the slim
   // list omits). Used to poll for the worker's async tailoring result and to load the
   // editor on expand — polling the whole list here cost ~11 MB per tick at 650 rows.
@@ -544,7 +526,6 @@ export default function ApplicationsPage() {
   }).length;
   // Applications waiting to be tailored — what the overnight drain (and "Run queue now")
   // acts on. Set-aside rows are deliberately excluded (the drain skips them too).
-  const queuedCount = apps.filter((a) => a.status === 'queued' && a.job && !a.has_resume && !a.parked).length;
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(selectableIds));
   }
@@ -891,7 +872,7 @@ export default function ApplicationsPage() {
       <div className="flex gap-1 mb-5 border-b border-ink">
         {([
           { id: 'list' as View, label: 'Queue' },
-          { id: 'ai' as View, label: 'Assign to AI' },
+          ...(aiApplyEnabled ? [{ id: 'ai' as View, label: 'Assign to AI' }] : []),
           { id: 'parked' as View, label: 'Set Aside' },
           { id: 'manual' as View, label: 'Quick Generate' },
         ]).map((t) => (
@@ -1158,14 +1139,6 @@ export default function ApplicationsPage() {
           {view === 'list' && (
             <>
               <button
-                onClick={runQueueNow}
-                disabled={bulkBusy || bulkRunning || !!genId || queuedCount === 0}
-                title="Tailor, score, and render every queued application now (the same pipeline the overnight schedule runs)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-sky bg-sky/10 border border-sky/30 hover:bg-sky/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
-              >
-                <Clock size={13} /> Run queue now{queuedCount > 0 ? ` (${queuedCount})` : ''}
-              </button>
-              <button
                 onClick={generateSelected}
                 disabled={bulkBusy || bulkRunning || !!genId || selectedGeneratable === 0}
                 title="Generate a tailored résumé for every selected application that doesn't have one yet (rows with a résumé are skipped — use a row's Regenerate to redo one)"
@@ -1174,14 +1147,14 @@ export default function ApplicationsPage() {
                 {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                 {bulkBusy ? 'Generating…' : `Generate selected${selectedGeneratable > 0 ? ` (${selectedGeneratable})` : ''}`}
               </button>
-              <button
+              {aiApplyEnabled && <button
                 onClick={assignSelectedToAi}
                 disabled={bulkBusy || selectedAiEligible === 0}
                 title="Assign every selected unapplied job with a valid link to the AI queue"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-violet-300 bg-violet-500/10 border border-violet-500/30 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-all"
               >
                 <Bot size={13} /> Assign to AI{selectedAiEligible > 0 ? ` (${selectedAiEligible})` : ''}
-              </button>
+              </button>}
             </>
           )}
           {inAi && (
@@ -1386,7 +1359,7 @@ export default function ApplicationsPage() {
                   <span className="hidden md:flex items-center gap-1 text-slate-muted text-[11px] shrink-0">
                     <Clock size={11} /> {new Date(a.created_at).toLocaleDateString()}
                   </span>
-                  {view === 'list' && a.ai_apply_status == null && (
+                  {aiApplyEnabled && view === 'list' && a.ai_apply_status == null && (
                     <button
                       onClick={() => updateAiApplication(a, 'assign')}
                       disabled={bulkBusy || !aiReadiness.eligible}

@@ -229,6 +229,12 @@ facts and prompt guidance remain exclusively under Candidate Profile. API keys, 
 connections, settings rows, RLS, and worker credentials retain their existing owners and
 save semantics.
 
+AI Apply is a settings-gated capability: `settings.ai_apply_enabled` defaults false, the
+Tailor & Apply client omits its tab/actions, and assignment plus MCP queue routes enforce
+the same flag. Candidate Profile's validated JSON policy separately owns the opt-in
+job-location display for generated résumé copies; app and worker apply it after the
+fact-preserving merge without changing `profile.base_resume` (ADR 0104).
+
 Candidate AI customization is a validated policy boundary (ADR 0083), not a user-editable
 system prompt. `candidate_preferences` stores bounded scoring/tailoring choices; the API and
 worker normalize them, then project only scorer or tailorer fields into that task. Current
@@ -336,6 +342,11 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
+- **mail_messages.assessment_start_at / assessment_end_at**: nullable timestamps grounded
+  in explicit assessment email text. Classification transiently fetches a bounded full
+  Gmail body, sends it to the selected classifier, then discards it; only headers,
+  snippet, classification, summary, and dates persist. `/api/calendar` reads dated
+  assessment rows through the same request-scoped forced RLS boundary.
 - **applications.ai_apply_***: nullable, user-owned AI navigation state
   (`assigned → in_progress → submitted`, or `blocked`; legacy `ready_to_submit` remains
   completion-compatible). Blocking also

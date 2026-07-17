@@ -29,4 +29,23 @@ describe('parseMailResponse', () => {
     expect(r.category).toBe('other');
     expect(r.apply_source).toBeNull();
   });
+
+  it('keeps grounded assessment dates and normalizes them to UTC', () => {
+    const r = parseMailResponse([
+      'CATEGORY: assessment',
+      'SOURCE: none',
+      'SUMMARY: Complete the coding assessment.',
+      'ASSESSMENT_START: 2026-07-20T09:00:00-04:00',
+      'ASSESSMENT_END: 2026-07-22T17:00:00-04:00',
+    ].join('\n'));
+    expect(r.assessment_start_at).toBe('2026-07-20T13:00:00.000Z');
+    expect(r.assessment_end_at).toBe('2026-07-22T21:00:00.000Z');
+  });
+
+  it('drops assessment dates for other mail and rejects invented or reversed dates', () => {
+    expect(parseMailResponse('CATEGORY: other\nASSESSMENT_END: 2026-07-22T17:00:00Z').assessment_end_at).toBeNull();
+    const reversed = parseMailResponse('CATEGORY: assessment\nASSESSMENT_START: 2026-07-23T17:00:00Z\nASSESSMENT_END: 2026-07-22T17:00:00Z');
+    expect(reversed.assessment_start_at).toBeNull();
+    expect(reversed.assessment_end_at).toBeNull();
+  });
 });

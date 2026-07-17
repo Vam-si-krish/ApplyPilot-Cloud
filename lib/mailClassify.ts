@@ -32,7 +32,11 @@ Also report HOW the application was submitted, judging mainly by the SENDER:
 RESPOND IN EXACTLY THIS FORMAT, nothing else:
 CATEGORY: [recruiter|applied|shortlisted|action_needed|assessment|rejection|other]
 SOURCE: [easy_apply|company_portal|none]
-SUMMARY: [one short sentence — what it is and any deadline/action]`;
+SUMMARY: [one short sentence — what it is and any deadline/action]
+ASSESSMENT_START: [ISO 8601 timestamp with timezone, or NONE]
+ASSESSMENT_END: [ISO 8601 timestamp with timezone, or NONE]
+
+Only populate assessment dates when CATEGORY is assessment and the email explicitly states them. START is when the assessment opens/becomes available; END is its deadline/expiry. A lone deadline belongs in END. Never invent a date. Use the email received timestamp only to resolve an explicit relative date such as "tomorrow".`;
 
 // Confirmation senders that pin the source deterministically (ADR 0021, broadened).
 // Job boards / aggregators → you applied within the platform = easy_apply.
@@ -65,12 +69,23 @@ export interface MailClassification {
   /** How the application was submitted — null when not an application (ADR 0021). */
   apply_source: MailApplySource | null;
   summary: string;
+  assessment_start_at: string | null;
+  assessment_end_at: string | null;
+}
+
+function parsedTimestamp(value: string): string | null {
+  const clean = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(clean)) return null;
+  const ms = Date.parse(clean);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 export function parseMailResponse(response: string): MailClassification {
   let category: MailCategory = 'other';
   let apply_source: MailApplySource | null = null;
   let summary = '';
+  let assessment_start_at: string | null = null;
+  let assessment_end_at: string | null = null;
   for (const raw of response.split('\n')) {
     const line = raw.trim();
     if (line.toUpperCase().startsWith('CATEGORY:')) {
@@ -81,13 +96,24 @@ export function parseMailResponse(response: string): MailClassification {
       if ((SOURCES as string[]).includes(v)) apply_source = v as MailApplySource;
     } else if (line.toUpperCase().startsWith('SUMMARY:')) {
       summary = line.slice(8).trim();
+    } else if (line.toUpperCase().startsWith('ASSESSMENT_START:')) {
+      assessment_start_at = parsedTimestamp(line.slice(17));
+    } else if (line.toUpperCase().startsWith('ASSESSMENT_END:')) {
+      assessment_end_at = parsedTimestamp(line.slice(15));
     }
   }
-  return { category, apply_source, summary };
+  if (category !== 'assessment') {
+    assessment_start_at = null;
+    assessment_end_at = null;
+  } else if (assessment_start_at && assessment_end_at && assessment_end_at < assessment_start_at) {
+    assessment_start_at = null;
+    assessment_end_at = null;
+  }
+  return { category, apply_source, summary, assessment_start_at, assessment_end_at };
 }
 
-export function buildMailMessages(email: { from: string; subject: string; snippet: string }): ChatMessage[] {
-  const user = `FROM: ${email.from}\nSUBJECT: ${email.subject}\nSNIPPET:\n${(email.snippet || '').slice(0, 2000)}`;
+export function buildMailMessages(email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null }): ChatMessage[] {
+  const user = `FROM: ${email.from}\nSUBJECT: ${email.subject}\nRECEIVED_AT: ${email.receivedAt || 'unknown'}\nSNIPPET:\n${(email.snippet || '').slice(0, 2000)}\nBODY:\n${(email.body || '').slice(0, 12000)}`;
   return [
     { role: 'system', content: MAIL_CLASSIFY_PROMPT },
     { role: 'user', content: user },
@@ -96,14 +122,14 @@ export function buildMailMessages(email: { from: string; subject: string; snippe
 
 /** Classify one email. One LLM call (temperature 0). Any error → 'other'. */
 export async function classifyEmail(
-  email: { from: string; subject: string; snippet: string },
+  email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null },
   client?: LLMClient,
 ): Promise<MailClassification> {
   try {
     const llm = client ?? getClient();
-    const response = await llm.chat(buildMailMessages(email), { maxTokens: 160, temperature: 0 });
+    const response = await llm.chat(buildMailMessages(email), { maxTokens: 260, temperature: 0 });
     return parseMailResponse(response);
   } catch {
-    return { category: 'other', apply_source: null, summary: '' };
+    return { category: 'other', apply_source: null, summary: '', assessment_start_at: null, assessment_end_at: null };
   }
 }

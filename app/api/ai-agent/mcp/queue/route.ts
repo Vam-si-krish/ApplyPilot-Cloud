@@ -11,6 +11,13 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   const identity = await authenticateAiAgentRequest(req);
   if (!identity) return NextResponse.json({ error: 'invalid, expired, or revoked AI run token' }, { status: 401 });
+  const { data: settings, error: settingsError } = await supabaseAdmin(identity.userId)
+    .from('settings')
+    .select('ai_apply_enabled')
+    .eq('id', 1)
+    .single();
+  if (settingsError) return NextResponse.json({ error: settingsError.message }, { status: 500 });
+  if (!settings?.ai_apply_enabled) return NextResponse.json({ error: 'Assign to AI is disabled in Settings.' }, { status: 403 });
   const requested = Number(new URL(req.url).searchParams.get('limit') || 20);
   const limit = Number.isFinite(requested) ? Math.max(1, Math.min(Math.floor(requested), 50)) : 20;
 

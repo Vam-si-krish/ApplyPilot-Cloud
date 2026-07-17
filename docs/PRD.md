@@ -73,7 +73,8 @@ dedicated column. It remains available from the fit-score tooltip, while complet
 reasoning stays in the expanded job details. On desktop, role type, apply type, company
 assessment, duplicate locations, ATS match, skill match, and opened state each retain a
 stable column, and row actions retain fixed icon slots (ADR 0092).
-Tailor & Apply also provides AI Apply Navigator. Every unapplied job with a valid
+Tailor & Apply also provides an opt-in AI Apply Navigator, disabled by default and enabled
+from Settings. Every unapplied job with a valid
 web link may enter the AI queue regardless of Easy Apply/External type or document
 readiness. The extension fills first; AI completes missed fields from Candidate Profile,
 saved application answers, résumé, or cover letter, navigates and submits, then records
@@ -89,6 +90,12 @@ single-use code; the AI Apply header shows queue health and connection state, wh
 the existing next-twenty copied prompt remains a fallback during rollout (ADRs
 0093–0096 and 0099–0102). The installed plugin targets production by default; development
 is an explicit endpoint override.
+
+Jobs presents Apply as the primary row action and omits the internal Filtered status tab.
+Tailor & Apply opens to Queue and uses Generate selected as its single manual batch action.
+Candidate Profile can opt newly tailored copies into the job's listed location while
+leaving the Base résumé unchanged. Assessment email classification records explicit
+start/end dates in a dedicated calendar; undated assessments remain in Inbox only (ADR 0104).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

@@ -190,6 +190,8 @@ export interface Profile {
 }
 
 export interface CandidatePreferences {
+  /** When enabled, a newly tailored résumé uses the target job's listed location in its header. */
+  use_job_location_on_tailored_resume?: boolean;
   /** User policy choices applied by the scorer in addition to factual eligibility. */
   avoid_security_clearance_jobs?: boolean;
   avoid_citizenship_restricted_jobs?: boolean;
@@ -252,6 +254,8 @@ export interface Settings {
   /** When true, a nightly cron drains the Tailor & Apply queue (status 'queued') on the
    *  worker — tailor + score + PDF per résumé — at auto_tailor_time (ADR 0043). Off by default. */
   auto_tailor_enabled: boolean;
+  /** Opt-in access to the AI Apply assignment queue. Hidden and server-gated when false. */
+  ai_apply_enabled?: boolean;
   /** 'HH:MM' wall-clock (in `timezone`) the overnight tailoring drain fires, e.g. '04:00'. */
   auto_tailor_time: string;
   /** When true, each run advances every provider's active key to the next stored one (ADR 0007). */
@@ -358,6 +362,9 @@ export interface MailMessage {
   /** For 'applied' mail: how it was submitted (ADR 0021); null otherwise. */
   apply_source: MailApplySource | null;
   summary: string | null;
+  /** Explicit assessment availability/deadline dates extracted by the mail classifier. */
+  assessment_start_at: string | null;
+  assessment_end_at: string | null;
   /** 'pending' = fetched, awaiting AI; 'classified' = category assigned. */
   status: 'pending' | 'classified';
   created_at: string;

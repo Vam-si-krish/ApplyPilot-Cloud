@@ -301,6 +301,16 @@ export default function ProfilePage() {
                   ]}
                 />
               </div>
+              <div className="border-t border-ink pt-4">
+                <CheckBox
+                  label="Use each job's listed location on its newly tailored résumé"
+                  checked={!!form.candidate_preferences?.use_job_location_on_tailored_resume}
+                  onChange={(v) => set('candidate_preferences.use_job_location_on_tailored_resume', v)}
+                />
+                <p className="mt-1.5 pl-6 text-[11px] text-slate-muted">
+                  Off by default. When enabled, only the generated copy changes; your Base résumé and saved home location stay untouched.
+                </p>
+              </div>
             </div>
             <div className="card p-5 space-y-4">
               <div>

@@ -14,14 +14,13 @@ import { useProgress } from '@/components/ProgressContext';
 import { fitScoreTooltip } from '@/lib/jobPresentation';
 import type { Job } from '@/lib/types';
 
-const STATUSES = ['all', 'scored', 'unscored', 'filtered', 'opened', 'shortlisted', 'applied', 'archived'] as const;
+const STATUSES = ['all', 'scored', 'unscored', 'opened', 'shortlisted', 'applied', 'archived'] as const;
 type StatusFilter = (typeof STATUSES)[number];
 
 const STATUS_HELP: Record<StatusFilter, string> = {
   all: 'All jobs from the last 24h',
   scored: 'Jobs the AI has scored for fit',
   unscored: 'Not scored by the AI yet',
-  filtered: 'Pre-screened out before AI scoring (low résumé keyword match)',
   opened: "You clicked the apply link but haven't marked it applied",
   shortlisted: 'Jobs you starred',
   applied: 'Jobs you marked as applied',
@@ -173,7 +172,7 @@ export default function JobsPage() {
   // and by "select all matching" (idsOnly).
   // Unscored/Filtered jobs have no fit_score and no company tier, so those filters
   // would silently empty the list on those tabs — skip them there.
-  const scoreless = status === 'unscored' || status === 'filtered';
+  const scoreless = status === 'unscored';
 
   // Fit-score range setters that keep the range valid. Picking a max below the current
   // min (e.g. the default ≥6) clears the min — that's exactly the "show me the low-fit
@@ -1340,7 +1339,7 @@ export default function JobsPage() {
 
                     {/* Fixed action rail keeps every icon in the same position, including
                         the reserved archive slot on rows that are already archived. */}
-                    <div className="flex w-[9.25rem] shrink-0 items-center justify-end gap-2">
+                    <div className="flex w-[12.5rem] shrink-0 items-center justify-end gap-2">
                       <button
                         onClick={() =>
                           job.applied_at
@@ -1364,10 +1363,10 @@ export default function JobsPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => markOpened(job)}
-                        title="Open posting (will ask if you applied)"
-                        className="p-1 rounded-md text-slate-muted hover:text-sky hover:bg-sky/10 transition-colors"
+                        title="Open the application (will ask if you applied)"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sky/40 bg-gradient-to-r from-sky/20 to-iris/20 px-3 py-1.5 text-[12px] font-semibold text-sky shadow-[0_0_16px_rgba(56,189,248,0.08)] transition-all hover:border-sky/70 hover:from-sky/30 hover:to-iris/30"
                       >
-                        <ExternalLink size={15} />
+                        Apply <ExternalLink size={13} />
                       </a>
                       {job.status !== 'archived' ? (
                         <button

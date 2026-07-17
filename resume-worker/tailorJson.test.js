@@ -34,6 +34,26 @@ test('tailoring completes from a response whose cover letter contains raw paragr
   assert.match(result.coverLetter, /I would welcome a conversation/);
 });
 
+test('opt-in job location changes only the generated résumé copy', async () => {
+  const base = normalizeResume({
+    basics: { name: 'Taylor Candidate', location: 'Denver, CO' },
+    work: [{ name: 'Acme', position: 'Engineer', highlights: ['Built products'] }],
+  });
+  const response = '{"basics":{"summary":"Relevant engineer"},"work":[{"name":"Acme","highlights":["Built relevant products"]}],"skills":[],"projects":[],"customSections":[]}';
+  const client = { model: 'sonnet', lastUsage: null, chat: async () => response };
+  const result = await tailorResume(
+    base,
+    { title: 'Engineer', company: 'Example', location: 'Austin, TX', full_description: 'Build products.' },
+    {},
+    client,
+    '',
+    { skillAdditionMode: 'learnable', skillLearningHorizonDays: 15, titleAlignment: 'honest_reframe', evidenceStandard: 'plausible_with_review', useJobLocation: true },
+  );
+
+  assert.equal(result.resume.basics.location, 'Austin, TX');
+  assert.equal(base.basics.location, 'Denver, CO');
+});
+
 test('tailoring prompt demonstrates escaped JSON newlines, not raw ones', () => {
   assert.match(TAILOR_PROMPT, /"cover_letter": "Dear Hiring Manager,\\n\\n<3 paragraphs>/);
   assert.doesNotMatch(TAILOR_PROMPT, /"cover_letter": "Dear Hiring Manager,\n\n<3 paragraphs>/);

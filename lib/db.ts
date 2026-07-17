@@ -668,12 +668,34 @@ export async function setMailClassification(
   category: string,
   summary: string,
   applySource: string | null = null,
+  assessmentStartAt: string | null = null,
+  assessmentEndAt: string | null = null,
 ): Promise<void> {
   const { error } = await supabaseAdmin()
     .from('mail_messages')
-    .update({ category, summary, apply_source: applySource, status: 'classified' })
+    .update({
+      category,
+      summary,
+      apply_source: applySource,
+      assessment_start_at: category === 'assessment' ? assessmentStartAt : null,
+      assessment_end_at: category === 'assessment' ? assessmentEndAt : null,
+      status: 'classified',
+    })
     .eq('id', id);
   if (error) throw new Error(`Failed to update mail classification: ${error.message}`);
+}
+
+/** Dated assessment messages for the calendar, scoped by the request user through RLS. */
+export async function getAssessmentCalendar(): Promise<MailMessage[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .select('*')
+    .eq('status', 'classified')
+    .eq('category', 'assessment')
+    .or('assessment_start_at.not.is.null,assessment_end_at.not.is.null')
+    .order('assessment_end_at', { ascending: true, nullsFirst: false });
+  if (error) throw new Error(`Failed to load assessment calendar: ${error.message}`);
+  return (data ?? []) as MailMessage[];
 }
 
 /** Which of these Gmail ids are already stored (so we don't refetch them). Chunked to keep the URL small. */

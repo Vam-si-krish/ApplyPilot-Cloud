@@ -347,6 +347,22 @@ export default function SettingsPage() {
           When enabled, the scheduled run fetches jobs for this account using the saved Job Search settings. Turning it off pauses scheduled discovery without affecting the manual <span className="text-sky">Run now</span> button.
         </p>
 
+        <div className="mt-6 border-t border-ink pt-5">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="ai_apply_enabled"
+              checked={s.ai_apply_enabled ?? false}
+              onChange={(e) => patch({ ai_apply_enabled: e.target.checked })}
+              className="h-4 w-4 rounded accent-violet-500"
+            />
+            <label htmlFor="ai_apply_enabled" className="text-[13px] text-slate-text">Enable Assign to AI</label>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-muted">
+            Off by default. Turn this on to reveal the AI assignment queue and its controls in Tailor &amp; Apply.
+          </p>
+        </div>
+
         <div className="mt-6 pt-5 border-t border-ink">
           <div className="flex items-center gap-2">
             <input
@@ -377,8 +393,7 @@ export default function SettingsPage() {
           </p>
           <p className="text-slate-muted text-[11px] mt-2">
             The schedule is driven by the always-on worker Mac (the app host doesn&apos;t run timers), so the worker must be
-            online and awake at this hour. Use <span className="text-sky">Run queue now</span> on Tailor &amp; Apply to test it
-            any time.
+            online and awake at this hour. Use <span className="text-sky">Generate selected</span> in Tailor &amp; Apply when you want to run chosen rows immediately.
           </p>
         </div>
       </Section>

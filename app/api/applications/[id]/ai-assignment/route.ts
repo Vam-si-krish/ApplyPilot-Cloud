@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { type AiApplyAction } from '@/lib/aiApply';
 import { mutateAiApplication } from '@/lib/aiApplyServer';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getSettings } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
   if (typeof body.action !== 'string' || !ACTIONS.includes(body.action as AiApplyAction)) {
     return NextResponse.json({ error: 'invalid AI assignment action' }, { status: 400 });
+  }
+  const settings = await getSettings();
+  if (!settings.ai_apply_enabled && body.action !== 'unassign') {
+    return NextResponse.json({ error: 'Assign to AI is disabled in Settings.' }, { status: 403 });
   }
 
   const result = await mutateAiApplication(

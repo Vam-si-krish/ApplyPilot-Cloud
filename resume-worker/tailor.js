@@ -711,6 +711,7 @@ export function mergeTailored(base, tailored, policy = {
   skillLearningHorizonDays: 15,
   titleAlignment: 'honest_reframe',
   evidenceStandard: 'plausible_with_review',
+  useJobLocation: false,
 }) {
   // Years of experience is a verifiable fact derived from the dates (ADR 0041): clamp any
   // claim that exceeds the candidate's true career span so the model can't inflate tenure.
@@ -815,6 +816,7 @@ export async function tailorResume(base, job, signals, client, instructions = ''
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json), policy);
+  if (policy.useJobLocation && job.location?.trim()) resume.basics.location = job.location.trim();
   // Usage of THIS call (ADR 0064) — the client path that answered sets lastUsage;
   // null when the provider doesn't report it. Persisted so the user can see what
   // one résumé costs (and whether the cache is being read).
