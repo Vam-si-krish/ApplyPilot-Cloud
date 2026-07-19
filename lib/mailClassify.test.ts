@@ -29,4 +29,56 @@ describe('parseMailResponse', () => {
     expect(r.category).toBe('other');
     expect(r.apply_source).toBeNull();
   });
+
+  it('keeps grounded assessment dates and normalizes them to UTC', () => {
+    const r = parseMailResponse([
+      'CATEGORY: assessment',
+      'SOURCE: none',
+      'SUMMARY: Complete the coding assessment.',
+      'ASSESSMENT_START: 2026-07-20T09:00:00-04:00',
+      'ASSESSMENT_END: 2026-07-22T17:00:00-04:00',
+    ].join('\n'));
+    expect(r.assessment_start_at).toBe('2026-07-20T13:00:00.000Z');
+    expect(r.assessment_end_at).toBe('2026-07-22T21:00:00.000Z');
+  });
+
+  it('drops assessment dates for other mail and rejects invented or reversed dates', () => {
+    expect(parseMailResponse('CATEGORY: other\nASSESSMENT_END: 2026-07-22T17:00:00Z').assessment_end_at).toBeNull();
+    const reversed = parseMailResponse('CATEGORY: assessment\nASSESSMENT_START: 2026-07-23T17:00:00Z\nASSESSMENT_END: 2026-07-22T17:00:00Z');
+    expect(reversed.assessment_start_at).toBeNull();
+    expect(reversed.assessment_end_at).toBeNull();
+  });
+
+  it('creates an interview event only from a scheduled pipeline email', () => {
+    const scheduled = parseMailResponse([
+      'CATEGORY: shortlisted',
+      'SOURCE: none',
+      'SUMMARY: Technical interview confirmed.',
+      'EVENT_TYPE: interview',
+      'EVENT_START: 2026-07-21T14:00:00-04:00',
+      'EVENT_END: 2026-07-21T15:00:00-04:00',
+    ].join('\n'));
+    expect(scheduled.calendar_event_kind).toBe('interview');
+    expect(scheduled.calendar_start_at).toBe('2026-07-21T18:00:00.000Z');
+    expect(scheduled.calendar_end_at).toBe('2026-07-21T19:00:00.000Z');
+
+    const unrelated = parseMailResponse('CATEGORY: recruiter\nEVENT_TYPE: interview\nEVENT_START: 2026-07-21T14:00:00-04:00');
+    expect(unrelated.calendar_event_kind).toBeNull();
+  });
+
+  it('keeps an explicit completion signal without inventing event dates', () => {
+    const completed = parseMailResponse([
+      'CATEGORY: other',
+      'SOURCE: none',
+      'SUMMARY: Walmart confirms the assessment was submitted.',
+      'EVENT_TYPE: assessment',
+      'EVENT_ACTION: complete',
+      'EVENT_START: NONE',
+      'EVENT_END: NONE',
+    ].join('\n'));
+    expect(completed.calendar_event_kind).toBe('assessment');
+    expect(completed.calendar_action).toBe('complete');
+    expect(completed.calendar_start_at).toBeNull();
+    expect(completed.calendar_end_at).toBeNull();
+  });
 });

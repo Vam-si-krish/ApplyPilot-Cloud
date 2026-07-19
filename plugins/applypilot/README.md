@@ -1,8 +1,8 @@
 # ApplyPilot Codex plugin
 
-This development plugin replaces the repeated batch-prompt handoff with six structured MCP tools and a bundled Chrome workflow skill.
+This plugin replaces the repeated batch-prompt handoff with six structured MCP tools and a bundled Chrome workflow skill. Its installed configuration connects to the production ApplyPilot site by default.
 
-## Install from this development checkout
+## Install from this checkout
 
 ```bash
 codex plugin marketplace add /absolute/path/to/ApplyPilot-Cloud-dev
@@ -12,6 +12,11 @@ codex plugin add applypilot@personal
 Confirm `applypilot@personal` is `installed, enabled` with `codex plugin list`. After
 installing or updating, start a new Codex thread so the bundled skill and MCP tools are
 loaded.
+
+Development testing may explicitly override `APPLYPILOT_URL` with
+`https://applydev.vamsikrish.com`; the packaged/default endpoint remains
+`https://apply.vamsikrish.com` so production pairing codes reach the database that
+created them.
 
 No environment values or access tokens need to be copied. In ApplyPilot, open **AI Apply**, choose **Pair Codex**, and give the displayed one-time code to Codex. Codex calls `connect_applypilot`; the code is consumed and the resulting token remains only in the MCP process memory.
 

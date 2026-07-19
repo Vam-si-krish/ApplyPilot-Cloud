@@ -27,7 +27,7 @@ the existing ApplyPilot production database. The accepted roadmap is [ADR 0072](
 
 - **Phase 1 (complete):** isolated database, API, file store, worker, credentials,
   public path, services, recovery, and backups on the server laptop.
-- **Phase 2A (implemented/current private release):** three fixed `APP_USERS_JSON` accounts, signed identity sessions,
+- **Phase 2A (implemented/current private release):** four fixed production `APP_USERS_JSON` accounts, signed identity sessions,
   forced database RLS, per-user files/keys/jobs/settings, and PDF résumé onboarding. Public
   signup is deferred; normal work uses each account's own Apify/LLM keys or its own
   connected UUID-isolated Claude or ChatGPT subscription (ADRs 0074 and 0081).

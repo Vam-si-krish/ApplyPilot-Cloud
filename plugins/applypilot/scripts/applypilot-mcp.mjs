@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const SERVER = { name: 'applypilot-mcp', version: '0.1.0' };
-const baseUrl = (process.env.APPLYPILOT_URL || 'https://applydev.vamsikrish.com').replace(/\/+$/, '');
+const baseUrl = (process.env.APPLYPILOT_URL || 'https://apply.vamsikrish.com').replace(/\/+$/, '');
 let token = '';
 
 const tools = [

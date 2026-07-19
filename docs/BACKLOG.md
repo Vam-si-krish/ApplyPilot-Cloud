@@ -13,6 +13,9 @@
   worker call, API key, onboarding flow, password reset, and rate/spend boundary.
 - [x] **Phase 2A: implement and verify fixed-account multi-user isolation.** Add
   cross-user denial tests, migrate singleton rows, and keep public signup disabled.
+- [x] **Phase 2A: provision Rishab as the fourth production-only fixed account.** Retain
+  all baseline UUIDs, add isolated singleton rows, and keep development at three accounts
+  unless it explicitly needs the optional identity (ADR 0103).
 - [ ] **Phase 2B: complete public-account security gates.** Add self-service signup,
   verified password recovery, session controls, credential encryption at rest, encrypted
   off-host backup handling, and abuse/rate/spend controls before enabling public access.
@@ -23,16 +26,16 @@
 - [x] **AI Apply Navigator Phase 2 foundation: ApplyPilot plugin + MCP.** Bundle the
   queue workflow as a repo-local Codex plugin with six narrow MCP tools, revocable
   two-hour UUID-scoped runs, extension-first Chrome instructions, and a copied-prompt
-  fallback (ADR 0096). The development migration/APIs are live, the repo-local marketplace
-  is installed as `applypilot@personal`, and an authenticated queue smoke test
-  passes against `applydev.vamsikrish.com` (ADR 0098). Visible already-applied employer
+  fallback (ADR 0096). The repo-local marketplace is installed as
+  `applypilot@personal`; its packaged endpoint targets production, while development is
+  an explicit override (ADRs 0098 and 0102). Visible already-applied employer
   status is reconciled without duplicate submission; uncertain rows go to Needs review
   (ADR 0100).
 - [ ] **AI Apply Navigator Phase 2 hardening: durable native invocation.** Replace the
   local one-time pairing bridge with a remote Streamable HTTP MCP server and native
   OAuth, add run leases and
   per-step audit evidence, evaluate success detection and prompt-injection handling, and
-  package/install the reviewed plugin. Keep unknown-answer and visible-success evidence
+  package the reviewed plugin for native remote distribution. Keep unknown-answer and visible-success evidence
   explicit; the unsafe environment-token setup is already removed (ADR 0099). See
   `docs/APPLYPILOT-PLUGIN-PLAN.md`.
 

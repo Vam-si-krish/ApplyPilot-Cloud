@@ -5,6 +5,7 @@ export interface TailoringPolicy {
   skillLearningHorizonDays: 7 | 15 | 30 | 60;
   titleAlignment: 'preserve' | 'honest_reframe';
   evidenceStandard: 'base_only' | 'plausible_with_review';
+  useJobLocation?: boolean;
 }
 
 export const DEFAULT_TAILORING_POLICY: TailoringPolicy = {
@@ -12,6 +13,7 @@ export const DEFAULT_TAILORING_POLICY: TailoringPolicy = {
   skillLearningHorizonDays: 15,
   titleAlignment: 'honest_reframe',
   evidenceStandard: 'plausible_with_review',
+  useJobLocation: false,
 };
 
 const VALID_VALUES = {
@@ -39,7 +41,7 @@ export function normalizeCandidatePreferences(value: unknown): CandidatePreferen
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const source = value as Record<string, unknown>;
   const result: CandidatePreferences = {};
-  for (const key of ['avoid_security_clearance_jobs', 'avoid_citizenship_restricted_jobs'] as const) {
+  for (const key of ['avoid_security_clearance_jobs', 'avoid_citizenship_restricted_jobs', 'use_job_location_on_tailored_resume'] as const) {
     if (typeof source[key] === 'boolean') result[key] = source[key];
   }
   const scoring = text(source.scoring_instructions, 4000);
@@ -96,6 +98,7 @@ export function resolveTailoringPolicy(value: unknown): TailoringPolicy {
     skillLearningHorizonDays: normalized.skill_learning_horizon_days ?? DEFAULT_TAILORING_POLICY.skillLearningHorizonDays,
     titleAlignment: normalized.title_alignment ?? DEFAULT_TAILORING_POLICY.titleAlignment,
     evidenceStandard: normalized.evidence_standard ?? DEFAULT_TAILORING_POLICY.evidenceStandard,
+    useJobLocation: normalized.use_job_location_on_tailored_resume ?? false,
   };
 }
 

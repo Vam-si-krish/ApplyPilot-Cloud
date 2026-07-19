@@ -49,7 +49,7 @@ Phase 2A. Public account creation, password reset/session controls, encryption a
 and abuse/rate/spend controls remain Phase 2B gates before public access.
 
 **Phase 2A — fixed private accounts (current):** ship the ownership and onboarding model
-first for three environment-configured username/password accounts. Public signup and
+for four production environment-configured username/password accounts. Public signup and
 password reset remain disabled. Each account uploads a résumé PDF for AI-assisted initial
 profile/search setup, then supplies its own Apify/LLM API keys or connects its own
 UUID-isolated Claude or ChatGPT subscription for normal work. The owner's server subscription is
@@ -80,7 +80,8 @@ a badge with the reason. A default-on "Hide time-wasters" filter removes
 aggregator/talent-pool/gig-platform reposts and suspicious employers while never hiding
 companies that haven't been assessed yet; verdicts are correctable per company from the
 job details and corrections persist across future runs (ADR 0107).
-Tailor & Apply also provides AI Apply Navigator. Every unapplied job with a valid
+Tailor & Apply also provides an opt-in AI Apply Navigator, disabled by default and enabled
+from Settings. Every unapplied job with a valid
 web link may enter the AI queue regardless of Easy Apply/External type or document
 readiness. The extension fills first; AI completes missed fields from Candidate Profile,
 saved application answers, résumé, or cover letter, navigates and submits, then records
@@ -88,13 +89,23 @@ visible success. If the exact employer-site job visibly says the user already ap
 AI must not resubmit it and instead reconciles the ApplyPilot application and linked job
 to Applied. If the answer or completion state is uncertain, the job becomes Needs review, its tab
 stays open, and AI continues with the next job in a new tab. Assignment is uncapped.
-The preferred development path is now a bundled ApplyPilot Codex plugin: six MCP tools
+The preferred path is now a bundled ApplyPilot Codex plugin: six MCP tools
 read the live assigned queue, retrieve one active row's grounded context only when
 needed, pair the local process without exposing a bearer token, and record lifecycle
 outcomes. Access is a revocable, user-bound two-hour run obtained through a ten-minute,
 single-use code; the AI Apply header shows queue health and connection state, while
 the existing next-twenty copied prompt remains a fallback during rollout (ADRs
-0093–0096 and 0099–0100).
+0093–0096 and 0099–0102). The installed plugin targets production by default; development
+is an explicit endpoint override.
+
+Jobs presents Apply as the primary row action and omits the internal Filtered status tab.
+Tailor & Apply opens to Queue and uses Generate selected as its single manual batch action.
+Candidate Profile can opt newly tailored copies into the job's listed location while
+leaving the Base résumé unchanged. Mail classification records explicit assessment
+windows/deadlines and confirmed interview times in a dedicated month/week calendar;
+undated or unscheduled messages remain in Inbox only. Calendar events form a reversible
+Active/Done task ledger; explicit, safely matched completion emails may mark the source
+event done automatically (ADRs 0104–0106).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).
@@ -164,8 +175,10 @@ must never be publicly readable — a single shared password gates everything (A
    eligibility/avoidance/scoring-preference facts (see ARCHITECTURE §Scoring).
 4. **Present results**: a shortlist sorted by `fit_score` desc, with filters
    (score range, search, status) and a shortlist toggle. Fresh/unscored results are
-   visible without silently active score/company/run constraints; “Clear all” removes
-   every filter. "Run now" button for manual runs.
+   visible without silently active score/company/run constraints. Applied jobs and jobs
+   already in Tailor & Apply are hidden by default, posting-by-posting; an eligible
+   duplicate location remains visible even when its original canonical row is hidden.
+   “Clear all” removes every filter. "Run now" button for manual runs.
 5. **Maintain one complete résumé:** the Base résumé editor supports both the standard
    résumé fields and user-defined sections. Custom sections remain editable in a tailored
    copy, are included in AI/local scoring context, preserve user-entered facts during AI

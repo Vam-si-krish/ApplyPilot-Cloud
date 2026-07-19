@@ -20,6 +20,7 @@ export const FIXED_USER_IDS = [
   '00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000002',
   '00000000-0000-4000-8000-000000000003',
+  '578fcb56-5900-4d0d-be20-6b6c191554b7',
 ] as const;
 
 function secret(): string {
@@ -68,8 +69,8 @@ export function configuredUsers(): FixedUser[] {
   } catch {
     throw new Error('APP_USERS_JSON must be valid JSON');
   }
-  if (!Array.isArray(parsed) || parsed.length !== 3) {
-    throw new Error('APP_USERS_JSON must contain exactly three accounts');
+  if (!Array.isArray(parsed) || parsed.length < 3 || parsed.length > FIXED_USER_IDS.length) {
+    throw new Error('APP_USERS_JSON must contain the three baseline accounts and may include Rishab');
   }
   const users = parsed.map((entry): FixedUser => {
     const row = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
@@ -91,7 +92,10 @@ export function configuredUsers(): FixedUser[] {
     throw new Error('Fixed account ids and usernames must be unique');
   }
   if (users.some((user) => !(FIXED_USER_IDS as readonly string[]).includes(user.id))) {
-    throw new Error('Fixed account ids must match migration 0044');
+    throw new Error('Fixed account ids must match the provisioned account migrations');
+  }
+  if ((FIXED_USER_IDS as readonly string[]).slice(0, 3).some((id) => !users.some((user) => user.id === id))) {
+    throw new Error('APP_USERS_JSON must retain all three baseline accounts');
   }
   return users;
 }

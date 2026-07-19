@@ -2,7 +2,7 @@
 
 > **`multi-user-fork` branch:** this branch is becoming a separate multi-user product
 > with its own server-laptop backend and no runtime access to ApplyPilot production data.
-> Phase 2A now supports three fixed private accounts with enforced per-user ownership and
+> Phase 2A now supports four fixed private accounts with enforced per-user ownership and
 > résumé onboarding. A one-time owner-authorized snapshot populated the isolated `vamsi`
 > account; it is not a shared database or ongoing sync. Public self-service signup remains
 > deferred. See [ADR 0073](docs/adr/0073-fixed-accounts-and-enforced-user-ownership.md)
@@ -27,7 +27,7 @@ evolved into the weighted v2 rubric documented in
 - **Apify** — daily job fetch (configurable actor, default `cheap_scraper~linkedin-job-scraper`)
 - **LLM scoring** — Gemini `gemini-2.0-flash` by default (OpenAI / DeepSeek / Anthropic supported)
 - **Netlify scheduled functions** — trigger the daily run
-- Auth: three fixed usernames/passwords → signed identity session cookie
+- Auth: four fixed usernames/passwords → signed identity session cookie
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full pipeline and
 [`docs/adr/`](docs/adr) for the decisions behind it.
@@ -65,7 +65,7 @@ cp .env.example .env.local      # then fill in the values (see below)
 2. **Fill `.env.local`** (all keys documented in [`.env.example`](.env.example)):
    - `BACKEND_URL`, `BACKEND_SERVICE_KEY`
    - `RESUME_WORKER_URL`, `RESUME_WORKER_SECRET`
-   - `APP_USERS_JSON` (three fixed accounts) and `AUTH_SECRET` (`openssl rand -hex 32`)
+   - `APP_USERS_JSON` (three baseline accounts plus the optional provisioned Rishab account) and `AUTH_SECRET` (`openssl rand -hex 32`)
    - `CRON_SECRET` (`openssl rand -hex 32`)
    - `NEXT_PUBLIC_APP_URL=http://localhost:3000`
 3. **Run it:**

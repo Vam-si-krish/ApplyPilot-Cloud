@@ -18,9 +18,17 @@ const queueRoute = text('../app/api/ai-agent/mcp/queue/route.ts');
 const contextRoute = text('../app/api/ai-agent/mcp/applications/[id]/route.ts');
 const pluginRoot = fileURLToPath(new URL('../plugins/applypilot/', import.meta.url));
 const mcpScript = fileURLToPath(new URL('../plugins/applypilot/scripts/applypilot-mcp.mjs', import.meta.url));
+const mcpScriptText = text('../plugins/applypilot/scripts/applypilot-mcp.mjs');
+const mcpConfig = text('../plugins/applypilot/.mcp.json');
 const applyJobsSkill = text('../plugins/applypilot/skills/apply-jobs/SKILL.md');
 
 describe('ApplyPilot plugin boundary', () => {
+  it('sends packaged pairing codes to production, with development available only as an override', () => {
+    expect(mcpConfig).toContain('https://apply.vamsikrish.com');
+    expect(mcpConfig).not.toContain('https://applydev.vamsikrish.com');
+    expect(mcpScriptText).toContain("process.env.APPLYPILOT_URL || 'https://apply.vamsikrish.com'");
+  });
+
   it('keeps run authorization revocable and forced-RLS user owned', () => {
     expect(migration).toContain('create table if not exists public.ai_agent_runs');
     expect(migration).toContain('alter table public.ai_agent_runs force row level security');

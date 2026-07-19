@@ -55,6 +55,7 @@ describe('candidate preferences', () => {
       skillLearningHorizonDays: 15,
       titleAlignment: 'honest_reframe',
       evidenceStandard: 'plausible_with_review',
+      useJobLocation: false,
     });
     expect(globalTailoringInstructions({ skill_learning_horizon_days: 30 })).toContain('within 30 days');
     expect(resolveTailoringPolicy({ skill_learning_horizon_days: 365 }).skillLearningHorizonDays).toBe(15);

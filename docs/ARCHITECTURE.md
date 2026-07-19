@@ -95,12 +95,14 @@ excluded; and the source remained read-only. Nine legacy jobs marked `scored` wi
 numeric result were reset to `unscored`, and active scoring state was cleared rather than
 resumed. There is no ongoing synchronization or runtime dependency on production.
 
-Phase 2A is implemented per ADR 0073. Three fixed server-side accounts carry stable UUIDs
+Phase 2A is implemented per ADRs 0073 and 0103. Four fixed production server-side accounts carry stable UUIDs
 in signed sessions. Middleware injects the verified UUID; the gateway converts it into a
 short-lived PostgREST JWT. Forced PostgreSQL RLS then scopes every domain table even when
 application code omits a filter. Files are physically namespaced by UUID and worker calls
 carry the same identity. `profile.id=1` and similar singleton selectors remain for code
 compatibility, but their real primary key is `user_id`, so each account has its own row.
+Development may retain the three baseline accounts; the validator accepts the provisioned
+fourth UUID only as an addition and never permits replacing a baseline identity.
 
 First login leads to PDF résumé onboarding. Netlify extracts PDF text, makes one bounded
 anti-fabrication parse through the owner's subscription worker, and initializes only that
@@ -193,9 +195,10 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   `supabaseAdmin(userId)` gateway client; they expose only active queue listing, one-row
   grounded context, and start/Needs-review/submitted transitions. The local stdio MCP
   process never receives a backend service key, database credential, app cookie, or
-  another user's identity. Development distributes this source through the repo-local
-  `personal` marketplace and installs it as `applypilot@personal`; production packaging
-  remains deferred (ADRs 0096, 0098, and 0099).
+  another user's identity. The repo-local `personal` marketplace installs the reviewed
+  source as `applypilot@personal`; its packaged endpoint is production, while development
+  requires an explicit `APPLYPILOT_URL` override. Native remote MCP packaging remains
+  deferred (ADRs 0096, 0098, 0099, and 0102).
 - `lib/jobPresentation.ts`, `components/ScoreBadge.tsx`, and `app/(app)/jobs/page.tsx` —
   keep the Jobs list's fit explanation presentation bounded. The short persisted
   `score_note` is exposed through the score tooltip rather than a repeated row column;
@@ -225,6 +228,12 @@ uses a URL hash for navigation; it does not create a second persistence model. C
 facts and prompt guidance remain exclusively under Candidate Profile. API keys, OAuth
 connections, settings rows, RLS, and worker credentials retain their existing owners and
 save semantics.
+
+AI Apply is a settings-gated capability: `settings.ai_apply_enabled` defaults false, the
+Tailor & Apply client omits its tab/actions, and assignment plus MCP queue routes enforce
+the same flag. Candidate Profile's validated JSON policy separately owns the opt-in
+job-location display for generated résumé copies; app and worker apply it after the
+fact-preserving merge without changing `profile.base_resume` (ADR 0104).
 
 Candidate AI customization is a validated policy boundary (ADR 0083), not a user-editable
 system prompt. `candidate_preferences` stores bounded scoring/tailoring choices; the API and
@@ -361,6 +370,18 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
+- **mail_messages.assessment_start_at / assessment_end_at**: compatibility fields for
+  explicitly grounded assessment windows and deadlines; generalized calendar reads use
+  the event fields below.
+- **mail_messages.calendar_event_kind / calendar_start_at / calendar_end_at**: generalized
+  assessment/interview projection. The classifier receives at most 30,000 transient body
+  characters plus the account timezone; it creates interview events only for explicit
+  scheduled times and assessment ranges only from stated openings/deadlines. Month/week
+  views read these fields through `/api/calendar` (ADR 0105).
+- **mail_messages.calendar_completed_at / calendar_completion_source**: reversible task
+  completion on the same forced-RLS event row. `/api/calendar/[id]` handles manual state;
+  mail sync may complete a unique thread match or a strong unique sender/subject match.
+  Ambiguous confirmation email never changes an event (ADR 0106).
 - **applications.ai_apply_***: nullable, user-owned AI navigation state
   (`assigned → in_progress → submitted`, or `blocked`; legacy `ready_to_submit` remains
   completion-compatible). Blocking also
@@ -451,3 +472,10 @@ before AI scoring, External includes an omitted `easy_apply` flag, and AI-derive
 match only populated values. The Apify output adapter owns normalization of source filter
 metadata: actor `contractType` becomes the persisted employment enum and actor `applyType`
 becomes `easy_apply`, so those filters do not wait on the LLM. See ADR 0078.
+
+Applied jobs and jobs already represented in Tailor & Apply are hidden on initial load.
+Those exclusions are UUID-scoped across both representatives and attached duplicate
+locations. If an excluded canonical still has an eligible duplicate, the API promotes
+one eligible duplicate as representative and attaches only other eligible siblings;
+canonical exclusion cannot erase the remaining group. Clear all disables both rules.
+See ADR 0101.

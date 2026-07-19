@@ -16,7 +16,7 @@ function boundedText(value, max) {
 export function normalizeCandidatePreferences(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const out = {};
-  for (const key of ['avoid_security_clearance_jobs', 'avoid_citizenship_restricted_jobs']) {
+  for (const key of ['avoid_security_clearance_jobs', 'avoid_citizenship_restricted_jobs', 'use_job_location_on_tailored_resume']) {
     if (typeof value[key] === 'boolean') out[key] = value[key];
   }
   for (const key of ['scoring_instructions', 'tailoring_instructions']) {
@@ -52,6 +52,7 @@ export function resolveTailoringPolicy(value) {
     skillLearningHorizonDays: p.skill_learning_horizon_days ?? 15,
     titleAlignment: p.title_alignment ?? 'honest_reframe',
     evidenceStandard: p.evidence_standard ?? 'plausible_with_review',
+    useJobLocation: p.use_job_location_on_tailored_resume ?? false,
   };
 }
 

@@ -40,6 +40,7 @@ export interface TailorJob {
   title?: string | null;
   company?: string | null;
   full_description?: string | null;
+  location?: string | null;
 }
 
 /** Tailored résumé + the disclosure of what was added/embellished. */
@@ -430,5 +431,6 @@ export async function tailorResume(
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json), policy);
+  if (policy.useJobLocation && job.location?.trim()) resume.basics.location = job.location.trim();
   return { resume, changes: { addedSkills: addedSkills(base, resume), titleChanges: titleChanges(base, resume), notes } };
 }

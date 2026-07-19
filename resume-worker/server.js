@@ -199,7 +199,7 @@ app.delete('/chatgpt-connection', async (req, res) => {
  */
 app.get('/version', (_req, res) => {
   // Static marker: bump this list when adding a feature you want to verify post-deploy.
-  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'chatgpt-user-login', 'tailor-queue', 'candidate-prompt-controls', 'custom-resume-sections', 'tailor-json-control-repair'];
+  const features = ['score-jobs-allow-rescore', 'score-company-parity', 'assess-jobs', 'llm', 'chatgpt-subscription', 'claude-user-login', 'chatgpt-user-login', 'tailor-queue', 'candidate-prompt-controls', 'job-location-tailoring', 'custom-resume-sections', 'tailor-json-control-repair'];
   let commit = 'unknown';
   try {
     const here = dirname(fileURLToPath(import.meta.url));

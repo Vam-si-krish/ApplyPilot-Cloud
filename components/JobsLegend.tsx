@@ -79,16 +79,12 @@ export default function JobsLegend() {
             <Text title="Apply type">Easy Apply = one-click on LinkedIn · External = apply on the company / another site.</Text>
           </Item>
           <Item>
-            <span className="text-[11px] text-slate-muted">Filtered</span>
-            <Text title="Status: Filtered">Pre-screened out before AI scoring (low keyword match). “Archived” = hidden/skipped.</Text>
-          </Item>
-          <Item>
             <div className="flex items-center gap-2 text-slate-muted">
               <ExternalLink size={15} />
               <Archive size={15} />
               <Trash2 size={15} />
             </div>
-            <Text title="Row actions">Open posting · Archive (hide) · Delete permanently.</Text>
+            <Text title="Row actions">Apply · Archive (hide) · Delete permanently.</Text>
           </Item>
         </div>
       )}

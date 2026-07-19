@@ -1,6 +1,6 @@
 {
   "name": "applypilot",
-  "version": "0.1.0+codex.20260716083627",
+  "version": "0.1.0+codex.20260716092603",
   "description": "Apply assigned jobs through Chrome using user-scoped ApplyPilot queue and profile tools.",
   "author": {
     "name": "ApplyPilot"

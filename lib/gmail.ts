@@ -153,3 +153,47 @@ export async function getMessage(accessToken: string, id: string): Promise<Fetch
     snippet: (data.snippet as string) || '',
   };
 }
+
+type GmailPart = {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+};
+
+function decodeBase64Url(value: string): string {
+  try {
+    return Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function plainTextFromPart(part: GmailPart): string {
+  const children = (part.parts ?? []).map(plainTextFromPart).filter(Boolean);
+  if (children.length > 0) return children.join('\n');
+  const raw = part.body?.data ? decodeBase64Url(part.body.data) : '';
+  if (!raw) return '';
+  if (part.mimeType === 'text/html') {
+    return raw
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>');
+  }
+  return part.mimeType === 'text/plain' || !part.mimeType ? raw : '';
+}
+
+/** Read a bounded body for classification only. The caller never persists this text. */
+export async function getMessageBodyText(accessToken: string, id: string): Promise<string> {
+  const resp = await fetch(`${GMAIL_API}/messages/${id}?format=full`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok) throw new Error(`Gmail body error: ${resp.status}`);
+  const data = await resp.json();
+  return plainTextFromPart((data.payload ?? {}) as GmailPart).replace(/\s{3,}/g, '\n\n').trim().slice(0, 30000);
+}
