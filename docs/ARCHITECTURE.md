@@ -253,7 +253,7 @@ contract lives in `lib/scoring.ts` and its tests/evals:
 3. Include the posting title, company, location, metadata, and HTML-stripped description
    truncated to 15,000 characters. The scoring call judges résumé↔role fit and the
    role's tech stack only; the employer itself is assessed separately per company
-   (ADR 0101, below).
+   (ADR 0107, below).
 4. Make one LLM call per job with `temperature: 0.1` and `maxTokens: 1000`, preserving
    the stable cacheable résumé/rubric prefix.
 5. Parse and clamp the structured response. Parse/provider failure produces a visible
@@ -287,7 +287,7 @@ null-aware Easy/External semantics as Jobs (ADR 0090).
 The labeled evals protect directional score bands and known regressions, not equality
 with a retired Python implementation.
 
-## Company assessment (per company, ADR 0101)
+## Company assessment (per company, ADR 0107)
 
 `lib/companyAssessment.ts` judges each posting **company** once, on two orthogonal
 axes: `apply_channel` (who actually receives the application — `direct`, `staffing`,
@@ -343,7 +343,7 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   application_url, fit_score (0–10, null=unscored), score_note, score_keywords,
   score_reasoning, status (unscored|scored|archived), is_shortlisted, discovered_at,
   scored_at, source, plus `company_key` and the stamped per-company verdict
-  `apply_channel`/`company_trust` (ADR 0101).
+  `apply_channel`/`company_trust` (ADR 0107).
 - **company_assessments**: shared (no personal data, permissive RLS) per-company
   verdict cache keyed by normalized name — apply_channel, trust, note, model,
   override_channel/override_trust (user corrections; always win), assessed_at.

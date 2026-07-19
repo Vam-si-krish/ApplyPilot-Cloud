@@ -1,4 +1,4 @@
--- Company assessment v2 (ADR 0101): the per-job COMPANY_TIER conflated "is the
+-- Company assessment v2 (ADR 0107): the per-job COMPANY_TIER conflated "is the
 -- employer legit" with "does applying reach the employer", and judging the same
 -- company independently on every posting produced contradictory tiers (one company
 -- received all four tiers across 122 postings). Assess each COMPANY once on two

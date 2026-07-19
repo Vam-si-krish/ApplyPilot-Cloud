@@ -128,7 +128,7 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
   let filtered = 0;
   let errors = 0;
 
-  // Company assessment (ADR 0101): one batched call covers every company in this
+  // Company assessment (ADR 0107): one batched call covers every company in this
   // chunk that hasn't been assessed yet, then verdicts are stamped onto the jobs.
   // Guarded — an assessment failure leaves companies visibly unassessed and must
   // never block scoring.
@@ -238,7 +238,7 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
       // Ingestion may already know the actor's contract type. A provider failure or
       // old-format response must not erase that deterministic source metadata.
       if (result.employment_type != null) scorePatch.employment_type = result.employment_type;
-      // Legacy per-job company tier (pre-ADR 0101): the scorer no longer produces it,
+      // Legacy per-job company tier (pre-ADR 0107): the scorer no longer produces it,
       // and a rescore must not erase the value on rows that still carry one. The
       // per-company assessment (apply_channel/company_trust) is stamped separately.
       if (result.company_tier != null) {

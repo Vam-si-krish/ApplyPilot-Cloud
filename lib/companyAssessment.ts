@@ -1,5 +1,5 @@
 /**
- * Per-company assessment (ADR 0101).
+ * Per-company assessment (ADR 0107).
  *
  * Replaces the per-job COMPANY_TIER that rode the scoring call (ADR 0065): a
  * company's identity does not change between postings, so judging it on every
@@ -38,7 +38,7 @@ export const ASSESS_COMPANIES_PER_CALL = 15;
 
 /**
  * Normalize a company name into the shared cache key. MUST stay in lockstep with
- * the SQL backfill in supabase/migrations/0053_company_assessments.sql:
+ * the SQL backfill in supabase/migrations/0057_company_assessments.sql:
  * collapse whitespace, trim, lowercase.
  */
 export function normalizeCompanyKey(name: string | null | undefined): string | null {

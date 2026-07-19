@@ -1,6 +1,6 @@
 /**
  * POST /api/company-assessments/backfill — assess companies of EXISTING jobs
- * (rows scored before ADR 0101, or whose assessment batch previously failed).
+ * (rows scored before ADR 0107, or whose assessment batch previously failed).
  *
  * One invocation: stamp anything already assessable, assess up to
  * COMPANIES_PER_INVOCATION not-yet-assessed companies via the scoring-lane LLM,

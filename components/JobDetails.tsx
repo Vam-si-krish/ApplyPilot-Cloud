@@ -8,7 +8,7 @@ import type { ApplyChannel, CompanyAssessment, Job } from '@/lib/types';
 import { scoreUsageCostUsd } from '@/lib/pricing';
 
 /**
- * Per-company verdict block (ADR 0101): badge + AI note + a correction dropdown.
+ * Per-company verdict block (ADR 0107): badge + AI note + a correction dropdown.
  * A correction writes an override on the shared company_assessments row and
  * re-stamps every posting from that company, so it sticks across future runs.
  */
@@ -166,7 +166,7 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           </div>
         </div>
       )}
-      {/* Per-company verdict (ADR 0101); legacy per-job tier only when no verdict exists. */}
+      {/* Per-company verdict (ADR 0107); legacy per-job tier only when no verdict exists. */}
       <CompanyAssessmentBlock job={job} />
       {!job.apply_channel && job.company_tier && (
         <div>

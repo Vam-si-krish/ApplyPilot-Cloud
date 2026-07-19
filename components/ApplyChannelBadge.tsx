@@ -4,7 +4,7 @@ import { Building2, ShieldAlert } from 'lucide-react';
 import type { ApplyChannel, CompanyTrust } from '@/lib/types';
 
 /** Channel styling + plain-English meaning, shared by the row badge, details panel,
- *  and filter labels (ADR 0101). The rose ones are the time-waster set. */
+ *  and filter labels (ADR 0107). The rose ones are the time-waster set. */
 export const CHANNEL_META: Record<ApplyChannel, { label: string; cls: string; help: string }> = {
   direct: {
     label: 'Direct',
@@ -39,7 +39,7 @@ export const CHANNEL_META: Record<ApplyChannel, { label: string; cls: string; he
 };
 
 /**
- * Per-company apply-channel badge (ADR 0101) — supersedes CompanyTierBadge on rows
+ * Per-company apply-channel badge (ADR 0107) — supersedes CompanyTierBadge on rows
  * whose company has been assessed. A suspicious-trust company renders as a red
  * "Suspicious" badge regardless of channel: that verdict outranks everything.
  */

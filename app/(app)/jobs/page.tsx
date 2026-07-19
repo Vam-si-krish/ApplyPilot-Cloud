@@ -38,7 +38,7 @@ const COMPANY_LABEL: Record<string, string> = {
   none: 'Not assessed',
 };
 
-// Per-company apply-channel filter labels (ADR 0101).
+// Per-company apply-channel filter labels (ADR 0107).
 const CHANNEL_LABEL: Record<string, string> = {
   direct: 'Direct employer',
   staffing: 'Staffing',
@@ -88,8 +88,8 @@ export default function JobsPage() {
   const [maxScore, setMaxScore] = useState(''); // upper fit-score bound — lets you isolate low-fit jobs
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
-  const [companyTier, setCompanyTier] = useState(''); // legacy per-job tier (pre-ADR 0101)
-  const [applyChannel, setApplyChannel] = useState(''); // per-company channel (ADR 0101)
+  const [companyTier, setCompanyTier] = useState(''); // legacy per-job tier (pre-ADR 0107)
+  const [applyChannel, setApplyChannel] = useState(''); // per-company channel (ADR 0107)
   // Default ON: aggregator/talent-pool/gig-platform reposts and suspicious employers
   // are hidden out of the box. Unassessed companies stay visible, and the active-filter
   // chip keeps the hiding from ever being silent.
@@ -347,7 +347,7 @@ export default function JobsPage() {
     setSelectedRunIds([]);
   }
 
-  // Assess companies of existing jobs (ADR 0101 backfill): loop the chunked route
+  // Assess companies of existing jobs (ADR 0107 backfill): loop the chunked route
   // until every company has a verdict, refreshing the list as badges appear.
   async function runCompanyBackfill() {
     if (assessBusy) return;
@@ -1043,7 +1043,7 @@ export default function JobsPage() {
             <option value="internship">Internship</option>
           </select>
 
-          {/* Legacy per-job tier (pre-ADR 0101) — still filterable for rows scored
+          {/* Legacy per-job tier (pre-ADR 0107) — still filterable for rows scored
               before the per-company assessment existed. */}
           <select
             value={companyTier}
@@ -1389,7 +1389,7 @@ export default function JobsPage() {
                       </div>
 
                       <div className="flex min-w-0 items-center">
-                        {/* Per-company verdict (ADR 0101) when assessed; legacy per-job tier otherwise. */}
+                        {/* Per-company verdict (ADR 0107) when assessed; legacy per-job tier otherwise. */}
                         {job.apply_channel ? (
                           <ApplyChannelBadge channel={job.apply_channel} trust={job.company_trust} className="shrink-0" />
                         ) : job.company_tier ? (

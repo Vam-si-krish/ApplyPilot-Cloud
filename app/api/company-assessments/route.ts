@@ -2,7 +2,7 @@
  * GET  /api/company-assessments?key=…&key=… — fetch assessment rows by company key
  *      (repeated params, not comma-joined: normalized keys may contain commas).
  * PATCH /api/company-assessments — set/clear a user override on one company, then
- *      re-stamp that company's jobs. Overrides win over the AI verdict (ADR 0101).
+ *      re-stamp that company's jobs. Overrides win over the AI verdict (ADR 0107).
  *
  * Session-gated by middleware like every other /api route.
  */

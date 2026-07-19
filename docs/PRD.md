@@ -79,7 +79,7 @@ platform) and employer trust — cached per company, stamped onto its jobs, and 
 a badge with the reason. A default-on "Hide time-wasters" filter removes
 aggregator/talent-pool/gig-platform reposts and suspicious employers while never hiding
 companies that haven't been assessed yet; verdicts are correctable per company from the
-job details and corrections persist across future runs (ADR 0101).
+job details and corrections persist across future runs (ADR 0107).
 Tailor & Apply also provides AI Apply Navigator. Every unapplied job with a valid
 web link may enter the AI queue regardless of Easy Apply/External type or document
 readiness. The extension fills first; AI completes missed fields from Candidate Profile,

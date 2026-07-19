@@ -299,7 +299,7 @@ export async function createCustomApplication(input: {
       full_description: description,
       status: 'unscored', // truthful: no fit_score exists; automatic queue excludes manual rows
       source: 'manual', // hidden from the scraped Jobs list
-      company_key: normalizeCompanyKey(input.company), // ADR 0101 join key
+      company_key: normalizeCompanyKey(input.company), // ADR 0107 join key
     })
     .select('*')
     .single();

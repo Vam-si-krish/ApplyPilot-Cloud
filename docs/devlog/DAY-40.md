@@ -1,4 +1,4 @@
-# Day 37 — Per-company apply-channel assessment and time-waster filtering
+# Day 40 — Per-company apply-channel assessment and time-waster filtering
 
 **Date:** 2026-07-19  
 **Branch:** `develop`
@@ -23,9 +23,9 @@ talent pool, or gig platform instead of reaching the named employer.
   detection has no signal. Company name + posting text + model world knowledge is the
   signal.
 
-## Implemented (ADR 0101)
+## Implemented (ADR 0107)
 
-- **Migration 0053**: shared `company_assessments` table (normalized `company_key` PK,
+- **migration 0057**: shared `company_assessments` table (normalized `company_key` PK,
   `apply_channel` direct/staffing/aggregator/talent_marketplace/gig_platform/unknown,
   `trust` established/plausible/suspicious/unknown, note/model, user override columns);
   `jobs.company_key` backfilled in SQL (lockstep with `normalizeCompanyKey`); stamped

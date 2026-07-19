@@ -5,11 +5,11 @@
 export type JobStatus = 'unscored' | 'scored' | 'archived' | 'filtered';
 
 /** AI company assessment tier (ADR 0009). 'unknown' = model couldn't tell (never guessed).
- *  LEGACY as of ADR 0101 — superseded by the per-company ApplyChannel/CompanyTrust
+ *  LEGACY as of ADR 0107 — superseded by the per-company ApplyChannel/CompanyTrust
  *  assessment; still rendered for rows scored before the cutover. */
 export type CompanyTier = 'good' | 'medium' | 'low' | 'unknown';
 
-/** Who actually receives the candidate when they click apply (ADR 0101).
+/** Who actually receives the candidate when they click apply (ADR 0107).
  *  The waste-of-time axis: aggregator / talent_marketplace / gig_platform postings
  *  route the candidate into an intermediary's funnel, not to the named role. */
 export type ApplyChannel =
@@ -20,11 +20,11 @@ export type ApplyChannel =
   | 'gig_platform'       // piecework/task platform recruiting for tasks styled as jobs
   | 'unknown';
 
-/** Employer legitimacy (ADR 0101) — orthogonal to ApplyChannel. 'suspicious' is
+/** Employer legitimacy (ADR 0107) — orthogonal to ApplyChannel. 'suspicious' is
  *  reserved for concrete scheme signals, never for being small or unrecognized. */
 export type CompanyTrust = 'established' | 'plausible' | 'suspicious' | 'unknown';
 
-/** One row of the shared per-company verdict cache (ADR 0101). Overrides are user
+/** One row of the shared per-company verdict cache (ADR 0107). Overrides are user
  *  corrections and win over the AI columns when stamping jobs. */
 export interface CompanyAssessment {
   company_key: string;
@@ -77,15 +77,15 @@ export interface Job {
   /** Company headcount/size text from scrape (e.g. '51-200 employees'); null when not provided. */
   company_size: string | null;
   /** AI assessment of the employer. Produced inline by the scorer (ADR 0065; was a
-   *  separate on-demand call under ADR 0009). LEGACY as of ADR 0101 — no longer
+   *  separate on-demand call under ADR 0009). LEGACY as of ADR 0107 — no longer
    *  written; rendered only for rows that predate the per-company assessment. */
   company_tier: CompanyTier | null;
   /** One-line reason for the company_tier. */
   company_tier_note: string | null;
-  /** Normalized company name — join key into company_assessments (ADR 0101). */
+  /** Normalized company name — join key into company_assessments (ADR 0107). */
   company_key: string | null;
   /** Effective (override-first) per-company verdict, denormalized from
-   *  company_assessments so list filters stay plain column filters (ADR 0101).
+   *  company_assessments so list filters stay plain column filters (ADR 0107).
    *  null = company not yet assessed. */
   apply_channel: ApplyChannel | null;
   company_trust: CompanyTrust | null;

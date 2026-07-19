@@ -1,5 +1,5 @@
 /**
- * Eval harness for the per-company assessment (ADR 0101), mirroring evals.test.ts.
+ * Eval harness for the per-company assessment (ADR 0107), mirroring evals.test.ts.
  *
  * Every case in evals/company-cases/*.json is a labeled company+posting with the
  * apply-channel verdict(s) we accept and the trust values we forbid. With an LLM

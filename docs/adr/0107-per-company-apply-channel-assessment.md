@@ -1,4 +1,4 @@
-# ADR 0101: Per-company apply-channel assessment
+# ADR 0107: Per-company apply-channel assessment
 
 - Status: accepted
 - Date: 2026-07-19
