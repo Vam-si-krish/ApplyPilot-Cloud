@@ -377,11 +377,20 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   assessment/interview projection. The classifier receives at most 30,000 transient body
   characters plus the account timezone; it creates interview events only for explicit
   scheduled times and assessment ranges only from stated openings/deadlines. Month/week
-  views read these fields through `/api/calendar` (ADR 0105).
+  views read these fields through `/api/calendar` (ADR 0105). `POST /api/calendar/intake`
+  accepts a bounded external paste from the signed-in browser, sends it once to that
+  user's existing scoring/classification provider, and persists only grounded extraction;
+  the raw paste never enters PostgreSQL (ADR 0108).
+- **mail_messages.intake_source / company_name / role_title**: distinguish Gmail rows
+  from synthetic `manual:<uuid>` external-message rows and retain the grounded company
+  and role. Both sources stay in the same forced-RLS user-owned table. Classified
+  recruiter rows are task-ledger items even without dates; only dated assessment or
+  interview rows render on the calendar grid.
 - **mail_messages.calendar_completed_at / calendar_completion_source**: reversible task
-  completion on the same forced-RLS event row. `/api/calendar/[id]` handles manual state;
+  completion on the same forced-RLS event/recruiter row. `/api/calendar/[id]` handles manual state;
   mail sync may complete a unique thread match or a strong unique sender/subject match.
-  Ambiguous confirmation email never changes an event (ADR 0106).
+  Ambiguous confirmation email never changes an event; pasted completion-only content
+  cannot create a new task (ADRs 0106 and 0108).
 - **applications.ai_apply_***: nullable, user-owned AI navigation state
   (`assigned → in_progress → submitted`, or `blocked`; legacy `ready_to_submit` remains
   completion-compatible). Blocking also

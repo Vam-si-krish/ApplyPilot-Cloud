@@ -33,6 +33,8 @@ RESPOND IN EXACTLY THIS FORMAT, nothing else:
 CATEGORY: [recruiter|applied|shortlisted|action_needed|assessment|rejection|other]
 SOURCE: [easy_apply|company_portal|none]
 SUMMARY: [one short sentence — what it is and any deadline/action]
+COMPANY: [hiring company explicitly named in the message, or NONE]
+ROLE: [job title explicitly named in the message, or NONE]
 EVENT_TYPE: [assessment|interview|none]
 EVENT_ACTION: [active|complete|none]
 EVENT_START: [ISO 8601 timestamp with timezone, or NONE]
@@ -40,7 +42,7 @@ EVENT_END: [ISO 8601 timestamp with timezone, or NONE]
 
 Calendar rules:
 - assessment: populate only when the email explicitly gives an opening/start time or deadline/expiry. START is when it becomes available. END is its deadline. A lone deadline belongs in END.
-- interview: populate only for an explicitly scheduled or confirmed interview date/time. START is the interview time. END is present only when an end time or duration is explicit. An invitation that merely asks the candidate to choose availability has no calendar event yet.
+- interview: populate only for an explicitly scheduled or confirmed interview date/time. START is the interview time. END is present only when an end time or duration is explicit. This may accompany recruiter mail when the new-opportunity message already confirms a call. An invitation that merely asks the candidate to choose availability has no calendar event yet.
 - none: every other message.
 - EVENT_ACTION active creates/updates a dated event from this email. EVENT_ACTION complete is ONLY for an explicit confirmation that the candidate finished/submitted the assessment, or an explicit post-interview confirmation/follow-up proving the interview happened. A generic invitation, reminder, application confirmation, or "thanks for applying" is never complete. Completion mail may have no event dates; preserve EVENT_TYPE so it can be matched to the earlier event.
 Never invent a date or timezone. You may resolve explicit relative wording such as "tomorrow" from RECEIVED_AT. When a time is stated without a timezone, use USER_TIMEZONE and preserve that offset in the ISO result.`;
@@ -76,6 +78,8 @@ export interface MailClassification {
   /** How the application was submitted — null when not an application (ADR 0021). */
   apply_source: MailApplySource | null;
   summary: string;
+  company_name: string | null;
+  role_title: string | null;
   assessment_start_at: string | null;
   assessment_end_at: string | null;
   calendar_event_kind: 'assessment' | 'interview' | null;
@@ -95,6 +99,8 @@ export function parseMailResponse(response: string): MailClassification {
   let category: MailCategory = 'other';
   let apply_source: MailApplySource | null = null;
   let summary = '';
+  let company_name: string | null = null;
+  let role_title: string | null = null;
   let assessment_start_at: string | null = null;
   let assessment_end_at: string | null = null;
   let calendar_event_kind: 'assessment' | 'interview' | null = null;
@@ -110,7 +116,13 @@ export function parseMailResponse(response: string): MailClassification {
       const v = line.slice(7).trim().toLowerCase().replace(/[^a-z_]/g, '');
       if ((SOURCES as string[]).includes(v)) apply_source = v as MailApplySource;
     } else if (line.toUpperCase().startsWith('SUMMARY:')) {
-      summary = line.slice(8).trim();
+      summary = line.slice(8).trim().slice(0, 500);
+    } else if (line.toUpperCase().startsWith('COMPANY:')) {
+      const value = line.slice(8).trim();
+      company_name = value && value.toUpperCase() !== 'NONE' ? value.slice(0, 200) : null;
+    } else if (line.toUpperCase().startsWith('ROLE:')) {
+      const value = line.slice(5).trim();
+      role_title = value && value.toUpperCase() !== 'NONE' ? value.slice(0, 200) : null;
     } else if (line.toUpperCase().startsWith('ASSESSMENT_START:')) {
       assessment_start_at = parsedTimestamp(line.slice(17));
     } else if (line.toUpperCase().startsWith('ASSESSMENT_END:')) {
@@ -137,7 +149,7 @@ export function parseMailResponse(response: string): MailClassification {
   const kindMatchesCategory = calendar_action === 'complete' ? true : calendar_event_kind === 'assessment'
     ? category === 'assessment'
     : calendar_event_kind === 'interview'
-      ? category === 'shortlisted' || category === 'action_needed'
+      ? category === 'shortlisted' || category === 'action_needed' || category === 'recruiter'
       : true;
   if (!kindMatchesCategory || (calendar_action !== 'complete' && !calendar_start_at && !calendar_end_at) || (calendar_start_at && calendar_end_at && calendar_end_at < calendar_start_at)) {
     calendar_event_kind = null;
@@ -157,7 +169,7 @@ export function parseMailResponse(response: string): MailClassification {
     assessment_end_at = calendar_end_at;
   }
   if (calendar_event_kind && !calendar_action) calendar_action = calendar_start_at || calendar_end_at ? 'active' : null;
-  return { category, apply_source, summary, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at, calendar_action };
+  return { category, apply_source, summary, company_name, role_title, assessment_start_at, assessment_end_at, calendar_event_kind, calendar_start_at, calendar_end_at, calendar_action };
 }
 
 export function buildMailMessages(email: { from: string; subject: string; snippet: string; body?: string; receivedAt?: string | null; timezone?: string }): ChatMessage[] {
@@ -178,6 +190,6 @@ export async function classifyEmail(
     const response = await llm.chat(buildMailMessages(email), { maxTokens: 340, temperature: 0 });
     return parseMailResponse(response);
   } catch {
-    return { category: 'other', apply_source: null, summary: '', assessment_start_at: null, assessment_end_at: null, calendar_event_kind: null, calendar_start_at: null, calendar_end_at: null, calendar_action: null };
+    return { category: 'other', apply_source: null, summary: '', company_name: null, role_title: null, assessment_start_at: null, assessment_end_at: null, calendar_event_kind: null, calendar_start_at: null, calendar_end_at: null, calendar_action: null };
   }
 }

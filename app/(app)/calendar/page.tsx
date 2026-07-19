@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  CalendarDays, Check, ChevronLeft, ChevronRight, Circle, Clock3,
-  ExternalLink, ListTodo, Mail, RotateCcw,
+  Check, ChevronLeft, ChevronRight, Circle, Clock3,
+  ExternalLink, ListTodo, Mail, Plus, RotateCcw, Sparkles, X,
 } from 'lucide-react';
 import type { MailMessage } from '@/lib/types';
 
@@ -23,6 +23,7 @@ function eventEnd(event: MailMessage): string | null {
 }
 
 function eventTouchesDay(event: MailMessage, day: Date): boolean {
+  if (!eventStart(event)) return false;
   const start = new Date(eventStart(event) || 0);
   const end = new Date(eventEnd(event) || 0);
   const floor = new Date(day.getFullYear(), day.getMonth(), day.getDate());
@@ -51,6 +52,10 @@ function gmailUrl(event: MailMessage): string {
   return `https://mail.google.com/mail/u/0/#inbox/${event.thread_id || event.gmail_id}`;
 }
 
+function taskTime(event: MailMessage): number {
+  return new Date(eventEnd(event) || event.received_at || event.created_at).getTime();
+}
+
 export default function CalendarPage() {
   const [events, setEvents] = useState<MailMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +63,10 @@ export default function CalendarPage() {
   const [view, setView] = useState<'month' | 'week'>('month');
   const [taskView, setTaskView] = useState<'active' | 'done'>('active');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [showIntake, setShowIntake] = useState(false);
+  const [pastedContent, setPastedContent] = useState('');
+  const [intakeError, setIntakeError] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     fetch('/api/calendar')
@@ -76,7 +85,7 @@ export default function CalendarPage() {
 
   const active = useMemo(() => events
     .filter((event) => !event.calendar_completed_at)
-    .sort((a, b) => new Date(eventEnd(a) || 0).getTime() - new Date(eventEnd(b) || 0).getTime()), [events]);
+    .sort((a, b) => taskTime(a) - taskTime(b)), [events]);
   const done = useMemo(() => events
     .filter((event) => Boolean(event.calendar_completed_at))
     .sort((a, b) => new Date(b.calendar_completed_at || 0).getTime() - new Date(a.calendar_completed_at || 0).getTime()), [events]);
@@ -108,6 +117,31 @@ export default function CalendarPage() {
     }
   }
 
+  async function analyzePastedMessage() {
+    if (!pastedContent.trim() || analyzing) return;
+    setAnalyzing(true);
+    setIntakeError('');
+    try {
+      const response = await fetch('/api/calendar/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: pastedContent,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not analyze this message.');
+      setEvents((items) => [data.item, ...items]);
+      setPastedContent('');
+      setShowIntake(false);
+    } catch (error) {
+      setIntakeError(error instanceof Error ? error.message : 'Could not analyze this message.');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   const periodLabel = view === 'month'
     ? cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })
     : `${days[0].toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${days[6].toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -122,16 +156,50 @@ export default function CalendarPage() {
             </p>
             <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-text sm:text-4xl">Your next move, at a glance.</h1>
             <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-slate-muted">
-              Confirmed interviews and assessment deadlines from your inbox. Check off what you finish; confirmation emails can close matching tasks automatically.
+              Confirmed interviews, assessment deadlines, and recruiter replies from Gmail or pasted external messages. Check off what you finish; confirmation emails can close matching tasks automatically.
             </p>
           </div>
-          <div className="flex items-stretch divide-x divide-ink rounded-xl border border-ink bg-card/55 backdrop-blur">
-            <div className="px-4 py-2.5"><p className="font-mono text-xl text-slate-text">{active.length}</p><p className="text-[10px] uppercase tracking-wider text-slate-dim">Active</p></div>
-            <div className="px-4 py-2.5"><p className="font-mono text-xl text-amber-400">{thisWeek}</p><p className="text-[10px] uppercase tracking-wider text-slate-dim">Next 7 days</p></div>
-            <div className="px-4 py-2.5"><p className="font-mono text-xl text-emerald">{done.length}</p><p className="text-[10px] uppercase tracking-wider text-slate-dim">Done</p></div>
+          <div className="flex flex-wrap items-stretch gap-3">
+            <button onClick={() => setShowIntake((open) => !open)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky/30 bg-sky/10 px-4 py-2.5 text-[12px] font-medium text-sky transition hover:bg-sky/15">
+              {showIntake ? <X size={15} /> : <Plus size={15} />} {showIntake ? 'Close' : 'Add external message'}
+            </button>
+            <div className="flex items-stretch divide-x divide-ink rounded-xl border border-ink bg-card/55 backdrop-blur">
+              <div className="px-4 py-2.5"><p className="font-mono text-xl text-slate-text">{active.length}</p><p className="text-[10px] uppercase tracking-wider text-slate-dim">Active</p></div>
+              <div className="px-4 py-2.5"><p className="font-mono text-xl text-amber-400">{thisWeek}</p><p className="text-[10px] uppercase tracking-wider text-slate-dim">Next 7 days</p></div>
+              <div className="px-4 py-2.5"><p className="font-mono text-xl text-emerald">{done.length}</p><p className="text-[10px] uppercase tracking-wider text-slate-dim">Done</p></div>
+            </div>
           </div>
         </div>
       </header>
+
+      {showIntake && (
+        <section className="mb-5 rounded-2xl border border-sky/25 bg-card/75 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.16)] sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-lg bg-sky/10 p-2 text-sky"><Sparkles size={16} /></div>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-[15px] font-semibold text-slate-text">Paste an interview or recruiter message</h2>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-muted">Use a message from another email account, SMS, or chat. AI extracts the company, role, and confirmed schedule. Recruiter outreach becomes a reply task. The original pasted text is analyzed once and is not stored.</p>
+              <textarea
+                value={pastedContent}
+                onChange={(event) => setPastedContent(event.target.value)}
+                maxLength={30000}
+                rows={7}
+                placeholder="Paste the complete message here…"
+                className="mt-4 w-full resize-y rounded-xl border border-ink bg-base/80 px-3.5 py-3 text-[12px] leading-relaxed text-slate-text outline-none transition placeholder:text-slate-dim focus:border-sky/50 focus:ring-2 focus:ring-sky/10"
+              />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="font-mono text-[9px] text-slate-dim">{pastedContent.length.toLocaleString()} / 30,000</span>
+                  {intakeError && <p className="mt-1 text-[11px] text-rose">{intakeError}</p>}
+                </div>
+                <button onClick={analyzePastedMessage} disabled={!pastedContent.trim() || analyzing} className="inline-flex items-center gap-2 rounded-lg bg-sky px-4 py-2 text-[11px] font-semibold text-void transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
+                  <Sparkles size={13} /> {analyzing ? 'Analyzing…' : 'Analyze and add'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_370px]">
         <section className="overflow-hidden rounded-2xl border border-ink bg-card/65 shadow-[0_22px_80px_rgba(0,0,0,0.18)] backdrop-blur">
@@ -170,7 +238,7 @@ export default function CalendarPage() {
                       const complete = Boolean(event.calendar_completed_at);
                       const interview = event.calendar_event_kind === 'interview';
                       return (
-                        <a key={event.id} href={gmailUrl(event)} target="_blank" rel="noreferrer" title={event.subject || 'Calendar event'} className={`block rounded-md border-l-2 px-1.5 py-1.5 text-[10px] transition hover:translate-x-0.5 hover:brightness-125 ${complete ? 'border-slate-dim bg-raised/40 text-slate-dim line-through' : interview ? 'border-emerald bg-emerald/10 text-emerald' : 'border-violet-400 bg-violet-500/10 text-violet-200'}`}>
+                        <a key={event.id} href={event.intake_source === 'manual' ? undefined : gmailUrl(event)} target={event.intake_source === 'manual' ? undefined : '_blank'} rel="noreferrer" title={event.subject || 'Calendar event'} className={`block rounded-md border-l-2 px-1.5 py-1.5 text-[10px] transition ${event.intake_source === 'manual' ? '' : 'hover:translate-x-0.5 hover:brightness-125'} ${complete ? 'border-slate-dim bg-raised/40 text-slate-dim line-through' : interview ? 'border-emerald bg-emerald/10 text-emerald' : 'border-violet-400 bg-violet-500/10 text-violet-200'}`}>
                           <span className="block truncate font-medium">{interview ? 'Interview' : 'Assessment'} · {event.subject || 'Event'}</span>
                           {view === 'week' && <span className="mt-0.5 block font-mono text-[9px] opacity-75">{formatDate(eventStart(event), true)}</span>}
                         </a>
@@ -208,13 +276,14 @@ export default function CalendarPage() {
               <div className="px-6 py-14 text-center">
                 <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-ink bg-raised/50"><Mail size={16} className="text-slate-dim" /></div>
                 <p className="text-[12px] font-medium text-slate-text">{taskView === 'active' ? 'Nothing active' : 'Nothing completed yet'}</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-slate-muted">{taskView === 'active' ? 'Dated assessments and confirmed interviews will appear here.' : 'Finished tasks move here and can be restored.'}</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-muted">{taskView === 'active' ? 'Interviews, assessments, and recruiter replies will appear here.' : 'Finished tasks move here and can be restored.'}</p>
               </div>
             ) : (
               <div className="divide-y divide-ink-subtle">
                 {tasks.map((event) => {
                   const complete = Boolean(event.calendar_completed_at);
                   const interview = event.calendar_event_kind === 'interview';
+                  const recruiter = event.category === 'recruiter' && !interview;
                   const alert = urgency(event);
                   return (
                     <article key={event.id} className="group relative px-4 py-4 transition-colors hover:bg-raised/25">
@@ -224,17 +293,23 @@ export default function CalendarPage() {
                         </button>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${interview ? 'bg-emerald/10 text-emerald' : 'bg-violet-500/10 text-violet-200'}`}>{interview ? 'Interview' : 'Assessment'}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${interview ? 'bg-emerald/10 text-emerald' : recruiter ? 'bg-sky/10 text-sky' : 'bg-violet-500/10 text-violet-200'}`}>{interview ? 'Interview' : recruiter ? 'Reply to recruiter' : 'Assessment'}</span>
+                            {event.intake_source === 'manual' && <span className="rounded-full bg-raised px-2 py-0.5 text-[9px] text-slate-muted">Pasted</span>}
                             {alert && <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${alert === 'Overdue' ? 'bg-rose/10 text-rose' : 'bg-amber-500/10 text-amber-400'}`}>{alert}</span>}
                             {complete && event.calendar_completion_source === 'email' && <span className="rounded-full bg-sky/10 px-2 py-0.5 text-[9px] text-sky">Email confirmed</span>}
                           </div>
                           <h3 className={`mt-2 line-clamp-2 text-[12px] font-medium leading-snug ${complete ? 'text-slate-muted line-through' : 'text-slate-text'}`}>{event.subject || 'Calendar event'}</h3>
+                          {event.summary && <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-muted">{event.summary}</p>}
                           <div className="mt-2 space-y-1 font-mono text-[9px] text-slate-muted">
-                            <p className="flex items-center gap-1.5"><Clock3 size={10} /> {interview ? 'Starts' : event.calendar_start_at ? 'Opens' : 'Deadline'} · {formatDate(event.calendar_start_at || event.calendar_end_at || event.assessment_start_at || event.assessment_end_at, true)}</p>
-                            {!interview && event.calendar_start_at && event.calendar_end_at && <p className="pl-4">Deadline · {formatDate(event.calendar_end_at, true)}</p>}
+                            {recruiter ? (
+                              <p className="flex items-center gap-1.5"><Mail size={10} /> Reply needed · received {formatDate(event.received_at, true)}</p>
+                            ) : (
+                              <p className="flex items-center gap-1.5"><Clock3 size={10} /> {interview ? 'Starts' : event.calendar_start_at ? 'Opens' : 'Deadline'} · {formatDate(event.calendar_start_at || event.calendar_end_at || event.assessment_start_at || event.assessment_end_at, true)}</p>
+                            )}
+                            {!interview && !recruiter && event.calendar_start_at && event.calendar_end_at && <p className="pl-4">Deadline · {formatDate(event.calendar_end_at, true)}</p>}
                           </div>
                           <div className="mt-3 flex items-center gap-3">
-                            <a href={gmailUrl(event)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-sky hover:underline">Open email <ExternalLink size={10} /></a>
+                            {event.intake_source !== 'manual' && <a href={gmailUrl(event)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-sky hover:underline">Open email <ExternalLink size={10} /></a>}
                             {complete && <button onClick={() => setCompleted(event, false)} className="inline-flex items-center gap-1 text-[10px] text-slate-muted hover:text-slate-text"><RotateCcw size={10} /> Mark active</button>}
                           </div>
                         </div>

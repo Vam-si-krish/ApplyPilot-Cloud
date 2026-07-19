@@ -675,6 +675,8 @@ export async function setMailClassification(
   calendarEventKind: 'assessment' | 'interview' | null = null,
   calendarStartAt: string | null = null,
   calendarEndAt: string | null = null,
+  companyName: string | null = null,
+  roleTitle: string | null = null,
 ): Promise<void> {
   const { error } = await supabaseAdmin()
     .from('mail_messages')
@@ -687,20 +689,21 @@ export async function setMailClassification(
       calendar_event_kind: calendarEventKind,
       calendar_start_at: calendarEventKind ? calendarStartAt : null,
       calendar_end_at: calendarEventKind ? calendarEndAt : null,
+      company_name: companyName,
+      role_title: roleTitle,
       status: 'classified',
     })
     .eq('id', id);
   if (error) throw new Error(`Failed to update mail classification: ${error.message}`);
 }
 
-/** Dated assessment messages for the calendar, scoped by the request user through RLS. */
+/** Calendar events plus recruiter reply tasks, scoped by the request user through RLS. */
 export async function getAssessmentCalendar(): Promise<MailMessage[]> {
   const { data, error } = await supabaseAdmin()
     .from('mail_messages')
     .select('*')
     .eq('status', 'classified')
-    .not('calendar_event_kind', 'is', null)
-    .or('calendar_start_at.not.is.null,calendar_end_at.not.is.null')
+    .or('category.eq.recruiter,calendar_start_at.not.is.null,calendar_end_at.not.is.null')
     .order('calendar_end_at', { ascending: true, nullsFirst: false });
   if (error) throw new Error(`Failed to load assessment calendar: ${error.message}`);
   return (data ?? []) as MailMessage[];
@@ -715,12 +718,53 @@ export async function setCalendarEventCompleted(id: string, completed: boolean):
       calendar_completion_source: completed ? 'user' : null,
     })
     .eq('id', id)
-    .not('calendar_event_kind', 'is', null)
-    .or('calendar_start_at.not.is.null,calendar_end_at.not.is.null')
+    .or('category.eq.recruiter,calendar_start_at.not.is.null,calendar_end_at.not.is.null')
     .select('*')
     .maybeSingle();
   if (error) throw new Error(`Failed to update calendar task: ${error.message}`);
   return data as MailMessage | null;
+}
+
+export interface ManualMailTaskInput {
+  category: 'recruiter' | 'shortlisted' | 'action_needed' | 'assessment';
+  summary: string;
+  company_name: string | null;
+  role_title: string | null;
+  calendar_event_kind: 'assessment' | 'interview' | null;
+  calendar_start_at: string | null;
+  calendar_end_at: string | null;
+}
+
+/** Persist only grounded extraction from pasted content; never persist the raw paste. */
+export async function createManualMailTask(input: ManualMailTaskInput): Promise<MailMessage> {
+  const now = new Date().toISOString();
+  const label = [input.role_title, input.company_name].filter(Boolean).join(' at ')
+    || (input.calendar_event_kind === 'interview' ? 'Interview' : input.category === 'recruiter' ? 'Recruiter follow-up' : 'Assessment');
+  const { data, error } = await supabaseAdmin()
+    .from('mail_messages')
+    .insert({
+      gmail_id: `manual:${randomUUID()}`,
+      thread_id: null,
+      received_at: now,
+      from_name: 'Pasted external message',
+      subject: label,
+      snippet: null,
+      category: input.category,
+      summary: input.summary,
+      status: 'classified',
+      intake_source: 'manual',
+      company_name: input.company_name,
+      role_title: input.role_title,
+      assessment_start_at: input.calendar_event_kind === 'assessment' ? input.calendar_start_at : null,
+      assessment_end_at: input.calendar_event_kind === 'assessment' ? input.calendar_end_at : null,
+      calendar_event_kind: input.calendar_event_kind,
+      calendar_start_at: input.calendar_start_at,
+      calendar_end_at: input.calendar_end_at,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to save pasted message task: ${error.message}`);
+  return data as MailMessage;
 }
 
 function mailDomain(value: string | null): string {

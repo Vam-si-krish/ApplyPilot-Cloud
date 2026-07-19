@@ -14,9 +14,11 @@ describe('parseMailResponse', () => {
   });
 
   it('recognizes the recruiter category (inbound outreach, no application)', () => {
-    const r = parseMailResponse('CATEGORY: recruiter\nSOURCE: none\nSUMMARY: Recruiter at Randstad reaching out about a Sr Front End role.');
+    const r = parseMailResponse('CATEGORY: recruiter\nSOURCE: none\nSUMMARY: Recruiter at Randstad reaching out about a Sr Front End role.\nCOMPANY: Acme\nROLE: Senior Frontend Engineer');
     expect(r.category).toBe('recruiter');
     expect(r.apply_source).toBeNull();
+    expect(r.company_name).toBe('Acme');
+    expect(r.role_title).toBe('Senior Frontend Engineer');
   });
 
   it('leaves apply_source null for SOURCE: none or when absent', () => {
@@ -62,8 +64,11 @@ describe('parseMailResponse', () => {
     expect(scheduled.calendar_start_at).toBe('2026-07-21T18:00:00.000Z');
     expect(scheduled.calendar_end_at).toBe('2026-07-21T19:00:00.000Z');
 
-    const unrelated = parseMailResponse('CATEGORY: recruiter\nEVENT_TYPE: interview\nEVENT_START: 2026-07-21T14:00:00-04:00');
-    expect(unrelated.calendar_event_kind).toBeNull();
+    const recruiterCall = parseMailResponse('CATEGORY: recruiter\nEVENT_TYPE: interview\nEVENT_START: 2026-07-21T14:00:00-04:00');
+    expect(recruiterCall.calendar_event_kind).toBe('interview');
+
+    const unscheduled = parseMailResponse('CATEGORY: recruiter\nEVENT_TYPE: interview\nEVENT_START: NONE');
+    expect(unscheduled.calendar_event_kind).toBeNull();
   });
 
   it('keeps an explicit completion signal without inventing event dates', () => {

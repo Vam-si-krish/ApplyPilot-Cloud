@@ -402,6 +402,11 @@ export interface MailMessage {
   /** For 'applied' mail: how it was submitted (ADR 0021); null otherwise. */
   apply_source: MailApplySource | null;
   summary: string | null;
+  /** Where this classified item came from. Manual raw content is never persisted. */
+  intake_source: 'gmail' | 'manual';
+  /** Grounded company/role extracted during classification when present. */
+  company_name: string | null;
+  role_title: string | null;
   /** Explicit assessment availability/deadline dates extracted by the mail classifier. */
   assessment_start_at: string | null;
   assessment_end_at: string | null;
