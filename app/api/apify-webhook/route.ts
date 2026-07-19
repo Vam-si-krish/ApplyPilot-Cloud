@@ -14,6 +14,7 @@ import {
   getScoringResumeText, getSettings, linkDuplicateJobs, enrichExistingJobApplyTypes,
 } from '@/lib/db';
 import { atsMatchScores } from '@/lib/prefilter';
+import { normalizeCompanyKey, stampJobsFromAssessments } from '@/lib/companyAssessment';
 import { jobContentKey } from '@/lib/dedupe';
 import { triggerScoreBatch } from '@/lib/pipeline';
 import { configuredUsers } from '@/lib/auth';
@@ -100,6 +101,8 @@ export async function POST(req: Request) {
       // Content fingerprint (ADR 0057): multi-location blasts and daily reposts share
       // a key even though every copy carries a fresh URL.
       content_key: jobContentKey(r.company, r.title, r.full_description),
+      // Join key into the shared per-company assessment cache (ADR 0101).
+      company_key: normalizeCompanyKey(r.company),
     }));
 
     let inserted = 0;
@@ -129,6 +132,16 @@ export async function POST(req: Request) {
         return 0;
       });
       if (linked > 0) console.log(`[apify-webhook] linked ${linked} duplicate posting(s)`);
+
+      // Companies already in the shared assessment cache (ADR 0101) stamp their
+      // verdict onto the fresh rows immediately; new companies are assessed by the
+      // scoring runner when the batch loop reaches them.
+      const keys = [...new Set(rows.map((r) => r.company_key).filter((k): k is string => !!k))];
+      if (keys.length > 0) {
+        await stampJobsFromAssessments(keys).catch((e) => {
+          console.error('[apify-webhook] assessment stamping failed:', e instanceof Error ? e.message : String(e));
+        });
+      }
     }
 
     if (runId) await updateRunByApifyId(runId, { jobs_found: inserted });

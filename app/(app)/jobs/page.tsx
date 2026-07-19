@@ -6,6 +6,7 @@ import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, CheckCi
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
+import ApplyChannelBadge from '@/components/ApplyChannelBadge';
 import SkillMatchBadge from '@/components/SkillMatchBadge';
 import MatchBadge from '@/components/MatchBadge';
 import JobsLegend from '@/components/JobsLegend';
@@ -34,6 +35,17 @@ const COMPANY_LABEL: Record<string, string> = {
   medium: 'Medium',
   low: 'Low',
   unknown: 'Unknown',
+  none: 'Not assessed',
+};
+
+// Per-company apply-channel filter labels (ADR 0101).
+const CHANNEL_LABEL: Record<string, string> = {
+  direct: 'Direct employer',
+  staffing: 'Staffing',
+  aggregator: 'Aggregator',
+  talent_marketplace: 'Talent pool',
+  gig_platform: 'Gig platform',
+  unknown: 'Channel unknown',
   none: 'Not assessed',
 };
 
@@ -76,7 +88,14 @@ export default function JobsPage() {
   const [maxScore, setMaxScore] = useState(''); // upper fit-score bound — lets you isolate low-fit jobs
   const [expanded, setExpanded] = useState<string | null>(null);
   const [easyApply, setEasyApply] = useState<boolean | null>(null);
-  const [companyTier, setCompanyTier] = useState('');
+  const [companyTier, setCompanyTier] = useState(''); // legacy per-job tier (pre-ADR 0101)
+  const [applyChannel, setApplyChannel] = useState(''); // per-company channel (ADR 0101)
+  // Default ON: aggregator/talent-pool/gig-platform reposts and suspicious employers
+  // are hidden out of the box. Unassessed companies stay visible, and the active-filter
+  // chip keeps the hiding from ever being silent.
+  const [hideTimeWasters, setHideTimeWasters] = useState(true);
+  const [assessBusy, setAssessBusy] = useState(false); // company backfill loop in flight
+  const [assessMsg, setAssessMsg] = useState<string | null>(null);
   const [minSkill, setMinSkill] = useState(''); // skill-match % gate for the view
   const [minMatch, setMinMatch] = useState(''); // ATS match % gate (ADR 0053); '0-39' style ranges too
   const [sortBy, setSortBy] = useState<'fit' | 'match'>('fit'); // 'match' = first-filter pass over fresh jobs
@@ -155,6 +174,7 @@ export default function JobsPage() {
     (minSkill ? 1 : 0) +
     (minMatch ? 1 : 0) +
     (employmentType ? 1 : 0) +
+    (companyTier ? 1 : 0) +
     (hideApplied && status !== 'applied' ? 1 : 0) +
     (hideOpened && status !== 'opened' ? 1 : 0) +
     (hideInApplications ? 1 : 0);
@@ -204,6 +224,10 @@ export default function JobsPage() {
     if (easyApply === true) p.set('easyApply', 'true');
     if (easyApply === false) p.set('easyApply', 'false');
     if (companyTier && !scoreless) p.set('companyTier', companyTier);
+    // Channel verdicts are stamped per company (webhook + scoring), so they exist on
+    // unscored rows too — unlike the legacy tier, these filters apply on every tab.
+    if (applyChannel) p.set('applyChannel', applyChannel);
+    if (hideTimeWasters) p.set('hideTimeWasters', 'true');
     if (employmentType) p.set('employmentType', employmentType);
     if (hideApplied && status !== 'applied') p.set('excludeApplied', 'true');
     if (hideOpened && status !== 'opened') p.set('excludeOpened', 'true');
@@ -211,7 +235,7 @@ export default function JobsPage() {
     if (selectedRunIds.length > 0) p.set('runId', selectedRunIds.join(','));
     p.set('recency', 'recent'); // main page = jobs discovered in the last 24h
     return p;
-  }, [search, minScore, maxScore, minSkill, minMatch, sortBy, employmentType, scoreless, status, easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds]);
+  }, [search, minScore, maxScore, minSkill, minMatch, sortBy, employmentType, scoreless, status, easyApply, companyTier, applyChannel, hideTimeWasters, hideApplied, hideOpened, hideInApplications, selectedRunIds]);
 
   // `silent` refreshes the list in place WITHOUT flipping the full-card "Loading…" state.
   // That's what kills the flicker during live scoring/assessment and single-row actions:
@@ -239,7 +263,7 @@ export default function JobsPage() {
     setSelected(new Set());
   }, [
     search, status, minScore, maxScore, minSkill, minMatch, employmentType,
-    easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds,
+    easyApply, companyTier, applyChannel, hideTimeWasters, hideApplied, hideOpened, hideInApplications, selectedRunIds,
   ]);
 
   // Reset pagination when filters change.
@@ -247,7 +271,7 @@ export default function JobsPage() {
     setLimit(300);
   }, [
     search, status, minScore, maxScore, minSkill, minMatch, employmentType,
-    easyApply, companyTier, hideApplied, hideOpened, hideInApplications, selectedRunIds,
+    easyApply, companyTier, applyChannel, hideTimeWasters, hideApplied, hideOpened, hideInApplications, selectedRunIds,
   ]);
 
   // Close the runs dropdown on any click outside it (or Escape).
@@ -314,11 +338,43 @@ export default function JobsPage() {
     setMinMatch('');
     setEmploymentType('');
     setCompanyTier('');
+    setApplyChannel('');
+    setHideTimeWasters(false); // "Clear all" means a truly unconstrained view
     setEasyApply(null);
     setHideApplied(false);
     setHideOpened(false);
     setHideInApplications(false);
     setSelectedRunIds([]);
+  }
+
+  // Assess companies of existing jobs (ADR 0101 backfill): loop the chunked route
+  // until every company has a verdict, refreshing the list as badges appear.
+  async function runCompanyBackfill() {
+    if (assessBusy) return;
+    setAssessBusy(true);
+    setAssessMsg('Assessing companies…');
+    try {
+      for (let i = 0; i < 200; i++) {
+        const r = await fetch('/api/company-assessments/backfill', { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Company assessment failed.');
+        await load(true);
+        if (d.done) {
+          setAssessMsg('All companies assessed.');
+          break;
+        }
+        if (d.stalled) {
+          setAssessMsg('Some companies could not be assessed — try again later.');
+          break;
+        }
+        setAssessMsg(`Assessing companies… ${d.remaining_jobs} jobs still unassessed`);
+      }
+    } catch (e) {
+      setAssessMsg(e instanceof Error ? e.message : 'Company assessment failed.');
+    } finally {
+      setAssessBusy(false);
+      setTimeout(() => setAssessMsg(null), 10000);
+    }
   }
 
   // Recompute the local ATS match % for every non-archived job (ADR 0053) — pure
@@ -853,19 +909,35 @@ export default function JobsPage() {
           </div>
 
           <select
-            value={companyTier}
-            onChange={(e) => setCompanyTier(e.target.value)}
-            title="Filter by AI company assessment"
+            value={applyChannel}
+            onChange={(e) => setApplyChannel(e.target.value)}
+            title="Filter by who actually receives your application (AI per-company verdict)"
             className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
           >
-            <option value="good,medium">Company: Good or Medium</option>
             <option value="">Any company</option>
-            <option value="good">Company: Good</option>
-            <option value="medium">Company: Medium</option>
-            <option value="low">Company: Low</option>
-            <option value="unknown">Company: Unknown</option>
+            <option value="direct">Company: Direct employer</option>
+            <option value="staffing">Company: Staffing</option>
+            <option value="aggregator">Company: Aggregator</option>
+            <option value="talent_marketplace">Company: Talent pool</option>
+            <option value="gig_platform">Company: Gig platform</option>
+            <option value="unknown">Company: Channel unknown</option>
             <option value="none">Company: Not assessed</option>
           </select>
+
+          <label
+            title="Hide aggregator reposts, talent-pool onboarding, gig platforms, and suspicious employers. Companies not yet assessed stay visible."
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border cursor-pointer select-none transition-all ${
+              hideTimeWasters ? 'bg-rose/10 text-rose border-rose/30' : 'text-slate-muted border-ink hover:text-slate-text hover:bg-raised'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={hideTimeWasters}
+              onChange={(e) => setHideTimeWasters(e.target.checked)}
+              className="w-3.5 h-3.5 rounded accent-rose-500"
+            />
+            Hide time-wasters
+          </label>
 
           {/* Fold the secondary refinements away by default — a badge keeps any active
               ones from hiding silently. */}
@@ -931,6 +1003,8 @@ export default function JobsPage() {
                 setMinScore('');
                 setMaxScore('');
                 setCompanyTier('');
+                setApplyChannel('');
+                setHideTimeWasters(false);
               }
             }}
             title="Filter by skill match (how many of your skills the job mentions)"
@@ -968,6 +1042,34 @@ export default function JobsPage() {
             <option value="contract">Contract</option>
             <option value="internship">Internship</option>
           </select>
+
+          {/* Legacy per-job tier (pre-ADR 0101) — still filterable for rows scored
+              before the per-company assessment existed. */}
+          <select
+            value={companyTier}
+            onChange={(e) => setCompanyTier(e.target.value)}
+            title="Filter by the legacy per-job company tier (rows scored before the per-company assessment)"
+            className="px-3 py-1.5 bg-card border border-ink rounded-lg text-[12px] text-slate-text outline-none focus:border-sky/40"
+          >
+            <option value="">Any legacy tier</option>
+            <option value="good">Tier: Good</option>
+            <option value="medium">Tier: Medium</option>
+            <option value="low">Tier: Low</option>
+            <option value="unknown">Tier: Unknown</option>
+            <option value="none">Tier: Not assessed</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={runCompanyBackfill}
+            disabled={assessBusy}
+            title="Assess the companies of existing jobs that don't have a verdict yet (one cheap AI call per ~15 companies)"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg border border-ink text-slate-muted hover:text-slate-text hover:bg-raised disabled:opacity-50 transition-all"
+          >
+            <RefreshCw size={12} className={assessBusy ? 'animate-spin' : ''} />
+            {assessBusy ? 'Assessing…' : 'Assess companies'}
+          </button>
+          {assessMsg && <span className="text-[11px] text-slate-muted">{assessMsg}</span>}
 
           <span className="hidden sm:block w-px h-5 bg-ink mx-1" />
 
@@ -1037,7 +1139,9 @@ export default function JobsPage() {
               label: minMatch === 'lt40' ? 'ATS match < 40%' : `ATS match ≥ ${minMatch}%`,
               clear: () => setMinMatch(''),
             });
-          if (companyTier && !scoreless) chips.push({ key: 'co', label: `Company: ${COMPANY_LABEL[companyTier] ?? companyTier}`, clear: () => setCompanyTier('') });
+          if (companyTier && !scoreless) chips.push({ key: 'co', label: `Legacy tier: ${COMPANY_LABEL[companyTier] ?? companyTier}`, clear: () => setCompanyTier('') });
+          if (applyChannel) chips.push({ key: 'ch', label: `Company: ${CHANNEL_LABEL[applyChannel] ?? applyChannel}`, clear: () => setApplyChannel('') });
+          if (hideTimeWasters) chips.push({ key: 'tw', label: 'Hiding time-wasters', clear: () => setHideTimeWasters(false) });
           if (employmentType) chips.push({ key: 'em', label: EMPLOYMENT_LABEL[employmentType] ?? employmentType, clear: () => setEmploymentType('') });
           if (easyApply !== null) chips.push({ key: 'ea', label: easyApply ? 'Easy Apply' : 'External', clear: () => setEasyApply(null) });
           if (hideApplied && status !== 'applied') chips.push({ key: 'ha', label: 'Hiding applied', clear: () => setHideApplied(false) });
@@ -1285,9 +1389,12 @@ export default function JobsPage() {
                       </div>
 
                       <div className="flex min-w-0 items-center">
-                        {job.company_tier && (
+                        {/* Per-company verdict (ADR 0101) when assessed; legacy per-job tier otherwise. */}
+                        {job.apply_channel ? (
+                          <ApplyChannelBadge channel={job.apply_channel} trust={job.company_trust} className="shrink-0" />
+                        ) : job.company_tier ? (
                           <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0" />
-                        )}
+                        ) : null}
                       </div>
 
                       {/* Multi-location duplicate group (ADR 0057). */}

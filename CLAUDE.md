@@ -85,6 +85,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `lib/llm.ts` | Multi-provider LLM client (Gemini/OpenAI/DeepSeek/Anthropic) — port of Lite `llm.py` |
 | `lib/scoring.ts` | `SCORE_PROMPT`, `scoreJob`, `parseScoreResponse` — port of Lite `scorer.py` |
 | `lib/apify.ts` | Apify actor start + input mapping (keywords×locations, last-24h) |
+| `lib/companyAssessment.ts` | Per-company apply-channel/trust verdicts (ADR 0101): batched LLM assessment, shared cache, job stamping |
 | `lib/supabase.ts` | REST/storage protocol clients; fork uses `BACKEND_*`, production keeps legacy env fallback |
 | `lib/auth.ts` | Fixed-account credential validation + identity session sign/verify |
 | `lib/workerConfig.ts` | Trusted worker resolution; deployment-only in the multi-user fork |
@@ -99,6 +100,7 @@ Canonical flow: `Cron → /api/run (start Apify async) → Apify webhook → /ap
 | `backend/` | `multi-user-fork` server API, storage, migrations, launchd/autopull/watchdog/backup |
 | `scripts/jobpilot-server` | Personal-laptop bootstrap, deploy, status, restart, logs, and backup CLI |
 | `evals/cases/` | Labeled resume+job → expected-score regression cases |
+| `evals/company-cases/` | Labeled company+posting → expected apply-channel/trust cases (ADR 0101) |
 | `docs/` | PRD, ARCHITECTURE, ADRs, devlog (read before non-trivial changes) |
 
 ## Commands

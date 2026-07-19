@@ -1,0 +1,16 @@
+{
+  "name": "direct-unknown-startup",
+  "description": "Guard against punishing small/unknown employers: a no-name startup hiring for itself — channel direct (or unknown at worst), trust may be unknown but never suspicious.",
+  "company": {
+    "name": "Quietloop Labs",
+    "company_size": "2-10 employees"
+  },
+  "posting": {
+    "title": "Founding Full-Stack Engineer",
+    "description": "Quietloop Labs is a seed-stage startup building developer tooling for observability pipelines. As our founding full-stack engineer you will own the product end to end: React/TypeScript frontend, Node backend, Postgres, deployed on AWS. You'll work directly with the two founders. Competitive salary plus meaningful equity. Apply with your resume and a note about something you've built."
+  },
+  "expect": {
+    "channel": ["direct", "unknown"],
+    "trustNot": ["suspicious"]
+  }
+}

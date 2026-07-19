@@ -1,0 +1,16 @@
+{
+  "name": "talent-pool-turing",
+  "description": "Vetted talent marketplace: applying means joining the pool via assessments, not applying to the named role — must be talent_marketplace.",
+  "company": {
+    "name": "Turing",
+    "company_size": "1001-5000 employees"
+  },
+  "posting": {
+    "title": "Remote Software Engineer (Python) - US Companies",
+    "description": "Turing is looking for talented software engineers to work with top US companies. Work remotely from anywhere. To get matched, complete your Turing profile, take our vetting tests and coding challenges, and once you clear the vetting process you become part of the Turing developer community, eligible to be matched with long-term opportunities with our clients."
+  },
+  "expect": {
+    "channel": ["talent_marketplace"],
+    "trustNot": ["suspicious"]
+  }
+}

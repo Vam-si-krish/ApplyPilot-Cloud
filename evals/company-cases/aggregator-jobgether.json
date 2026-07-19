@@ -1,0 +1,16 @@
+{
+  "name": "aggregator-jobgether",
+  "description": "Matching platform reposting a partner company's role behind its own signup — must be aggregator.",
+  "company": {
+    "name": "Jobgether",
+    "company_size": "11-50 employees"
+  },
+  "posting": {
+    "title": "Senior Backend Engineer (Remote - US)",
+    "description": "Jobgether is a Talent Matching Platform that partners with companies worldwide to efficiently connect top talent with the right opportunities through AI-driven job matching. One of our companies is currently looking for a Senior Backend Engineer in the United States. You will design and scale distributed services. To apply, create your Jobgether profile and our AI will match you with this and similar roles from our partner companies."
+  },
+  "expect": {
+    "channel": ["aggregator"],
+    "trustNot": ["suspicious"]
+  }
+}

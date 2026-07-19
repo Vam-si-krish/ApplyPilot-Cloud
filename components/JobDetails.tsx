@@ -1,9 +1,91 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
-import type { Job } from '@/lib/types';
+import ApplyChannelBadge, { CHANNEL_META } from '@/components/ApplyChannelBadge';
+import type { ApplyChannel, CompanyAssessment, Job } from '@/lib/types';
 import { scoreUsageCostUsd } from '@/lib/pricing';
+
+/**
+ * Per-company verdict block (ADR 0101): badge + AI note + a correction dropdown.
+ * A correction writes an override on the shared company_assessments row and
+ * re-stamps every posting from that company, so it sticks across future runs.
+ */
+function CompanyAssessmentBlock({ job }: { job: Job }) {
+  const [assessment, setAssessment] = useState<CompanyAssessment | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [channel, setChannel] = useState<ApplyChannel>(job.apply_channel ?? 'unknown');
+
+  useEffect(() => {
+    if (!job.company_key) return;
+    fetch(`/api/company-assessments?key=${encodeURIComponent(job.company_key)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const row = (d?.assessments ?? [])[0] as CompanyAssessment | undefined;
+        if (row) {
+          setAssessment(row);
+          setChannel(row.override_channel ?? row.apply_channel);
+        }
+      })
+      .catch(() => {});
+  }, [job.company_key]);
+
+  async function override(next: ApplyChannel) {
+    if (!job.company_key || saving) return;
+    const prev = channel;
+    setChannel(next);
+    setSaving(true);
+    try {
+      // Picking what the AI already concluded clears the override instead of pinning it.
+      const clears = assessment && next === assessment.apply_channel;
+      const r = await fetch('/api/company-assessments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_key: job.company_key, override_channel: clears ? null : next }),
+      });
+      if (!r.ok) setChannel(prev);
+      else {
+        const d = await r.json();
+        if (d.assessment) setAssessment(d.assessment as CompanyAssessment);
+      }
+    } catch {
+      setChannel(prev);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!job.apply_channel) return null;
+  const overridden = !!assessment?.override_channel;
+  return (
+    <div>
+      <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">
+        Company assessment{overridden ? ' · corrected by you' : ' · AI, once per company'}
+      </p>
+      <p className="text-slate-text text-[12px] leading-relaxed">
+        <span className="mr-2 align-middle">
+          <ApplyChannelBadge channel={channel} trust={job.company_trust} />
+        </span>
+        {job.company_size ? `${job.company_size} · ` : ''}
+        {assessment?.note ?? CHANNEL_META[channel].help}
+      </p>
+      <label className="mt-1.5 inline-flex items-center gap-2 text-[11px] text-slate-muted">
+        Correct it:
+        <select
+          value={channel}
+          disabled={saving}
+          onChange={(e) => override(e.target.value as ApplyChannel)}
+          className="px-2 py-1 bg-card border border-ink rounded-md text-[11px] text-slate-text outline-none focus:border-sky/40 disabled:opacity-50"
+        >
+          {(Object.keys(CHANNEL_META) as ApplyChannel[]).map((c) => (
+            <option key={c} value={c}>{CHANNEL_META[c].label}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
 
 /** Expanded detail panel for a job row — shared so Jobs and Past Jobs render identically. */
 export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: string, body: Record<string, unknown>) => void }) {
@@ -84,9 +166,11 @@ export default function JobDetails({ job, onPatch }: { job: Job; onPatch: (id: s
           </div>
         </div>
       )}
-      {job.company_tier && (
+      {/* Per-company verdict (ADR 0101); legacy per-job tier only when no verdict exists. */}
+      <CompanyAssessmentBlock job={job} />
+      {!job.apply_channel && job.company_tier && (
         <div>
-          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Company rated by AI</p>
+          <p className="text-slate-dim text-[10px] font-semibold uppercase tracking-[0.1em] mb-1">Company rated by AI (legacy)</p>
           <p className="text-slate-text text-[12px] leading-relaxed">
             <span className="mr-2 align-middle">
               <CompanyTierBadge tier={job.company_tier} />

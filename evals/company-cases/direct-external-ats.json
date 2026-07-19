@@ -1,0 +1,16 @@
+{
+  "name": "direct-external-ats",
+  "description": "Guard against over-filtering: an unremarkable real employer sending applicants to its own Workday — must be direct and never suspicious. Requiring an ATS account is normal.",
+  "company": {
+    "name": "Point32Health",
+    "company_size": "1001-5000 employees"
+  },
+  "posting": {
+    "title": "Senior Software Engineer",
+    "description": "Point32Health is a leading health and wellbeing organization, delivering an ever-better personalized health care experience to everyone in our communities. We are hiring a Senior Software Engineer to build member-facing services in Java and AWS. To apply, create an account and submit your application through our careers site (Workday). Point32Health is an equal-opportunity employer."
+  },
+  "expect": {
+    "channel": ["direct"],
+    "trustNot": ["suspicious"]
+  }
+}

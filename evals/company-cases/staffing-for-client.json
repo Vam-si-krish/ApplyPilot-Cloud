@@ -1,0 +1,16 @@
+{
+  "name": "staffing-for-client",
+  "description": "A recognized staffing agency hiring for a real client — must be staffing, never aggregator or suspicious.",
+  "company": {
+    "name": "Insight Global",
+    "company_size": "1001-5000 employees"
+  },
+  "posting": {
+    "title": "Frontend Developer (Contract)",
+    "description": "Insight Global is seeking a Frontend Developer for a 12-month W2 contract with one of our large financial-services clients in Charlotte, NC (hybrid). You will build React/TypeScript features on the client's customer portal. Required: 4+ years React, TypeScript, REST APIs. Compensation: $55-65/hr W2 with benefits available."
+  },
+  "expect": {
+    "channel": ["staffing"],
+    "trustNot": ["suspicious"]
+  }
+}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Star, CheckCircle2, ExternalLink, Archive, Trash2, ChevronDown, ChevronRight, HelpCircle, Target, Gauge } from 'lucide-react';
 import ScoreBadge from '@/components/ScoreBadge';
-import CompanyTierBadge from '@/components/CompanyTierBadge';
+import ApplyChannelBadge from '@/components/ApplyChannelBadge';
 
 /**
  * A collapsible key that decodes the icons, colours, and badges used in job rows
@@ -50,10 +50,10 @@ export default function JobsLegend() {
           </Item>
           <Item>
             <div className="flex gap-1">
-              <CompanyTierBadge tier="good" />
-              <CompanyTierBadge tier="low" />
+              <ApplyChannelBadge channel="direct" />
+              <ApplyChannelBadge channel="aggregator" />
             </div>
-            <Text title="Company rating (AI)">Employer quality, rated as each job is scored: Good · Medium · Low (likely résumé-harvester / lead-gen — flagged, never demoted) · Unknown. Hover a badge for why.</Text>
+            <Text title="Company assessment (AI)">Who actually receives your application, judged once per company: Direct · Staffing · red = time-waster (Aggregator repost / Talent pool / Gig platform / Suspicious). Filter or “Hide time-wasters”; expand a row to see why or correct it.</Text>
           </Item>
           <Item>
             <span className="px-1.5 py-0.5 text-[10px] font-medium bg-sky/10 border border-sky/25 text-sky rounded-md">React</span>

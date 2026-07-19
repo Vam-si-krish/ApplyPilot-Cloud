@@ -251,7 +251,9 @@ contract lives in `lib/scoring.ts` and its tests/evals:
    tolerance, overqualification treatment, and contract-role preference without changing
    the protected weights, caps, or eligibility rules.
 3. Include the posting title, company, location, metadata, and HTML-stripped description
-   truncated to 15,000 characters. Company assessment is returned in the same LLM call.
+   truncated to 15,000 characters. The scoring call judges résumé↔role fit and the
+   role's tech stack only; the employer itself is assessed separately per company
+   (ADR 0101, below).
 4. Make one LLM call per job with `temperature: 0.1` and `maxTokens: 1000`, preserving
    the stable cacheable résumé/rubric prefix.
 5. Parse and clamp the structured response. Parse/provider failure produces a visible
@@ -284,6 +286,28 @@ null-aware Easy/External semantics as Jobs (ADR 0090).
 
 The labeled evals protect directional score bands and known regressions, not equality
 with a retired Python implementation.
+
+## Company assessment (per company, ADR 0101)
+
+`lib/companyAssessment.ts` judges each posting **company** once, on two orthogonal
+axes: `apply_channel` (who actually receives the application — `direct`, `staffing`,
+`aggregator`, `talent_marketplace`, `gig_platform`, `unknown`) and `trust`
+(`established`, `plausible`, `suspicious`, `unknown`; suspicious requires concrete
+scheme signals). Verdicts come from one batched scoring-lane LLM call (≤15 companies),
+are parsed defensively (invalid enum → unknown; a mangled block leaves the company
+unassessed, never fabricated), and are cached in the shared `company_assessments`
+table keyed by the normalized name (`company_key`). The scoring runner assesses new
+companies before scoring a chunk; the apify webhook stamps fresh rows of already-known
+companies; `/api/company-assessments/backfill` walks pre-existing jobs in chunks. The
+`apply_company_assessments` SQL function (SECURITY INVOKER — user-scoped requests only
+stamp their own rows) denormalizes the effective, override-first verdict onto
+`jobs.apply_channel`/`jobs.company_trust`, so Jobs filtering ("Hide time-wasters":
+intermediary channels or suspicious trust; unassessed rows stay visible) remains plain
+column filters. User corrections are stored as overrides on the shared row and win
+over any later AI pass. The legacy per-job `company_tier` is read-only display for
+pre-cutover rows. `evals/company-cases/` pins the classification boundaries, including
+the never-over-filter guards (external ATS = direct; staffing ≠ aggregator; small
+unknown ≠ suspicious).
 
 ## LLM client (ported from llm.py; task routing extended in ADR 0025/0069)
 - Providers by env key: Gemini (default `gemini-2.0-flash`), OpenAI (`gpt-4o-mini`),
@@ -318,7 +342,11 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
 - **jobs**: id, URL unique per user, title, company, location, salary, full_description,
   application_url, fit_score (0–10, null=unscored), score_note, score_keywords,
   score_reasoning, status (unscored|scored|archived), is_shortlisted, discovered_at,
-  scored_at, source.
+  scored_at, source, plus `company_key` and the stamped per-company verdict
+  `apply_channel`/`company_trust` (ADR 0101).
+- **company_assessments**: shared (no personal data, permissive RLS) per-company
+  verdict cache keyed by normalized name — apply_channel, trust, note, model,
+  override_channel/override_trust (user corrections; always win), assessed_at.
 - **profile**: one row per user — personal, experience, compensation, work_authorization,
   skills_boundary, `base_resume` (the current résumé source for scoring/tailoring/ApplyBuddy),
   `candidate_preferences` (avoidance flags, recurring application answers, constrained AI

@@ -63,18 +63,9 @@ From the posting wording, classify the role:
 - full_time: a permanent direct-hire role.
 - unknown: not stated.
 
-### COMPANY ASSESSMENT (independent annotation — MUST NOT change the SCORE above)
-Separately from the fit score, judge the EMPLOYER behind this posting and name the role's core tech.
-This section is purely informational: it NEVER raises or lowers the SCORE, sub-scores, or seniority.
-Use what you actually KNOW about the company (reputation, size, industry standing) PLUS the posting.
-- COMPANY_TIER — rate the employer into exactly one of:
-  • good: a well-known, reputable, or clearly established employer (or a reputable staffing firm placing for a real client) hiring genuinely.
-  • medium: a plausible real employer or staffing firm, but unremarkable or with limited information.
-  • low: a genuine TIME-WASTER you have real reason to distrust — a lead-generation / résumé-upsell / data-harvesting scheme, a vague shell company, a listing that exists mainly to harvest applicant data, or a duplicate/scraped repost of a role that isn't really being hired.
-  • unknown: you do not recognize the company and the details are insufficient to judge. DO NOT GUESS — prefer 'unknown' over inventing facts.
-  BE CONSERVATIVE — 'low' is only for employers you actually recognize or that show clear scheme signals. When in doubt, use 'medium' or 'unknown', never 'low'.
-  DO NOT rate 'low' merely because: the role is CONTRACT / C2C / temporary; a staffing/recruiting firm is hiring for a real client; OR the posting sends you to the employer's OWN external ATS / career-site to create an account and apply (Workday, Greenhouse, iCIMS, Lever, etc.). Requiring a career-site account is completely normal for legitimate employers and is NOT a red flag by itself. Reserve 'low' for schemes whose PURPOSE is to farm data / upsell / drive signups to a third-party service, not for ordinary external application flows.
-- TECH_STACK — the primary technologies / frameworks / languages the role centers on, drawn from the posting (e.g. "React, TypeScript, Node.js"). "none" if the posting names no clear stack.
+### ROLE TECH (independent annotation — MUST NOT change the SCORE above)
+TECH_STACK — the primary technologies / frameworks / languages the role centers on, drawn from the posting (e.g. "React, TypeScript, Node.js"). "none" if the posting names no clear stack.
+(The employer itself is assessed separately per company — do not judge it here.)
 
 RESPOND IN EXACTLY THIS FORMAT, nothing else:
 SCORE: [0-10]
@@ -85,8 +76,6 @@ KEYWORDS: [comma-separated resume skills that are genuinely relevant to this job
 MISSING: [comma-separated MUST-HAVE requirements the resume does NOT evidence; "none" if all are met]
 NOTE: [one concise sentence summarizing the match quality]
 REASONING: [3-5 sentences bridging concrete resume facts to the job's must-haves. State the candidate's EVIDENCED years of experience from the resume (or "not specified") and how it compares to any required years — NEVER claim the candidate meets a years/seniority bar the resume does not actually show. State the seniority fit, and remember overqualification is not a penalty for shortlisting.]
-COMPANY_TIER: [good|medium|low|unknown]
-COMPANY_NOTE: [one concise sentence on the employer's legitimacy; if 'low', name the specific harvesting/lead-gen/scheme signal]
 TECH_STACK: [comma-separated primary technologies the role centers on; "none" if unclear]`;
 
 // ── Parsing ──────────────────────────────────────────────────────────────────

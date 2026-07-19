@@ -1,0 +1,16 @@
+{
+  "name": "gig-platform-dataannotation",
+  "description": "AI-training piecework platform posting styled as an engineering job — must be gig_platform, not a direct employer.",
+  "company": {
+    "name": "DataAnnotation",
+    "company_size": "51-200 employees"
+  },
+  "posting": {
+    "title": "Software Engineer - AI Trainer (Remote)",
+    "description": "We are looking for proficient programmers to join our team to train AI chatbots to code. You will work with the chatbots that we are building in order to measure their progress, as well as write and evaluate code. Projects are paid hourly, you choose when and how much you work. No previous AI experience is necessary. Benefits: flexible schedule, work remotely, set your own hours."
+  },
+  "expect": {
+    "channel": ["gig_platform"],
+    "trustNot": ["suspicious"]
+  }
+}

@@ -6,6 +6,7 @@ import { Star, ExternalLink, ChevronDown, ChevronRight, Archive, Search, Trash2,
 import ScoreBadge from '@/components/ScoreBadge';
 import JobDetails from '@/components/JobDetails';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
+import ApplyChannelBadge from '@/components/ApplyChannelBadge';
 import JobsLegend from '@/components/JobsLegend';
 import type { Job } from '@/lib/types';
 
@@ -231,9 +232,11 @@ export default function PastJobsPage() {
                           </div>
 
                           <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded-md border ${chip.cls}`}>{chip.label}</span>
-                          {job.company_tier && (
+                          {job.apply_channel ? (
+                            <ApplyChannelBadge channel={job.apply_channel} trust={job.company_trust} className="shrink-0 hidden sm:inline-flex" />
+                          ) : job.company_tier ? (
                             <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} className="shrink-0 hidden sm:inline-flex" />
-                          )}
+                          ) : null}
 
                           <button
                             onClick={() => patch(job.id, { is_shortlisted: !job.is_shortlisted })}

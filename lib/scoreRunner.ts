@@ -8,6 +8,7 @@
  * jobs 'filtered' and skips the LLM.
  */
 import { scoreJob } from './scoring';
+import { ensureCompanyAssessments } from './companyAssessment';
 import { isSubscriptionProvider, makeClient, makeWorkerClient, LLMClient } from './llm';
 import { currentUserId } from './userContext';
 import { getActiveApiKey, isApiKeyProvider } from './credentials';
@@ -127,6 +128,16 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
   let filtered = 0;
   let errors = 0;
 
+  // Company assessment (ADR 0101): one batched call covers every company in this
+  // chunk that hasn't been assessed yet, then verdicts are stamped onto the jobs.
+  // Guarded — an assessment failure leaves companies visibly unassessed and must
+  // never block scoring.
+  try {
+    await ensureCompanyAssessments(rows, opts.client);
+  } catch (e) {
+    console.error('[score-runner] company assessment failed:', e instanceof Error ? e.message : String(e));
+  }
+
   // Process one row: cheap DB-only gates, or the single LLM call + write. Self-contained
   // and guarded so one bad row can't fail the whole (now concurrent) batch.
   async function processRow(job: Job): Promise<void> {
@@ -218,10 +229,6 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
         score_keywords: result.keywords,
         score_reasoning: result.reasoning,
         score_breakdown: breakdown,
-        // Company assessment now rides the scoring call (ADR 0065) — one write, no
-        // second LLM pass. tier defaults to null (unassessed) only when the model omitted it.
-        company_tier: result.company_tier ?? null,
-        company_tier_note: result.company_tier_note ?? null,
         tech_stack: result.tech_stack ?? null,
         // Per-score token/cache/cost usage (ADR 0066); null when the provider didn't report it.
         score_usage: result.usage ?? null,
@@ -231,6 +238,13 @@ export async function scoreJobRows(rows: Job[], opts: ScoreRunOptions): Promise<
       // Ingestion may already know the actor's contract type. A provider failure or
       // old-format response must not erase that deterministic source metadata.
       if (result.employment_type != null) scorePatch.employment_type = result.employment_type;
+      // Legacy per-job company tier (pre-ADR 0101): the scorer no longer produces it,
+      // and a rescore must not erase the value on rows that still carry one. The
+      // per-company assessment (apply_channel/company_trust) is stamped separately.
+      if (result.company_tier != null) {
+        scorePatch.company_tier = result.company_tier;
+        scorePatch.company_tier_note = result.company_tier_note ?? null;
+      }
 
       const { error } = await supabaseAdmin()
         .from('jobs')

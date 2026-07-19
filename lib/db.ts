@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
 import { normalizeResume, resumeToText } from './resume';
 import { partitionByGeneration, pickCanonical } from './dedupe';
+import { normalizeCompanyKey } from './companyAssessment';
 import { scoringPreferences } from './candidatePreferences';
 import { explicitApplyTypeUrls } from './jobApplyType';
 import type { Settings, Profile, Run, Job, GmailConnection, MailMessage, ResumeDoc, Application, ApplicationWithJob, ScoringState } from './types';
@@ -246,7 +247,7 @@ export async function listApplications(): Promise<ApplicationWithJob[]> {
         'tailor_instructions, tailored_match_score, tailored_match_breakdown, base_match_score, parked, ' +
         'ai_apply_status, ai_assigned_at, ai_apply_updated_at, ai_block_reason, ' +
         'tailor_usage, has_resume, has_cover_letter, ' +
-        'job:jobs(id, title, company, url, location, fit_score, employment_type, company_tier, company_tier_note, application_url, easy_apply, clicked_at, discovered_at, source)',
+        'job:jobs(id, title, company, url, location, fit_score, employment_type, company_tier, company_tier_note, company_key, apply_channel, company_trust, application_url, easy_apply, clicked_at, discovered_at, source)',
     )
     .order('created_at', { ascending: false });
   if (error) throw new Error(`Failed to list applications: ${error.message}`);
@@ -298,6 +299,7 @@ export async function createCustomApplication(input: {
       full_description: description,
       status: 'unscored', // truthful: no fit_score exists; automatic queue excludes manual rows
       source: 'manual', // hidden from the scraped Jobs list
+      company_key: normalizeCompanyKey(input.company), // ADR 0101 join key
     })
     .select('*')
     .single();

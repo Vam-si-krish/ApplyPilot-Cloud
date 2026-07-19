@@ -8,6 +8,7 @@ import ResumeFields from '@/components/ResumeFields';
 import ResumeDiff from '@/components/ResumeDiff';
 import ChangesReview, { confirmTailorChanges } from '@/components/ChangesReview';
 import CompanyTierBadge from '@/components/CompanyTierBadge';
+import ApplyChannelBadge from '@/components/ApplyChannelBadge';
 import AiApplyQueueHeader from '@/components/AiApplyQueueHeader';
 import AiApplyStatusBadge from '@/components/AiApplyStatusBadge';
 import { useProgress } from '@/components/ProgressContext';
@@ -1290,7 +1291,11 @@ export default function ApplicationsPage() {
                       {typeof job?.fit_score === 'number' && (
                         <ScoreChip label="Job fit" value={job.fit_score} title="Original fit of your base résumé to this job" />
                       )}
-                      {job?.company_tier && <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} />}
+                      {job?.apply_channel ? (
+                        <ApplyChannelBadge channel={job.apply_channel} trust={job.company_trust} />
+                      ) : job?.company_tier ? (
+                        <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} />
+                      ) : null}
                       {a.ai_apply_status && (
                         <AiApplyStatusBadge status={a.ai_apply_status} reason={a.ai_block_reason} />
                       )}

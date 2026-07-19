@@ -73,6 +73,13 @@ dedicated column. It remains available from the fit-score tooltip, while complet
 reasoning stays in the expanded job details. On desktop, role type, apply type, company
 assessment, duplicate locations, ATS match, skill match, and opened state each retain a
 stable column, and row actions retain fixed icon slots (ADR 0092).
+Each posting company is assessed once by AI on two axes — who actually receives the
+application (direct employer, staffing, aggregator repost, talent-pool marketplace, gig
+platform) and employer trust — cached per company, stamped onto its jobs, and shown as
+a badge with the reason. A default-on "Hide time-wasters" filter removes
+aggregator/talent-pool/gig-platform reposts and suspicious employers while never hiding
+companies that haven't been assessed yet; verdicts are correctable per company from the
+job details and corrections persist across future runs (ADR 0101).
 Tailor & Apply also provides AI Apply Navigator. Every unapplied job with a valid
 web link may enter the AI queue regardless of Easy Apply/External type or document
 readiness. The extension fills first; AI completes missed fields from Candidate Profile,
