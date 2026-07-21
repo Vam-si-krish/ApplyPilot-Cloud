@@ -33,7 +33,7 @@ test('shared relay recovery reconnects Tailscale without resetting Funnel config
   const remoteControl = readFileSync(script, 'utf8');
   const recovery = readFileSync(join(backend, 'scripts', 'recover-funnel-relay.sh'), 'utf8');
   assert.match(remoteControl, /shared Funnel relay recovery is production-only/);
-  assert.match(recovery, /tailscale down --reason/);
+  assert.match(recovery, /tailscale down --accept-risk=lose-ssh --reason/);
   assert.match(recovery, /tailscale up/);
   assert.doesNotMatch(recovery, /funnel (reset|--https=443 off)/);
 });

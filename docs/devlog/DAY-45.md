@@ -26,6 +26,9 @@
 - Because path cycling still left the relay unable to complete TLS, added a final
   production-only scheduled Tailscale reconnect following official recovery guidance.
   Background Funnel configuration is preserved; no shared route is reset or rewritten.
+- The first scheduled reconnect was safely rejected by Tailscale because its SSH-loss
+  acknowledgement was absent; logs proved no change occurred. Added the explicit
+  `--accept-risk=lose-ssh` acknowledgement required for this intentional recovery.
 - Made onboarding render an explicit loading state, a non-destructive connection-error
   state with retry, and direct Dashboard routing for existing completed accounts.
 - Recorded the operational amendment in ADR 0109 and updated architecture, requirements,

@@ -6,6 +6,6 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PA
 # configured with --bg persist across the reconnect, so this does not reset or rewrite
 # the reserved root, split-six, production, or development mapping.
 sleep 2
-tailscale down --reason "Recover unavailable public Funnel relay"
+tailscale down --accept-risk=lose-ssh --reason "Recover unavailable public Funnel relay"
 sleep 2
 tailscale up
