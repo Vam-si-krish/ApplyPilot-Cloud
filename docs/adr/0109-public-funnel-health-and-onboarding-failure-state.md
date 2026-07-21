@@ -24,8 +24,8 @@ correct forced-RLS profile, Base résumé, and `onboarding_complete=true` row re
 - Use that check in each instance watchdog. When unhealthy, reassert only the instance's
   configured `APP_PATH` mapping; never reset Funnel or modify another application's path.
 - Add a forced-command `repair-funnel` operation for the explicitly selected production
-  or development instance. It runs the same bounded path reassertion and must pass the
-  public-relay check before reporting success.
+  or development instance. It cycles and reasserts only that instance path, never the
+  shared HTTPS listener, and must pass the public-relay check before reporting success.
 - Keep onboarding loading, unavailable, incomplete, and complete states distinct. Never
   show upload until a successful account-status response proves onboarding is incomplete.
   On failure, explain that existing data is unchanged and provide a retry action.

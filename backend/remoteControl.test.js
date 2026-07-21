@@ -34,6 +34,8 @@ test('Funnel repair is bounded to the selected instance path and externally veri
   const publicCheck = readFileSync(join(backend, 'scripts', 'check-public-funnel.sh'), 'utf8');
   assert.match(remoteControl, /repair-funnel\)/);
   assert.match(remoteControl, /--set-path "\/\$\{APP_PATH\}"/);
+  assert.match(remoteControl, /--set-path "\/\$\{APP_PATH\}" off/);
+  assert.doesNotMatch(remoteControl, /funnel reset|--https=443 off/);
   assert.match(watchdog, /check-public-funnel\.sh/);
   assert.match(publicCheck, /dig @8\.8\.8\.8/);
   assert.match(publicCheck, /curl .*--resolve/);

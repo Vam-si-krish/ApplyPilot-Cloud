@@ -20,7 +20,9 @@
 - Added an external-DNS/TLS-preserving Funnel health checker and replaced the watchdog's
   misleading private health probe.
 - Added a restricted, environment-selected `repair-funnel` command that can reassert only
-  `/jobpilot` or `/jobpilot-dev` from protected configuration.
+  `/jobpilot` or `/jobpilot-dev` from protected configuration. After a plain reassertion
+  did not refresh the public relay, the repair was tightened to cycle only the selected
+  path before reasserting it; the shared listener and unrelated routes remain untouched.
 - Made onboarding render an explicit loading state, a non-destructive connection-error
   state with retry, and direct Dashboard routing for existing completed accounts.
 - Recorded the operational amendment in ADR 0109 and updated architecture, requirements,

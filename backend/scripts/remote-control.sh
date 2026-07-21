@@ -109,7 +109,11 @@ case "$REQUEST" in
   repair-funnel)
     log "repair-funnel"
     set -a; source "$BACKEND/.env"; set +a
-    tailscale funnel --bg --set-path "/${APP_PATH}" "http://127.0.0.1:${PORT}"
+    # Cycle only this instance path. Do not reset port 443 or disturb the reserved root
+    # and other applications sharing the same Funnel hostname.
+    tailscale funnel --https=443 --set-path "/${APP_PATH}" off || true
+    sleep 1
+    tailscale funnel --bg --https=443 --set-path "/${APP_PATH}" "http://127.0.0.1:${PORT}"
     for attempt in {1..20}; do
       if "$BACKEND/scripts/check-public-funnel.sh" "$PUBLIC_URL/health"; then
         print -- "public_funnel=repaired path=/${APP_PATH}"
