@@ -40,4 +40,13 @@
   21 backend tests, 21 worker tests, TypeScript, shell syntax, documentation validation
   across 169 Markdown files and 103 ADRs, and the 35-page production build.
 - Both environment deployments, public Funnel recovery, and authenticated Netlify smoke
-  results follow below.
+  results pass. Production and development now run commit `0ada8db`; both server
+  checkouts are clean, both public Funnel probes are healthy, and authenticated `vamsi`
+  login plus `/api/onboarding` return `200` with `onboarding_complete=true` on both sites.
+- The development branch 404 was a separate Netlify deployment failure. The application
+  compiled successfully, but Netlify secret scanning treated the ordinary
+  `DEPLOYMENT_ENV=development` value as a leaked secret because the word appears in
+  documentation and tests. Configured `SECRETS_SCAN_OMIT_KEYS=DEPLOYMENT_ENV` at the
+  Netlify site level; no actual credential or secret-scanning coverage was removed.
+- A clean hosted `develop` rebuild completed and published successfully after that
+  configuration correction. Production also published commit `0ada8db` successfully.
