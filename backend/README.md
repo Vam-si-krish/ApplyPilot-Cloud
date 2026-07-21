@@ -77,6 +77,7 @@ Daily commands from the personal laptop:
 ./scripts/jobpilot-server deploy                 # push, immediate server sync, wait for commit
 ./scripts/jobpilot-server status                 # public + launchd/server health
 ./scripts/jobpilot-server repair-funnel          # reassert + externally verify this instance's public path
+./scripts/jobpilot-server recover-funnel-relay   # reconnect Tailscale only after bounded repair fails
 ./scripts/jobpilot-server sync                   # fetch/deploy origin without another push
 ./scripts/jobpilot-server restart worker         # all | backend | worker | rest
 ./scripts/jobpilot-server logs worker 100         # backend | worker | autopull | watchdog

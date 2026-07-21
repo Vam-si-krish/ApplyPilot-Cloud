@@ -26,6 +26,10 @@ correct forced-RLS profile, Base résumé, and `onboarding_complete=true` row re
 - Add a forced-command `repair-funnel` operation for the explicitly selected production
   or development instance. It cycles and reasserts only that instance path, never the
   shared HTTPS listener, and must pass the public-relay check before reporting success.
+- If bounded path repair fails and the relay itself is unavailable, permit one
+  production-only forced command to schedule Tailscale's documented down/up reconnect.
+  Persistent background Funnel mappings resume automatically; the operation never resets
+  Funnel configuration or rewrites the reserved root and unrelated paths.
 - Keep onboarding loading, unavailable, incomplete, and complete states distinct. Never
   show upload until a successful account-status response proves onboarding is incomplete.
   On failure, explain that existing data is unchanged and provide a retry action.
@@ -36,7 +40,8 @@ correct forced-RLS profile, Base résumé, and `onboarding_complete=true` row re
 
 - A healthy private gateway can no longer mask a broken public path used by Netlify.
 - The restricted key gains one operational repair but no shell, forwarding, global Funnel
-  reset, arbitrary path, or cross-instance authority.
+  reset, arbitrary path, or cross-instance authority. Relay recovery briefly interrupts
+  tailnet connectivity, so it is used only after path-scoped repair proves insufficient.
 - Backend outages no longer look like account deletion or invite destructive re-onboarding.
 - Public DNS is an additional watchdog dependency; resolution failure conservatively
   triggers an idempotent reassertion of only the current instance path.

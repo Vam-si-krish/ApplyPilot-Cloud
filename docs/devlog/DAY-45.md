@@ -23,6 +23,9 @@
   `/jobpilot` or `/jobpilot-dev` from protected configuration. After a plain reassertion
   did not refresh the public relay, the repair was tightened to cycle only the selected
   path before reasserting it; the shared listener and unrelated routes remain untouched.
+- Because path cycling still left the relay unable to complete TLS, added a final
+  production-only scheduled Tailscale reconnect following official recovery guidance.
+  Background Funnel configuration is preserved; no shared route is reset or rewritten.
 - Made onboarding render an explicit loading state, a non-destructive connection-error
   state with retry, and direct Dashboard routing for existing completed accounts.
 - Recorded the operational amendment in ADR 0109 and updated architecture, requirements,
@@ -31,7 +34,7 @@
 ## Verification
 
 - Full local gates pass: 263 application tests with 16 credentialed evaluations skipped,
-  20 backend tests, 21 worker tests, TypeScript, shell syntax, documentation validation
+  21 backend tests, 21 worker tests, TypeScript, shell syntax, documentation validation
   across 169 Markdown files and 103 ADRs, and the 35-page production build.
 - Both environment deployments, public Funnel recovery, and authenticated Netlify smoke
   results follow below.

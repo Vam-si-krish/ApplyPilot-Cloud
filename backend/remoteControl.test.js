@@ -25,7 +25,17 @@ test('remote control documents only its bounded command surface', () => {
   assert.match(result.stdout, /deploy <7-40 character git commit>/);
   assert.match(result.stdout, /restart all\|backend\|worker\|rest/);
   assert.match(result.stdout, /repair-funnel/);
+  assert.match(result.stdout, /production recover-funnel-relay/);
   assert.doesNotMatch(result.stdout, /shell/i);
+});
+
+test('shared relay recovery reconnects Tailscale without resetting Funnel configuration', () => {
+  const remoteControl = readFileSync(script, 'utf8');
+  const recovery = readFileSync(join(backend, 'scripts', 'recover-funnel-relay.sh'), 'utf8');
+  assert.match(remoteControl, /shared Funnel relay recovery is production-only/);
+  assert.match(recovery, /tailscale down --reason/);
+  assert.match(recovery, /tailscale up/);
+  assert.doesNotMatch(recovery, /funnel (reset|--https=443 off)/);
 });
 
 test('Funnel repair is bounded to the selected instance path and externally verified', () => {

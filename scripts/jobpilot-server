@@ -30,6 +30,7 @@ Development/deployment:
   sync                   Make the server pull/deploy the current origin branch immediately
   status                 Show public health/version and detailed server status when SSH is set up
   repair-funnel          Reassert and externally verify this environment's public Funnel path
+  recover-funnel-relay   Reconnect Tailscale after path repair fails (production control only)
   restart <target>       Restart all, backend, worker, or rest
   logs <service> [lines] Show backend, worker, autopull, or watchdog logs (maximum 500)
   backup                 Trigger the server's database/file backup job
@@ -266,6 +267,11 @@ case "$COMMAND" in
     [[ $# -eq 1 ]] || { usage; exit 64; }
     require_remote
     remote repair-funnel
+    ;;
+  recover-funnel-relay)
+    [[ $# -eq 1 && "$REMOTE_ENV" == "production" ]] || { usage; exit 64; }
+    require_remote
+    remote recover-funnel-relay
     ;;
   restart)
     [[ $# -eq 2 && "$2" =~ ^(all|backend|worker|rest)$ ]] || { usage; exit 64; }

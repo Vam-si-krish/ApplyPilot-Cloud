@@ -42,6 +42,7 @@ Allowed commands:
   production|development help
   production|development status
   production|development repair-funnel
+  production recover-funnel-relay
   production|development deploy <7-40 character git commit>
   production|development restart all|backend|worker|rest
   production|development logs backend|worker|autopull|watchdog <1-500 lines>
@@ -122,6 +123,16 @@ case "$REQUEST" in
       sleep 1
     done
     fail "Funnel did not become publicly reachable"
+    ;;
+
+  recover-funnel-relay)
+    [[ "$ENVIRONMENT" == "production" ]] || fail "shared Funnel relay recovery is production-only"
+    log "recover-funnel-relay"
+    # The reconnect drops this SSH transport, so schedule the fixed script outside the
+    # forced-command process. It preserves persistent Funnel configuration and never
+    # resets or rewrites the shared root/other paths.
+    nohup /bin/zsh "$BACKEND/scripts/recover-funnel-relay.sh" >> "$BACKEND/logs/watchdog.log" 2>&1 </dev/null &!
+    print -- "funnel_relay_recovery=scheduled"
     ;;
 
   backup)

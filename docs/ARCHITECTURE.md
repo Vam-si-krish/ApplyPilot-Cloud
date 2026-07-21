@@ -75,6 +75,9 @@ returned public address. Both watchdog instances reassert only their configured 
 when that check fails. The forced-command control surface exposes a bounded
 `repair-funnel` operation for the selected production or development instance; it cannot
 reset Funnel globally or target another path.
+If path repair cannot restore the relay, production control alone may schedule a
+Tailscale down/up reconnect. Persistent `--bg` Funnel mappings resume across that
+reconnect; configuration is not reset and unrelated routes are not rewritten (ADR 0109).
 
 ADR 0089 adds an isolated integration runtime at
 `/Users/vamsikrish/apps/jobpilot-multi-dev`: `jobpilotdev`,
