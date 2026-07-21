@@ -1,6 +1,6 @@
 # Architecture — ApplyPilot-Cloud
 
-**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-16 · **Current decisions:** ADRs 0072–0100
+**Production branch:** `multi-user-fork` · **Integration branch:** `develop` · **Last verified:** 2026-07-21 · **Current decisions:** ADRs 0072–0109
 
 ## Current deployment topology
 
@@ -68,6 +68,14 @@ the boundary. GitHub never receives backend/app secrets. The existing autopull r
 zero-touch recovery path when SSH is unavailable, and it continues to reject a dirty
 server checkout and non-fast-forward history.
 
+Public health is checked through the internet-facing Funnel relay, not the server's
+private MagicDNS `100.x` address (ADR 0109). `check-public-funnel.sh` resolves the public
+relay through an external resolver and preserves the TLS hostname while pinning each
+returned public address. Both watchdog instances reassert only their configured path
+when that check fails. The forced-command control surface exposes a bounded
+`repair-funnel` operation for the selected production or development instance; it cannot
+reset Funnel globally or target another path.
+
 ADR 0089 adds an isolated integration runtime at
 `/Users/vamsikrish/apps/jobpilot-multi-dev`: `jobpilotdev`,
 `jobpilot_multi_dev_app`/`jobpilot_multi_dev`, ports `8241`–`8243`, Funnel path
@@ -110,6 +118,12 @@ user's structured résumé, explicit résumé-stated work authorization, profile
 roles, and locations. It never infers immigration/citizenship/clearance facts. Normal work uses
 keys from that user's vault or that user's UUID-isolated Claude/ChatGPT subscription connection;
 deployment-level LLM/Apify fallback is disabled in the fork.
+
+Existing accounts do not re-enter onboarding. The onboarding page first resolves the
+RLS-scoped `app_users.onboarding_complete` value; completed accounts are redirected to
+Dashboard. Loading and backend-connectivity failure are distinct states. A failed account
+status request never exposes the upload form or implies that saved profile data is absent
+(ADR 0109).
 
 In a managed fork (`BACKEND_URL` is configured), the résumé worker URL and secret are
 deployment-owned environment values. Settings cannot reveal or override them. This keeps

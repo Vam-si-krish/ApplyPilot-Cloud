@@ -18,7 +18,7 @@ if ! curl -fsS -m 8 "http://127.0.0.1:${WORKER_PORT}/health" >/dev/null; then
   launchctl kickstart -k "gui/$(id -u)/com.${APP_NAME}.worker" >> "$LOG" 2>&1 || true
 fi
 
-if ! curl -fsS -m 12 "$PUBLIC_URL/health" >/dev/null; then
+if ! "$BACKEND/scripts/check-public-funnel.sh" "$PUBLIC_URL/health"; then
   log "public endpoint unhealthy; reasserting Funnel path"
   tailscale funnel --bg --set-path "/${APP_PATH}" "http://127.0.0.1:${PORT}" >> "$LOG" 2>&1 || true
 fi

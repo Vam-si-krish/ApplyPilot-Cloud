@@ -1,22 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, FileText, Loader2, ShieldCheck, Upload } from 'lucide-react';
+import { AlertCircle, ArrowRight, FileText, Loader2, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
 
 type Status = { username?: string; display_name?: string; onboarding_complete?: boolean };
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ name?: string; target_role?: string; skills?: string[] } | null>(null);
 
-  useEffect(() => {
-    fetch('/api/onboarding').then((response) => response.ok ? response.json() : null).then(setStatus);
+  const loadStatus = useCallback(async () => {
+    setStatusLoading(true);
+    setStatusError('');
+    try {
+      const response = await fetch('/api/onboarding', { cache: 'no-store' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not load your workspace.');
+      setStatus(body);
+    } catch {
+      setStatus(null);
+      setStatusError('ApplyPilot cannot reach your workspace right now. Your saved profile and résumé have not been changed.');
+    } finally {
+      setStatusLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadStatus();
+  }, [loadStatus]);
+
+  useEffect(() => {
+    if (status?.onboarding_complete && !result) router.replace('/dashboard');
+  }, [result, router, status?.onboarding_complete]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -51,7 +73,25 @@ export default function OnboardingPage() {
         </div>
 
         <section className="card space-y-5 p-6">
-          {complete ? (
+          {statusLoading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-muted">
+              <Loader2 size={17} className="animate-spin text-sky" /> Loading your workspace…
+            </div>
+          ) : statusError ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-xl border border-rose/25 bg-rose/10 p-4">
+                <AlertCircle className="mt-0.5 shrink-0 text-rose" size={20} />
+                <div>
+                  <h2 className="font-semibold">Workspace temporarily unavailable</h2>
+                  <p className="mt-1 text-sm text-slate-muted">{statusError}</p>
+                  <p className="mt-2 text-xs text-slate-dim">Do not upload your résumé again. Retry after the server connection is restored.</p>
+                </div>
+              </div>
+              <button onClick={() => void loadStatus()} className="btn-primary w-full py-3">
+                <RefreshCw size={16} /> Retry connection
+              </button>
+            </div>
+          ) : complete ? (
             <>
               <div className="flex items-start gap-3 rounded-xl border border-emerald/25 bg-emerald/10 p-4">
                 <ShieldCheck className="mt-0.5 text-emerald" size={20} />

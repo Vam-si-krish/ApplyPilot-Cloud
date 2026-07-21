@@ -76,6 +76,7 @@ Daily commands from the personal laptop:
 ```bash
 ./scripts/jobpilot-server deploy                 # push, immediate server sync, wait for commit
 ./scripts/jobpilot-server status                 # public + launchd/server health
+./scripts/jobpilot-server repair-funnel          # reassert + externally verify this instance's public path
 ./scripts/jobpilot-server sync                   # fetch/deploy origin without another push
 ./scripts/jobpilot-server restart worker         # all | backend | worker | rest
 ./scripts/jobpilot-server logs worker 100         # backend | worker | autopull | watchdog
@@ -98,6 +99,8 @@ ADR 0089 reserves `develop` for integration testing. Its resources are
 `jobpilotdev-rest`, a separate file/backup tree, and `com.jobpilotdev.*`. It starts empty
 and must never receive a production snapshot. Use a separate local worktree and
 `scripts/jobpilot-dev-server` for bootstrap, status, deploy, restart, logs, and backup.
+The development CLI also exposes `repair-funnel`; like production, it can reassert only
+the path selected by its protected instance configuration.
 Production continues to use `scripts/jobpilot-server`.
 
 ### Optional owner-authorized development seed

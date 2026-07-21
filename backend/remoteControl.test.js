@@ -24,7 +24,19 @@ test('remote control documents only its bounded command surface', () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /deploy <7-40 character git commit>/);
   assert.match(result.stdout, /restart all\|backend\|worker\|rest/);
+  assert.match(result.stdout, /repair-funnel/);
   assert.doesNotMatch(result.stdout, /shell/i);
+});
+
+test('Funnel repair is bounded to the selected instance path and externally verified', () => {
+  const remoteControl = readFileSync(script, 'utf8');
+  const watchdog = readFileSync(join(backend, 'scripts', 'watchdog.sh'), 'utf8');
+  const publicCheck = readFileSync(join(backend, 'scripts', 'check-public-funnel.sh'), 'utf8');
+  assert.match(remoteControl, /repair-funnel\)/);
+  assert.match(remoteControl, /--set-path "\/\$\{APP_PATH\}"/);
+  assert.match(watchdog, /check-public-funnel\.sh/);
+  assert.match(publicCheck, /dig @8\.8\.8\.8/);
+  assert.match(publicCheck, /curl .*--resolve/);
 });
 
 test('remote control rejects shell syntax and unapproved commands without evaluating them', () => {

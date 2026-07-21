@@ -56,6 +56,9 @@ UUID-isolated Claude or ChatGPT subscription for normal work. The owner's server
 permitted only for the bounded onboarding parse. Shared AI instructions are owner-neutral:
 each call receives only the authenticated user's Base résumé/profile context, and onboarding
 copies work-authorization facts only when the PDF states them explicitly (ADR 0080).
+Returning accounts whose onboarding is complete go directly to Dashboard. If the account
+status API is unreachable, the UI must report a temporary workspace connection failure
+and must not present résumé upload as though the account were new (ADR 0109).
 Candidate Profile is the single ongoing edit surface for the Base résumé, eligibility,
 recurring application answers, avoidance preferences, and constrained scoring/tailoring
 guidance. Its AI Guidance area also exposes validated per-user trade-offs for learnable

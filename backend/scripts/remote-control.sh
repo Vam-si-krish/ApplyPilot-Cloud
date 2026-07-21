@@ -41,6 +41,7 @@ Allowed commands:
   help
   production|development help
   production|development status
+  production|development repair-funnel
   production|development deploy <7-40 character git commit>
   production|development restart all|backend|worker|rest
   production|development logs backend|worker|autopull|watchdog <1-500 lines>
@@ -98,6 +99,25 @@ case "$REQUEST" in
     launchctl list | grep -E "com\.${APP_NAME}\.(backend|worker|autopull|watchdog|backup)" || true
     health_wait "http://127.0.0.1:${PORT}/health"
     health_wait "http://127.0.0.1:${WORKER_PORT}/version"
+    if "$BACKEND/scripts/check-public-funnel.sh" "$PUBLIC_URL/health"; then
+      print -- "public_funnel=healthy"
+    else
+      print -- "public_funnel=unhealthy"
+    fi
+    ;;
+
+  repair-funnel)
+    log "repair-funnel"
+    set -a; source "$BACKEND/.env"; set +a
+    tailscale funnel --bg --set-path "/${APP_PATH}" "http://127.0.0.1:${PORT}"
+    for attempt in {1..20}; do
+      if "$BACKEND/scripts/check-public-funnel.sh" "$PUBLIC_URL/health"; then
+        print -- "public_funnel=repaired path=/${APP_PATH}"
+        exit 0
+      fi
+      sleep 1
+    done
+    fail "Funnel did not become publicly reachable"
     ;;
 
   backup)
