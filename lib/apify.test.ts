@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  planRuns, mapDatasetItemToJob, booleanKeywordQuery, parseLinkedInLocation,
-  buildLinkedInSearchUrl, titleSearchTerms, careerSiteLocations, estimateRunCostUsd,
+  planRuns, mapDatasetItemToJob, parseLinkedInLocation, linkedInKeywordLocations,
+  titleSearchTerms, careerSiteLocations, estimateRunCostUsd,
   normalizeEmploymentType,
 } from './apify';
 import type { Settings } from './types';
@@ -48,27 +48,55 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
   };
 }
 
-describe('planRuns — one URL-driven LinkedIn run (ADR 0023, boolean query per ADR 0058)', () => {
-  it('covers every role × location via ONE boolean startUrl per location', () => {
+describe('planRuns — keyword-mode LinkedIn run with native filters (ADR 0110)', () => {
+  it('sends plain keyword × location searches — never startUrls, never a boolean query', () => {
     const specs = planRuns(makeSettings());
     expect(specs).toHaveLength(1);
     const run = specs[0];
     expect(run.portal).toBe('linkedin');
     expect(run.actorId).toBe('cheap_scraper~linkedin-job-scraper');
 
-    // One startUrls entry per LOCATION (2), all roles OR-combined in each …
-    const urls = (run.input.startUrls as { url: string }[]).map((u) => u.url);
-    expect(urls.length).toBe(2);
-    const q = new URL(urls[0]).searchParams.get('keywords');
-    expect(q).toBe('"Software Engineer" OR "Data Engineer" OR "ML Engineer" OR "Backend Engineer"');
-    // … and we DON'T send keyword/locations arrays (which would double-fetch).
-    expect(run.input.locations).toBeUndefined();
-    expect(run.input.keyword).toBeUndefined();
+    // Plain keywords: the actor only paginates unquoted searches (builds ≥0.0.35).
+    expect(run.input.keyword).toEqual(['Software Engineer', 'Data Engineer', 'ML Engineer', 'Backend Engineer']);
+    expect(run.input.locations).toEqual(['United States', 'Boston, MA']);
+    // startUrls alongside keyword/locations makes the actor double-fetch.
+    expect(run.input.startUrls).toBeUndefined();
     expect(run.input.urls).toBeUndefined();
   });
 
-  it('de-duplicates so overlapping locations are billed once', () => {
+  it('always filters to full-time + contract in-search (was f_JT=F,C)', () => {
+    expect(planRuns(makeSettings())[0].input.jobType).toEqual(['full-time', 'contract']);
+  });
+
+  it('maps stored f_E digits to the native experienceLevel enum; none selected → no filter', () => {
+    const specs = planRuns(makeSettings({ linkedin_experience_levels: ['2', '3', '4'] }));
+    expect(specs[0].input.experienceLevel).toEqual(['entry-level', 'associate', 'mid-senior']);
+    expect(planRuns(makeSettings())[0].input.experienceLevel).toBeUndefined();
+  });
+
+  it('collapses remote-ish locations into their geo; remote-ONLY lists add the workType filter', () => {
+    // Mixed list: "Remote, US" folds into "United States"; the plain geo search
+    // already includes remote rows, so no workType restriction.
+    const mixed = planRuns(makeSettings({ locations: ['United States', 'Remote, US'] }))[0].input;
+    expect(mixed.locations).toEqual(['United States']);
+    expect(mixed.workType).toBeUndefined();
+
+    // Every saved location remote → restrict the search to remote jobs.
+    const remoteOnly = planRuns(makeSettings({ locations: ['Remote, US'] }))[0].input;
+    expect(remoteOnly.locations).toEqual(['United States']);
+    expect(remoteOnly.workType).toEqual(['remote']);
+  });
+
+  it('never searches without a location (worldwide = unbounded billing)', () => {
+    expect(planRuns(makeSettings({ locations: [] }))[0].input.locations).toEqual(['United States']);
+  });
+
+  it('de-duplicates so overlapping searches are billed once', () => {
     expect(planRuns(makeSettings())[0].input.saveOnlyUniqueItems).toBe(true);
+  });
+
+  it('keeps the look-back window param', () => {
+    expect(planRuns(makeSettings())[0].input.publishedAt).toBe('r86400');
   });
 
   it('caps maxItems at results_per_query × combos, floored to the actor minimum (150)', () => {
@@ -88,31 +116,6 @@ describe('planRuns — one URL-driven LinkedIn run (ADR 0023, boolean query per 
     expect(planRuns(makeSettings({ max_jobs_per_run: 50 }))[0].input.maxItems).toBe(150);
   });
 
-  it('handles no locations as a single boolean search with a blank location', () => {
-    const specs = planRuns(makeSettings({ locations: [] }));
-    expect(specs).toHaveLength(1);
-    expect((specs[0].input.startUrls as { url: string }[]).length).toBe(1); // one boolean query, blank location
-  });
-
-  it('turns remote-ish locations into a real remote search (f_WT=2 on United States)', () => {
-    const specs = planRuns(makeSettings({ locations: ['Remote, US'] }));
-    const url = new URL((specs[0].input.startUrls as { url: string }[])[0].url);
-    expect(url.searchParams.get('location')).toBe('United States');
-    expect(url.searchParams.get('f_WT')).toBe('2');
-  });
-
-  it('bakes experience levels (f_E) and full-time+contract (f_JT) into every search URL', () => {
-    const specs = planRuns(makeSettings({ linkedin_experience_levels: ['2', '3', '4'] }));
-    for (const { url } of specs[0].input.startUrls as { url: string }[]) {
-      const params = new URL(url).searchParams;
-      expect(params.get('f_E')).toBe('2,3,4');
-      expect(params.get('f_JT')).toBe('F,C');
-    }
-    // No levels selected → no f_E facet at all.
-    const bare = planRuns(makeSettings());
-    expect(new URL((bare[0].input.startUrls as { url: string }[])[0].url).searchParams.get('f_E')).toBeNull();
-  });
-
   it('keeps non-LinkedIn portals as their own single run', () => {
     const specs = planRuns(makeSettings({ job_portals: ['linkedin', 'indeed'] }));
     expect(specs.filter((s) => s.portal === 'linkedin')).toHaveLength(1);
@@ -123,24 +126,9 @@ describe('planRuns — one URL-driven LinkedIn run (ADR 0023, boolean query per 
     const input = planRuns(makeSettings())[0].input;
     expect(input.resumeKeywords).toEqual([{ keyword: 'React' }, { keyword: 'TypeScript' }]);
   });
-
-  it("'keyword' fetch mode uses keyword/locations (not startUrls) — no double-fetch", () => {
-    const input = planRuns(makeSettings({ fetch_mode: 'keyword' }))[0].input;
-    expect(input.keyword).toEqual(['Software Engineer', 'Data Engineer', 'ML Engineer', 'Backend Engineer']);
-    expect(input.locations).toEqual(['United States', 'Boston, MA']);
-    expect(input.startUrls).toBeUndefined();
-    // Same hard cap applies in both modes.
-    expect(planRuns(makeSettings({ fetch_mode: 'keyword', max_jobs_per_run: 500 }))[0].input.maxItems).toBe(500);
-  });
 });
 
-describe('LinkedIn query helpers (ADR 0058)', () => {
-  it('booleanKeywordQuery quotes phrases and ORs them; single keyword stays bare', () => {
-    expect(booleanKeywordQuery(['React Developer', 'React.js'])).toBe('"React Developer" OR "React.js"');
-    expect(booleanKeywordQuery(['React Developer'])).toBe('React Developer');
-    expect(booleanKeywordQuery([])).toBe('');
-  });
-
+describe('LinkedIn location helpers', () => {
   it('parseLinkedInLocation maps remote variants to United States + remote', () => {
     expect(parseLinkedInLocation('Remote, US')).toEqual({ location: 'United States', remote: true });
     expect(parseLinkedInLocation('Remote')).toEqual({ location: 'United States', remote: true });
@@ -148,10 +136,16 @@ describe('LinkedIn query helpers (ADR 0058)', () => {
     expect(parseLinkedInLocation('Boston, MA')).toEqual({ location: 'Boston, MA', remote: false });
   });
 
-  it('buildLinkedInSearchUrl keeps the last-24h window param', () => {
-    const url = new URL(buildLinkedInSearchUrl('x', 'Boston, MA', 24));
-    expect(url.searchParams.get('f_TPR')).toBe('r86400');
-    expect(url.searchParams.get('f_WT')).toBeNull();
+  it('linkedInKeywordLocations de-duplicates geos case-insensitively and reports remote-only', () => {
+    expect(linkedInKeywordLocations(['Boston, MA', 'boston, ma', 'Remote, US'])).toEqual({
+      locations: ['Boston, MA', 'United States'],
+      remoteOnly: false,
+    });
+    expect(linkedInKeywordLocations(['Remote, US', 'Remote'])).toEqual({
+      locations: ['United States'],
+      remoteOnly: true,
+    });
+    expect(linkedInKeywordLocations([])).toEqual({ locations: ['United States'], remoteOnly: false });
   });
 });
 

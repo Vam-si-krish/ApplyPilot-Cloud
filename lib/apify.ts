@@ -40,19 +40,6 @@ function mapPublishedAt(hours: number): string {
 }
 
 /**
- * Combine the role keywords into ONE boolean search query (ADR 0058). LinkedIn's
- * guest search supports quoted phrases and uppercase OR, so one combined search per
- * location finds the same unique set as one search per role × location while
- * crawling far fewer pages — and exact-phrase matching cuts the "React.js mentioned
- * once in a backend JD" noise a bare keyword pulls in.
- */
-export function booleanKeywordQuery(keywords: string[]): string {
-  const phrases = keywords.map((k) => k.replace(/"/g, '').trim()).filter(Boolean);
-  if (phrases.length <= 1) return phrases[0] ?? '';
-  return phrases.map((p) => `"${p}"`).join(' OR ');
-}
-
-/**
  * LinkedIn has no "Remote" geo — remote is the f_WT=2 workplace facet on a real
  * location. A saved location like "Remote, US" used to be sent as a literal
  * location string (which LinkedIn can't geocode); it now becomes
@@ -76,46 +63,55 @@ export const LINKEDIN_EXPERIENCE_LEVELS = [
   { value: '6', label: 'Executive' },
 ] as const;
 
+/** f_E digit (the stored settings format) → the actor's native experienceLevel enum. */
+const LINKEDIN_EXPERIENCE_ENUM: Record<string, string> = {
+  '1': 'internship', '2': 'entry-level', '3': 'associate',
+  '4': 'mid-senior', '5': 'director', '6': 'executive',
+};
+
 /**
- * Build a LinkedIn job-search URL for one (possibly boolean) query × location,
- * last-N-hours window. Facet params (f_WT/f_E/f_JT) filter INSIDE LinkedIn's
- * search, i.e. before the pay-per-result actor ever sees — or bills — a job
- * (unlike the actor's own "dynamic filters", which are post-fetch).
+ * Map saved locations to keyword-mode geo strings: remote-ish entries collapse to
+ * their real geo ("Remote, US" → "United States"), duplicates are dropped, and an
+ * empty list falls back to United States (never search worldwide — unbounded
+ * billing). `remoteOnly` is true when EVERY saved location was remote-flagged, so
+ * the caller can add the actor's native remote work-type filter; a mixed list gets
+ * no filter because a plain geo search already includes its remote rows.
  */
-export function buildLinkedInSearchUrl(
-  keyword: string,
-  location: string,
-  hoursOld: number,
-  opts?: { experienceLevels?: string[] },
-): string {
-  const { location: geo, remote } = parseLinkedInLocation(location);
-  const params = new URLSearchParams({
-    keywords: keyword,
-    location: geo,
-    f_TPR: mapPublishedAt(hoursOld),
-  });
-  if (remote) params.set('f_WT', '2'); // workplace type facet: 2 = remote
-  const levels = (opts?.experienceLevels ?? []).filter((l) => /^[1-6]$/.test(l));
-  if (levels.length) params.set('f_E', levels.join(','));
-  // Full-time + contract only — the scorer flags contract instead of demoting it
-  // (ADR 0022); part-time/temp/internship listings are never worth a billed fetch.
-  params.set('f_JT', 'F,C');
-  return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
+export function linkedInKeywordLocations(locations: string[]): { locations: string[]; remoteOnly: boolean } {
+  const geos: string[] = [];
+  const seen = new Set<string>();
+  let sawOnsite = false;
+  let sawRemote = false;
+  for (const raw of locations) {
+    const loc = raw.trim();
+    if (!loc) continue;
+    const { location, remote } = parseLinkedInLocation(loc);
+    if (remote) sawRemote = true;
+    else sawOnsite = true;
+    const key = location.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      geos.push(location);
+    }
+  }
+  if (!geos.length) return { locations: ['United States'], remoteOnly: false };
+  return { locations: geos, remoteOnly: sawRemote && !sawOnsite };
 }
 
 /**
- * Build the LinkedIn actor input (ADR 0023). Two selectable fetch strategies, both
- * sharing a HARD global `maxItems` cap, dedup, skill-match, and the look-back window:
+ * Build the LinkedIn actor input. Since cheap_scraper build 0.0.35 (2026-07-19) the
+ * actor crawls only the FIRST page of each `startUrls` entry and never paginates a
+ * quoted boolean query — the ADR 0058 one-boolean-URL-per-location strategy
+ * collapsed from ~500 to ~40 jobs/run. Plain keyword searches still paginate fully
+ * ("Fetching N additional page(s)" via the guest API), so BOTH fetch strategies now
+ * send keyword-mode input — one search per keyword × location — with the facets the
+ * URLs used to carry (f_E/f_JT/f_WT) expressed through the actor's native filter
+ * fields, which it applies in-search before billing (ADR 0110).
  *
- *  - 'url' (default, precise): hand the actor EXACTLY one `startUrls` per location,
- *    all roles combined into one boolean query (window baked into the URL's f_TPR).
- *    Predictable count; no actor-side expansion (ADR 0058 — was one URL per
- *    role×location, which crawled K× the searches for the same unique set).
- *  - 'keyword' (broad): send `keyword[]` + `locations[]` and let the actor build one
- *    search per pair ("each location is combined with every keyword"). Wider reach.
- *
- * Critically, we never send BOTH startUrls AND keyword/locations — doing so makes the
- * actor double-fetch (its own searches on top of ours) and was the ~1200-job blowup.
+ * Critically, we never send BOTH startUrls AND keyword/locations — doing so makes
+ * the actor double-fetch (its own searches on top of ours) and was the ~1200-job
+ * blowup. The hard global `maxItems` cap, dedup, skill-match, and look-back window
+ * are unchanged.
  */
 function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const keywords = settings.keywords.filter(Boolean);
@@ -123,31 +119,33 @@ function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   const skills = (settings.skills ?? []).filter(Boolean);
 
   // Total cap = Max jobs/run when set (the hard total limit); otherwise
-  // results-per-role × #(role × location) pairs — the expected-yield estimate is
-  // unchanged even though the boolean query collapses the crawled searches.
-  // Always floored to the actor minimum (150).
+  // results-per-role × #(role × location) pairs. Always floored to the actor
+  // minimum (150).
   let cap = settings.results_per_query * Math.max(1, keywords.length * Math.max(1, locations.length));
   if (settings.max_jobs_per_run > 0) cap = settings.max_jobs_per_run;
   cap = Math.max(cap, MIN_MAX_ITEMS);
 
-  const base = {
+  const geo = linkedInKeywordLocations(locations);
+  const levels = (settings.linkedin_experience_levels ?? [])
+    .map((l) => LINKEDIN_EXPERIENCE_ENUM[l])
+    .filter(Boolean);
+
+  const input: Record<string, unknown> = {
     maxItems: cap, // hard global cap on the whole run
     saveOnlyUniqueItems: true,
     // Skill-match (ADR 0018): the actor tags each job with matched/unmatched skills + a 0–100 score.
     resumeKeywords: skills.map((s) => ({ keyword: s })),
     publishedAt: mapPublishedAt(settings.hours_old),
     proxy: { useApifyProxy: true },
+    keyword: keywords,
+    locations: geo.locations,
+    // Full-time + contract only — the scorer flags contract instead of demoting it
+    // (ADR 0022); part-time/temp/internship listings are never worth a billed fetch.
+    jobType: ['full-time', 'contract'],
   };
-
-  if (settings.fetch_mode === 'keyword') {
-    // Broad: actor builds one search per keyword × location pair (no startUrls).
-    return { ...base, keyword: keywords, locations };
-  }
-  // Precise (default): crawl exactly the searches we define — one boolean query per location.
-  const query = booleanKeywordQuery(keywords);
-  const locs = locations.length ? locations : [''];
-  const opts = { experienceLevels: settings.linkedin_experience_levels ?? [] };
-  return { ...base, startUrls: locs.map((l) => ({ url: buildLinkedInSearchUrl(query, l, settings.hours_old, opts) })) };
+  if (levels.length) input.experienceLevel = levels;
+  if (geo.remoteOnly) input.workType = ['remote'];
+  return input;
 }
 
 function buildIndeedInput(settings: Settings): Record<string, unknown> {

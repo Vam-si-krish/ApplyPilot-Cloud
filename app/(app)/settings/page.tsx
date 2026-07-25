@@ -488,23 +488,13 @@ export default function SettingsPage() {
           />
         </div>
 
-        {/* Fetch strategy (ADR 0023) */}
-        <div className="mt-4">
-          <p className="text-[11px] text-slate-muted mb-1.5 font-medium uppercase tracking-wider">Fetch mode</p>
-          <select
-            value={s.fetch_mode ?? 'url'}
-            onChange={(e) => patch({ fetch_mode: e.target.value as 'url' | 'keyword' })}
-            className="w-full sm:w-auto bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text"
-          >
-            <option value="url">Precise — search exactly your role × location combos</option>
-            <option value="keyword">Broad — let the scraper expand your keywords × locations</option>
-          </select>
-          <p className="text-slate-muted text-[11px] mt-2">
-            <span className="text-sky">Precise</span> crawls one search per role×location you selected — predictable count.{' '}
-            <span className="text-sky">Broad</span> hands your keywords + locations to the scraper to cast a wider net (may surface
-            more, less predictable). Both de-duplicate and obey <span className="font-mono">Max jobs / run</span> (min 150).
-          </p>
-        </div>
+        {/* Fetch strategy: one search per role × location with in-search filters
+            (ADR 0110). The old Precise/Broad selector is gone — the scraper only
+            paginates plain keyword searches now, so there is one strategy. */}
+        <p className="text-slate-muted text-[11px] mt-3">
+          Each role is searched in every location with your filters applied in-search; results de-duplicate and obey{' '}
+          <span className="font-mono">Total run cap</span> (min 150).
+        </p>
       </Section>
       )}
 
