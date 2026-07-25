@@ -3,6 +3,7 @@ import {
   applicationApplyTypeLabel,
   atsComparisonLabel,
   matchesApplicationApplyType,
+  tailoredLocationChip,
 } from './applicationPresentation';
 
 describe('Tailor & Apply presentation', () => {
@@ -21,5 +22,18 @@ describe('Tailor & Apply presentation', () => {
     expect(atsComparisonLabel(61, 61)).toBe('61% → 61%');
     expect(atsComparisonLabel(null, 74)).toBe('Base unavailable → 74%');
     expect(atsComparisonLabel(null, null)).toBe('ATS');
+  });
+
+  it('shows the location chip only when the tailored header meaningfully differs from home (ADR 0112)', () => {
+    expect(tailoredLocationChip('Austin, TX', 'Boston, MA')).toBe('Austin, TX');
+    // Same city — case/whitespace differences are not a different location.
+    expect(tailoredLocationChip('  boston,  ma ', 'Boston, MA')).toBeNull();
+    expect(tailoredLocationChip('Boston, MA', 'Boston, MA')).toBeNull();
+    // No tailored résumé / no location / non-string junk → no chip.
+    expect(tailoredLocationChip(null, 'Boston, MA')).toBeNull();
+    expect(tailoredLocationChip('', 'Boston, MA')).toBeNull();
+    expect(tailoredLocationChip(42, 'Boston, MA')).toBeNull();
+    // Missing home location still shows a real tailored city.
+    expect(tailoredLocationChip('Austin, TX', null)).toBe('Austin, TX');
   });
 });

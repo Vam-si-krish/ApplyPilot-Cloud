@@ -620,6 +620,9 @@ export interface Application {
 /** Application joined with its job — what the Applications tab lists. */
 export interface ApplicationWithJob extends Application {
   job: Job | null;
+  /** Tailored résumé's header location, present in the LIST projection only when it
+   *  differs from the home location (ADR 0112) — powers the copy-for-forms chip. */
+  tailored_location?: string | null;
 }
 
 export type RunStatus = 'running' | 'succeeded' | 'failed';

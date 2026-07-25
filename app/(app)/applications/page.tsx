@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput, Bot, Play, CircleX, RotateCcw } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle2, FileText, Briefcase, Clock, ChevronDown, ChevronRight, Sparkles, Save, AlertCircle, FileDown, Download, Loader2, Plus, Search, Gauge, FolderInput, FolderOutput, Bot, Play, CircleX, RotateCcw, MapPin } from 'lucide-react';
 import ManualGenerate from '@/components/ManualGenerate';
 import ResumeFields from '@/components/ResumeFields';
 import ResumeDiff from '@/components/ResumeDiff';
@@ -63,6 +63,17 @@ export default function ApplicationsPage() {
   const [genCoverId, setGenCoverId] = useState<string | null>(null); // application whose cover letter is generating
   const [atsId, setAtsId] = useState<string | null>(null); // application whose tailored ATS check is running
   const [msg, setMsg] = useState<string | null>(null);
+  // Row whose tailored-location chip (ADR 0112) just copied to the clipboard.
+  const [copiedLocationId, setCopiedLocationId] = useState<string | null>(null);
+
+  /** Copy a row's tailored header location for pasting into application forms. */
+  const copyTailoredLocation = (a: ApplicationWithJob) => {
+    if (!a.tailored_location) return;
+    navigator.clipboard?.writeText(a.tailored_location).then(() => {
+      setCopiedLocationId(a.id);
+      setTimeout(() => setCopiedLocationId((current) => (current === a.id ? null : current)), 1600);
+    }).catch(() => {});
+  };
 
   // Filters (parity with the Jobs tab — the subset that maps to applications).
   const [search, setSearch] = useState('');
@@ -1269,6 +1280,17 @@ export default function ApplicationsPage() {
                       ) : job?.company_tier ? (
                         <CompanyTierBadge tier={job.company_tier} note={job.company_tier_note} />
                       ) : null}
+                      {/* This résumé's header uses a different city than home (ADR 0112) —
+                          click to copy it so application-form city fields can match. */}
+                      {a.tailored_location && (
+                        <button
+                          onClick={() => copyTailoredLocation(a)}
+                          title={`This tailored résumé's header says "${a.tailored_location}" (not your home location). Click to copy it for city-level form fields — where a form wants your full street address, use your real one.`}
+                          className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md border border-sky/30 bg-sky/10 text-sky hover:bg-sky/20 transition-colors"
+                        >
+                          <MapPin size={10} /> {copiedLocationId === a.id ? 'Copied!' : a.tailored_location}
+                        </button>
+                      )}
                       {a.ai_apply_status && (
                         <AiApplyStatusBadge status={a.ai_apply_status} reason={a.ai_block_reason} />
                       )}

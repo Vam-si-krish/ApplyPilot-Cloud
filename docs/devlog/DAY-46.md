@@ -44,6 +44,14 @@ different metro. Verbatim overwrite removed on both worker and direct paths; san
 (≤ 60 chars, single line) with fallback to home; TARGET JOB block now carries the
 Location line. Tests cover judged-city, withheld/junk → home, and pref-off → ignored.
 
+## ✅ Copy-for-forms location chip on Tailor & Apply rows
+When a tailored résumé's header carries a different city than home (ADR 0112), its
+queue row now shows a `📍 City, ST` chip that copies the location on click — so the
+application form's city field can match the résumé. Slim list stays slim: the list
+projection pulls only `tailored_resume->basics->>location`, and the API nulls it when
+it matches the home location (chip appears exactly when the header differs). Tooltip
+tells the user it's for city-level fields, not street addresses.
+
 ## Open questions
 - Verify the first `score-tick` firings in the Netlify function log after deploy (the
   `*/5` cadence is the pipeline's only external re-driver on serverless).

@@ -4,14 +4,25 @@
  * Session-gated (ADR 0024).
  */
 import { NextResponse } from 'next/server';
-import { addApplications, listApplications } from '@/lib/db';
+import { addApplications, listApplications, getProfile } from '@/lib/db';
+import { tailoredLocationChip } from '@/lib/applicationPresentation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    return NextResponse.json({ applications: await listApplications() });
+    const [applications, profile] = await Promise.all([
+      listApplications(),
+      getProfile().catch(() => null),
+    ]);
+    // Keep tailored_location only when the résumé's header meaningfully differs from
+    // the home location (ADR 0112) — the UI copy-chip appears exactly then.
+    const home = profile?.base_resume?.basics?.location ?? '';
+    for (const application of applications) {
+      application.tailored_location = tailoredLocationChip(application.tailored_location, home);
+    }
+    return NextResponse.json({ applications });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
