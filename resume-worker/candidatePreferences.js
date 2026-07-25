@@ -56,6 +56,16 @@ export function resolveTailoringPolicy(value) {
   };
 }
 
+/** Opt-in header-location judgment (ADR 0112): the model decides between the home
+ *  location and the job's city — same-metro/remote/vague cases keep home. */
+export const HEADER_LOCATION_RULE =
+  'Header location: output a top-level "resume_location" string field, the location to print in this copy\'s header. '
+  + 'Judge it from the TARGET JOB\'s Location line and the Base résumé\'s home location: if the job is remote, its '
+  + 'location is missing or a vague region (e.g. "United States"), or it is within the same metro/commuting area as '
+  + 'the home location (e.g. Cambridge, MA for a Boston, MA candidate), return the home location EXACTLY as the base '
+  + 'writes it. Only when the job is clearly in a DIFFERENT metro area, return the job\'s city as "City, ST" for US '
+  + 'cities or "City, Country" elsewhere (e.g. "Austin, TX", never "Greater Austin Area"). Never output a street address.';
+
 export function combinedTailoringInstructions(value, perJob = '') {
   const p = normalizeCandidatePreferences(value);
   const policy = resolveTailoringPolicy(p);
@@ -76,6 +86,7 @@ export function combinedTailoringInstructions(value, perJob = '') {
     `- Skills: ${skillRule}`,
     `- Titles: ${titleRule}`,
     `- Evidence: ${evidenceRule}`,
+    policy.useJobLocation ? `- ${HEADER_LOCATION_RULE}` : '',
     p.tailoring_instructions ? `\nGLOBAL CANDIDATE GUIDANCE:\n${p.tailoring_instructions}` : '',
     local ? `\nJOB-SPECIFIC GUIDANCE:\n${local}` : '',
   ].filter(Boolean).join('\n');

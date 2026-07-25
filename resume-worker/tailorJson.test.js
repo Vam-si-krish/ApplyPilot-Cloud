@@ -34,24 +34,41 @@ test('tailoring completes from a response whose cover letter contains raw paragr
   assert.match(result.coverLetter, /I would welcome a conversation/);
 });
 
-test('opt-in job location changes only the generated résumé copy', async () => {
-  const base = normalizeResume({
-    basics: { name: 'Taylor Candidate', location: 'Denver, CO' },
-    work: [{ name: 'Acme', position: 'Engineer', highlights: ['Built products'] }],
-  });
-  const response = '{"basics":{"summary":"Relevant engineer"},"work":[{"name":"Acme","highlights":["Built relevant products"]}],"skills":[],"projects":[],"customSections":[]}';
-  const client = { model: 'sonnet', lastUsage: null, chat: async () => response };
-  const result = await tailorResume(
-    base,
-    { title: 'Engineer', company: 'Example', location: 'Austin, TX', full_description: 'Build products.' },
-    {},
-    client,
-    '',
-    { skillAdditionMode: 'learnable', skillLearningHorizonDays: 15, titleAlignment: 'honest_reframe', evidenceStandard: 'plausible_with_review', useJobLocation: true },
-  );
+const locationBase = () => normalizeResume({
+  basics: { name: 'Taylor Candidate', location: 'Denver, CO' },
+  work: [{ name: 'Acme', position: 'Engineer', highlights: ['Built products'] }],
+});
+const locationJob = { title: 'Engineer', company: 'Example', location: 'Remote — Austin Metropolitan Area', full_description: 'Build products.' };
+const locationPolicy = { skillAdditionMode: 'learnable', skillLearningHorizonDays: 15, titleAlignment: 'honest_reframe', evidenceStandard: 'plausible_with_review', useJobLocation: true };
+const locationResponse = (extra = '') =>
+  `{"basics":{"summary":"Relevant engineer"},"work":[{"name":"Acme","highlights":["Built relevant products"]}],"skills":[],"projects":[],"customSections":[]${extra}}`;
+const clientFor = (response) => ({ model: 'sonnet', lastUsage: null, chat: async () => response });
 
+test('opt-in location uses the model-judged resume_location on only the generated copy (ADR 0112)', async () => {
+  const base = locationBase();
+  const result = await tailorResume(
+    base, locationJob, {}, clientFor(locationResponse(',"resume_location":"Austin, TX"')), '', locationPolicy,
+  );
+  // The model's judged city is used — NOT the raw job string ("Remote — Austin Metropolitan Area").
   assert.equal(result.resume.basics.location, 'Austin, TX');
   assert.equal(base.basics.location, 'Denver, CO');
+});
+
+test('opt-in location keeps the home location when the model withholds or returns junk', async () => {
+  const withheld = await tailorResume(locationBase(), locationJob, {}, clientFor(locationResponse()), '', locationPolicy);
+  assert.equal(withheld.resume.basics.location, 'Denver, CO');
+
+  const junk = `,"resume_location":"${'x'.repeat(80)}"`;
+  const overlong = await tailorResume(locationBase(), locationJob, {}, clientFor(locationResponse(junk)), '', locationPolicy);
+  assert.equal(overlong.resume.basics.location, 'Denver, CO');
+});
+
+test('resume_location is ignored entirely when the preference is off', async () => {
+  const result = await tailorResume(
+    locationBase(), locationJob, {}, clientFor(locationResponse(',"resume_location":"Austin, TX"')), '',
+    { ...locationPolicy, useJobLocation: false },
+  );
+  assert.equal(result.resume.basics.location, 'Denver, CO');
 });
 
 test('tailoring prompt demonstrates escaped JSON newlines, not raw ones', () => {

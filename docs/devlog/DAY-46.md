@@ -34,6 +34,16 @@ ever restarted the chain (stale-lock takeover existed but had no external driver
 Once deployed, the ticks drain the stuck production backlog automatically. Tests 263
 green; typecheck green.
 
+## ✅ Header location on tailored résumés is now judged, not copied (ADR 0112)
+The opt-in `use_job_location_on_tailored_resume` swap pasted the job row's location
+verbatim — so remote rows produced "Remote — Los Angeles Metropolitan Area" headers and
+a Cambridge posting would displace a Boston candidate's already-local header. Now the
+tailoring call itself outputs a `resume_location`: home location for remote / missing /
+vague-region / same-metro jobs; the job's city as "City, ST" only when it's clearly a
+different metro. Verbatim overwrite removed on both worker and direct paths; sanitized
+(≤ 60 chars, single line) with fallback to home; TARGET JOB block now carries the
+Location line. Tests cover judged-city, withheld/junk → home, and pref-off → ignored.
+
 ## Open questions
 - Verify the first `score-tick` firings in the Netlify function log after deploy (the
   `*/5` cadence is the pipeline's only external re-driver on serverless).

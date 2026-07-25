@@ -38,4 +38,10 @@ test('worker tailoring instructions carry the validated horizon and both guidanc
   assert.match(instructions, /within 30 days/);
   assert.match(instructions, /Lead with API work/);
   assert.match(instructions, /Mention the migration/);
+  // Header-location judgment (ADR 0112) rides the instructions only when opted in.
+  assert.doesNotMatch(instructions, /resume_location/);
+  assert.match(
+    combinedTailoringInstructions({ ...preferences, use_job_location_on_tailored_resume: true }),
+    /resume_location.*same metro/s,
+  );
 });

@@ -59,5 +59,8 @@ describe('candidate preferences', () => {
     });
     expect(globalTailoringInstructions({ skill_learning_horizon_days: 30 })).toContain('within 30 days');
     expect(resolveTailoringPolicy({ skill_learning_horizon_days: 365 }).skillLearningHorizonDays).toBe(15);
+    // Header-location judgment (ADR 0112) rides the instructions only when opted in.
+    expect(globalTailoringInstructions({})).not.toContain('resume_location');
+    expect(globalTailoringInstructions({ use_job_location_on_tailored_resume: true })).toContain('resume_location');
   });
 });

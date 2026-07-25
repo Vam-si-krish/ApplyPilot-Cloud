@@ -552,7 +552,7 @@ export function buildTailorMessages(base, job, signals, instructions = '') {
     experienceLine;
   // VOLATILE tail — the per-job content, after the cache breakpoint.
   const jobBlock =
-    `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
+    `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\nLocation: ${job.location ?? 'N/A'}\n\n` +
     `JOB DESCRIPTION:\n${desc}\n\n` +
     `SIGNALS (from our scorer):\n` +
     `- Job keywords: ${signals.keywords || 'N/A'}\n` +
@@ -791,6 +791,15 @@ function extractChangeNotes(json) {
   return [];
 }
 
+/** The model-judged header location for this copy (ADR 0112), sanitized to a short
+ *  single line. null (missing/junk) means: keep the base home location. */
+function extractResumeLocation(json) {
+  const v = json && typeof json === 'object' ? json.resume_location : null;
+  if (typeof v !== 'string') return null;
+  const s = v.replace(/\s+/g, ' ').trim();
+  return s && s.length <= 60 ? s : null;
+}
+
 /**
  * Produce a tailored résumé for a job (ADR 0026). ONE LLM call. Returns the merged
  * résumé, `changes` (added skills + the model's invented-point notes), and `coverLetter`
@@ -816,7 +825,13 @@ export async function tailorResume(base, job, signals, client, instructions = ''
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json), policy);
-  if (policy.useJobLocation && job.location?.trim()) resume.basics.location = job.location.trim();
+  // Opt-in header location (ADR 0104), judged by the same call (ADR 0112): remote,
+  // vague, and same-metro jobs come back as the home location; the raw job string is
+  // never copied verbatim, and a missing/junk field keeps the base.
+  if (policy.useJobLocation) {
+    const headerLocation = extractResumeLocation(json);
+    if (headerLocation) resume.basics.location = headerLocation;
+  }
   // Usage of THIS call (ADR 0064) — the client path that answered sets lastUsage;
   // null when the provider doesn't report it. Persisted so the user can see what
   // one résumé costs (and whether the cache is being read).

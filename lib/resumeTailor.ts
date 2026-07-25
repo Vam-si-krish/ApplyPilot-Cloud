@@ -142,7 +142,7 @@ export function buildTailorMessages(base: ResumeDoc, job: TailorJob, signals: Ta
     experienceLine;
   // VOLATILE tail — the per-job content, after the cache breakpoint.
   const jobBlock =
-    `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\n\n` +
+    `TARGET JOB:\nTitle: ${job.title ?? 'N/A'}\nCompany: ${job.company ?? 'N/A'}\nLocation: ${job.location ?? 'N/A'}\n\n` +
     `JOB DESCRIPTION:\n${desc}\n\n` +
     `SIGNALS (from our scorer):\n` +
     `- Job keywords: ${signals.keywords || 'N/A'}\n` +
@@ -398,6 +398,15 @@ export function titleChanges(base: ResumeDoc, merged: ResumeDoc): string[] {
   return out;
 }
 
+/** The model-judged header location for this copy (ADR 0112), sanitized to a short
+ *  single line. null (missing/junk) means: keep the base home location. */
+function extractResumeLocation(json: unknown): string | null {
+  const v = json && typeof json === 'object' ? (json as { resume_location?: unknown }).resume_location : null;
+  if (typeof v !== 'string') return null;
+  const s = v.replace(/\s+/g, ' ').trim();
+  return s && s.length <= 60 ? s : null;
+}
+
 /** Pull the model's self-reported "_changes" notes out of the raw JSON. */
 function extractChangeNotes(json: unknown): string[] {
   if (json && typeof json === 'object' && Array.isArray((json as { _changes?: unknown })._changes)) {
@@ -431,6 +440,12 @@ export async function tailorResume(
   if (json == null) throw new Error('Could not parse a tailored résumé from the model response.');
   const notes = extractChangeNotes(json);
   const resume = mergeTailored(base, normalizeResume(json), policy);
-  if (policy.useJobLocation && job.location?.trim()) resume.basics.location = job.location.trim();
+  // Opt-in header location (ADR 0104), judged by the same call (ADR 0112): remote,
+  // vague, and same-metro jobs come back as the home location; the raw job string is
+  // never copied verbatim, and a missing/junk field keeps the base.
+  if (policy.useJobLocation) {
+    const headerLocation = extractResumeLocation(json);
+    if (headerLocation) resume.basics.location = headerLocation;
+  }
   return { resume, changes: { addedSkills: addedSkills(base, resume), titleChanges: titleChanges(base, resume), notes } };
 }

@@ -309,6 +309,7 @@ export default function ProfilePage() {
                 />
                 <p className="mt-1.5 pl-6 text-[11px] text-slate-muted">
                   Off by default. When enabled, only the generated copy changes; your Base résumé and saved home location stay untouched.
+                  Remote, vaguely-located, and same-metro jobs keep your home location — only a clearly different metro gets that job&apos;s city (as &ldquo;City, ST&rdquo;).
                 </p>
               </div>
             </div>
