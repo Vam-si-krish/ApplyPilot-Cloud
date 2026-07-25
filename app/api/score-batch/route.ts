@@ -24,7 +24,7 @@ import {
   countUnscored,
   getLatestRunningRun,
   bumpRunScored,
-  finalizeRun,
+  finalizeIdleRuns,
   acquireScoringLock,
   touchScoringSession,
   updateScoringProgress,
@@ -37,11 +37,11 @@ import { SCORE_BATCH_SIZE, triggerScoreBatch } from '@/lib/pipeline';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-/** Close out a finished/stopped session: finalize the run. Company assessment now
- *  rides the scoring call itself (ADR 0065), so there's no separate pass to kick. */
+/** Close out a finished/stopped session: finalize every idle 'running' run, not
+ *  just the latest — interrupted chains leave older runs behind (ADR 0111).
+ *  Company assessment rides the scoring call itself (ADR 0065). */
 async function finishUp(): Promise<void> {
-  const running = await getLatestRunningRun();
-  if (running) await finalizeRun(running.id, 'succeeded').catch(() => {});
+  await finalizeIdleRuns().catch(() => {});
 }
 
 async function handleForUser(req: Request) {
@@ -93,7 +93,7 @@ async function handleForUser(req: Request) {
       const more = await countUnscored();
       if (more > 0) {
         await updateScoringProgress(token, baseDone, baseErrors, baseDone + more);
-        triggerScoreBatch(token);
+        await triggerScoreBatch(token);
         return NextResponse.json({ ok: true, rescanned: true, remaining: more });
       }
     }
@@ -134,7 +134,7 @@ async function handleForUser(req: Request) {
   const remaining = await countUnscored();
   if (remaining > 0) {
     // The stop flag is checked at the next CONTINUE's entry, so stopping costs ≤1 batch.
-    triggerScoreBatch(token);
+    await triggerScoreBatch(token);
     return NextResponse.json({ ok: true, scored, filtered, done, remaining });
   }
 
@@ -142,7 +142,7 @@ async function handleForUser(req: Request) {
     const more = await countUnscored();
     if (more > 0) {
       await updateScoringProgress(token, done, baseErrors + errors, done + more);
-      triggerScoreBatch(token);
+      await triggerScoreBatch(token);
       return NextResponse.json({ ok: true, scored, filtered, done, rescanned: true, remaining: more });
     }
   }

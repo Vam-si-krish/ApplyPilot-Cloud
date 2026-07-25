@@ -484,10 +484,23 @@ cover-letter line-break formatting error from discarding an otherwise usable ré
 without adding another paid model call or weakening the trust boundary (ADR 0086).
 
 ## Re-trigger mechanism for chunked scoring
-`/api/score-batch` re-invokes itself via a fire-and-forget `fetch` to its own URL
-(`NEXT_PUBLIC_APP_URL`) with the `CRON_SECRET`, returning before the child completes.
-Simple and dependency-free; if it proves fragile under load, move to a server-laptop queue
-or a Netlify scheduled continuation (revisit in an ADR).
+`/api/score-batch` re-invokes itself via a `fetch` to its own URL
+(`NEXT_PUBLIC_APP_URL`) with the `CRON_SECRET`. The trigger is awaited only until the
+request is *delivered* (a short abort window), never until the child batch finishes —
+a fully fire-and-forget fetch was frequently dropped when the serverless instance
+froze after responding, which stranded runs at `status='running'` (ADR 0111). A
+scheduled `score-tick` (Netlify, every 5 minutes → `/api/score-tick`) is the safety
+net: for each user it revives a dead chain via the ADR 0028 stale-lock takeover and,
+when the unscored queue is empty, finalizes idle 'running' runs (a 10-minute grace
+window protects runs whose Apify webhook hasn't landed yet).
+
+## LinkedIn fetch strategy
+The LinkedIn actor input is keyword-mode only (ADR 0110): one plain-keyword search per
+role × location with the actor's native in-search filters (`jobType`,
+`experienceLevel`, `publishedAt`, and `workType` when every saved location is
+remote). Boolean `"A" OR "B"` queries and `startUrls` are never sent — since
+cheap_scraper build 0.0.35 the actor crawls only the first page of a startUrl and
+never paginates quoted queries, which collapsed fetch volume to ~40 jobs/run.
 
 ## Jobs view semantics
 

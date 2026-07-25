@@ -7,7 +7,7 @@ import { readSessionToken, SESSION_COOKIE } from '@/lib/auth';
 //    CRON_SECRET / the webhook secret (ADR 0004). /api/run also accepts a
 //    session and re-checks internally.
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];
-const SELF_AUTH_PATHS = ['/api/run', '/api/apify-webhook', '/api/score-batch', '/api/assess-batch', '/api/tailor-queue', '/api/gmail/sync', '/api/gmail/fetch', '/api/gmail/classify-batch'];
+const SELF_AUTH_PATHS = ['/api/run', '/api/apify-webhook', '/api/score-batch', '/api/score-tick', '/api/assess-batch', '/api/tailor-queue', '/api/gmail/sync', '/api/gmail/fetch', '/api/gmail/classify-batch'];
 const SELF_AUTH_PREFIXES = ['/api/ai-agent/mcp/'];
 
 export async function middleware(req: NextRequest) {

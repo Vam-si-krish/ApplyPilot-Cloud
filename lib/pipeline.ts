@@ -50,26 +50,46 @@ export function publicWebhookBaseUrl(env: AppUrlEnvironment = process.env as App
   return base;
 }
 
+/** How long a trigger waits for its request to reach the platform edge before
+ *  abandoning the response. The downstream invocation only responds after scoring
+ *  a whole batch, so the abort almost always fires — that's expected; by then the
+ *  request has been delivered and the next invocation runs independently. */
+const TRIGGER_DELIVERY_MS = 3_000;
+
 /**
- * Fire-and-forget POST to /api/score-batch to drive the scoring loop without
- * blocking the caller. Authenticated with CRON_SECRET.
+ * POST to /api/score-batch to drive the scoring loop. Authenticated with CRON_SECRET.
  *
  * No `token` → a START: tries to acquire the single-flight lock (ADR 0028); if a
  * chain is already active it no-ops, so duplicate triggers (multi-portal webhooks,
  * the manual button, overlapping runs) can't double-score. With a `token` → a
  * CONTINUE of that owning session's loop.
+ *
+ * Serverless platforms freeze the instance the moment the response returns, so a
+ * fully fire-and-forget fetch was often never sent — scoring chains died mid-queue
+ * with runs stuck 'running' and jobs_scored at a multiple of the batch size
+ * (ADR 0111). Callers must now await this: it waits only for request DELIVERY
+ * (bounded by TRIGGER_DELIVERY_MS), never for the downstream batch to finish, so
+ * the chain stays parallel instead of serializing. The scheduled score-tick
+ * watchdog revives anything that still slips through.
  */
-export function triggerScoreBatch(token?: string, explicitUserId?: string): void {
+export async function triggerScoreBatch(token?: string, explicitUserId?: string): Promise<void> {
   const secret = process.env.CRON_SECRET || '';
   const userId = explicitUserId || currentUserId();
   if (!userId) throw new Error('Cannot trigger scoring without a user context');
   const params = new URLSearchParams({ user_id: userId });
   if (token) params.set('token', token);
-  // Intentionally not awaited — we want the current invocation to return.
-  void fetch(`${appBaseUrl()}/api/score-batch?${params}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}` },
-  }).catch(() => {
-    /* best-effort; the next cron tick / webhook can re-drive if this drops */
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TRIGGER_DELIVERY_MS);
+  try {
+    await fetch(`${appBaseUrl()}/api/score-batch?${params}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: controller.signal,
+    });
+  } catch {
+    /* The delivery-window abort is the normal path; a genuinely dropped trigger
+       is re-driven by the next score-tick. */
+  } finally {
+    clearTimeout(timer);
+  }
 }

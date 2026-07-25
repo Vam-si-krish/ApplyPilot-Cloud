@@ -16,6 +16,6 @@ export const dynamic = 'force-dynamic';
 
 export async function POST() {
   const unscored = await countUnscored();
-  if (unscored > 0) triggerScoreBatch();
+  if (unscored > 0) await triggerScoreBatch();
   return NextResponse.json({ ok: true, unscored, started: unscored > 0 });
 }

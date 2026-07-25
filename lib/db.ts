@@ -579,6 +579,27 @@ export async function bumpRunScored(runId: string, scored: number, errors: numbe
   if (upErr) throw new Error(`Failed to bump run counters: ${upErr.message}`);
 }
 
+/** A 'running' run younger than this with no jobs yet may still be scraping —
+ *  its Apify webhook hasn't landed, so the idle sweep leaves it alone. */
+const RUN_WEBHOOK_GRACE_MS = 10 * 60_000;
+
+/**
+ * Close out every 'running' run that can no longer produce work. Called once the
+ * unscored queue is empty (post-scoring and from the score-tick watchdog), because
+ * a dropped self-trigger used to finalize only the LATEST running run — older
+ * interrupted runs stayed 'running' forever (ADR 0111). Runs inside the webhook
+ * grace window with jobs_found = 0 are skipped: their scrape may be in flight.
+ */
+export async function finalizeIdleRuns(): Promise<void> {
+  const graceBefore = new Date(Date.now() - RUN_WEBHOOK_GRACE_MS).toISOString();
+  const { error } = await supabaseAdmin()
+    .from('runs')
+    .update({ status: 'succeeded', finished_at: new Date().toISOString() })
+    .eq('status', 'running')
+    .or(`jobs_found.gt.0,started_at.lt.${graceBefore}`);
+  if (error) throw new Error(`Failed to finalize idle runs: ${error.message}`);
+}
+
 /** Mark a run finished. */
 export async function finalizeRun(runId: string, status: 'succeeded' | 'failed'): Promise<void> {
   const { error } = await supabaseAdmin()

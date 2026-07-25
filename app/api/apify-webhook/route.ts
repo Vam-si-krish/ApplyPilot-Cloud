@@ -10,7 +10,7 @@ import { checkCronAuth } from '@/lib/auth';
 import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
-  updateRunByApifyId, finalizeRun, getLatestRunningRun, getRunByApifyId,
+  updateRunByApifyId, finalizeRun, getRunByApifyId,
   getScoringResumeText, getSettings, linkDuplicateJobs, enrichExistingJobApplyTypes,
 } from '@/lib/db';
 import { atsMatchScores } from '@/lib/prefilter';
@@ -147,10 +147,11 @@ export async function POST(req: Request) {
     if (runId) await updateRunByApifyId(runId, { jobs_found: inserted });
 
     if (inserted > 0) {
-      triggerScoreBatch();
-    } else if (runId) {
-      // Nothing to score — close the run out now.
-      await finalizeRun((await getLatestRunningRun())?.id ?? '', 'succeeded').catch(() => {});
+      await triggerScoreBatch();
+    } else if (owningRun) {
+      // Nothing to score — close THIS run out now (not whichever run happens to
+      // be the latest 'running' one; that finalized the wrong row, ADR 0111).
+      await finalizeRun(owningRun.id, 'succeeded').catch(() => {});
     }
 
     return NextResponse.json({ ok: true, found: items.length, inserted });
