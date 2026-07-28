@@ -7,6 +7,11 @@
 import { ApifyClient } from 'apify-client';
 import type { EmploymentType, Settings } from './types';
 import { getActiveApiCredential, getApiCredentialById } from './credentials';
+import {
+  CHEAP_LINKEDIN_ACTOR_ID,
+  CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+  validateLinkedInSearchUrls,
+} from './linkedinScrapers';
 
 /**
  * Apify client authed with the active vault token (ADR 0006), falling back to the
@@ -148,6 +153,47 @@ function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   return input;
 }
 
+function curiousCoderResultCap(settings: Settings): number {
+  const configured = settings.max_jobs_per_run > 0
+    ? settings.max_jobs_per_run
+    : settings.results_per_query * Math.max(1, (settings.linkedin_search_urls ?? []).length);
+  return Math.max(configured, 10);
+}
+
+function buildCuriousCoderLinkedInInput(settings: Settings): Record<string, unknown> {
+  const { urls, invalid } = validateLinkedInSearchUrls(settings.linkedin_search_urls ?? []);
+  if (invalid.length) throw new Error(`Invalid LinkedIn Jobs search URL: ${invalid[0]}`);
+  if (!urls.length) {
+    throw new Error('Curious Coder requires at least one LinkedIn Jobs search URL in Settings.');
+  }
+  return {
+    urls,
+    count: curiousCoderResultCap(settings),
+    scrapeCompany: true,
+    useIncognitoMode: true,
+    splitByLocation: false,
+  };
+}
+
+function normalizeCuriousCoderItem(item: Record<string, unknown>): Record<string, unknown> {
+  const salaryInfo = item.salaryInfo;
+  const salary = Array.isArray(salaryInfo)
+    ? salaryInfo.map(String).map((value) => value.trim()).filter(Boolean).join(' – ')
+    : salaryInfo;
+  const applyMethod = item.applyMethod;
+  const serializedMethod = typeof applyMethod === 'string'
+    ? applyMethod
+    : applyMethod && typeof applyMethod === 'object' ? JSON.stringify(applyMethod) : '';
+  let easyApply: boolean | undefined;
+  if (/easy[ _-]?apply/i.test(serializedMethod)) easyApply = true;
+  else if (/external|company/i.test(serializedMethod)) easyApply = false;
+  return {
+    ...item,
+    salaryInfo: salary,
+    ...(easyApply === undefined ? {} : { easyApply }),
+  };
+}
+
 function buildIndeedInput(settings: Settings): Record<string, unknown> {
   const keywords = settings.keywords.filter(Boolean);
   const locations = settings.locations.filter(Boolean);
@@ -276,20 +322,72 @@ function buildCareerSitesInput(settings: Settings): Record<string, unknown> {
 // ── Portal registry ───────────────────────────────────────────────────────
 
 interface PortalConfig {
-  /** Default Apify actor ID. LinkedIn overrides this with settings.apify_actor_id. */
   actorId: string;
   buildInput: (s: Settings) => Record<string, unknown>;
+  pricePerResultUsd: number;
+  resultCap: (s: Settings, input: Record<string, unknown>) => number;
+  normalizeItem?: (item: Record<string, unknown>) => Record<string, unknown>;
 }
 
 const PORTAL_CONFIG: Record<string, PortalConfig> = {
-  linkedin:     { actorId: 'bebity~linkedin-jobs-scraper',                buildInput: buildLinkedInInput },
-  indeed:       { actorId: 'misceres~indeed-scraper',                      buildInput: buildIndeedInput },
-  glassdoor:    { actorId: 'bebity~glassdoor-jobs-scraper',               buildInput: buildGlassdoorInput },
-  career_sites: { actorId: 'fantastic-jobs~career-site-job-listing-api', buildInput: buildCareerSitesInput },
+  indeed: {
+    actorId: 'misceres~indeed-scraper',
+    buildInput: buildIndeedInput,
+    pricePerResultUsd: 0.003,
+    resultCap: (_s, input) => Number(input.maxItems) || 0,
+  },
+  glassdoor: {
+    actorId: 'bebity~glassdoor-jobs-scraper',
+    buildInput: buildGlassdoorInput,
+    pricePerResultUsd: 0.003,
+    resultCap: (_s, input) => Number(input.maxItems) || 0,
+  },
+  career_sites: {
+    actorId: 'fantastic-jobs~career-site-job-listing-api',
+    buildInput: buildCareerSitesInput,
+    pricePerResultUsd: 0.012,
+    resultCap: (_s, input) => Number(input.limit) || 0,
+  },
 };
 
 /** Keys of all portals the UI can present. */
-export const SUPPORTED_PORTALS = Object.keys(PORTAL_CONFIG);
+export const SUPPORTED_PORTALS = ['linkedin', ...Object.keys(PORTAL_CONFIG)];
+
+interface LinkedInScraperAdapter extends PortalConfig {
+  actorId: string;
+  inputMode: 'criteria' | 'search_urls';
+}
+
+const LINKEDIN_SCRAPER_ADAPTERS: Record<string, LinkedInScraperAdapter> = {
+  [CHEAP_LINKEDIN_ACTOR_ID]: {
+    actorId: CHEAP_LINKEDIN_ACTOR_ID,
+    inputMode: 'criteria',
+    buildInput: buildLinkedInInput,
+    pricePerResultUsd: 0.0007,
+    resultCap: (_s, input) => Number(input.maxItems) || 0,
+  },
+  [CURIOUS_CODER_LINKEDIN_ACTOR_ID]: {
+    actorId: CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+    inputMode: 'search_urls',
+    buildInput: buildCuriousCoderLinkedInInput,
+    pricePerResultUsd: 0.001,
+    resultCap: (_s, input) => Number(input.count) || 0,
+    normalizeItem: normalizeCuriousCoderItem,
+  },
+};
+
+function linkedInAdapter(actorId: string): LinkedInScraperAdapter {
+  const normalized = actorId.replace(/\//g, '~');
+  const registered = LINKEDIN_SCRAPER_ADAPTERS[normalized];
+  if (registered) return registered;
+  // Backward compatibility for saved custom actors that already accept the legacy
+  // criteria contract. New actors should be explicitly registered above.
+  return {
+    ...LINKEDIN_SCRAPER_ADAPTERS[CHEAP_LINKEDIN_ACTOR_ID],
+    actorId: normalized,
+    pricePerResultUsd: 0.003,
+  };
+}
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -309,6 +407,8 @@ export interface RunSpec {
   portal: string;
   actorId: string;
   input: Record<string, unknown>;
+  estimatedResults: number;
+  pricePerResultUsd: number;
 }
 
 /**
@@ -322,21 +422,31 @@ export function planRuns(settings: Settings): RunSpec[] {
   const portals = settings.job_portals?.length ? settings.job_portals : ['linkedin'];
   const specs: RunSpec[] = [];
   for (const portal of portals) {
+    if (portal === 'linkedin') {
+      const adapter = linkedInAdapter(settings.apify_actor_id);
+      const input = adapter.buildInput(settings);
+      specs.push({
+        portal,
+        actorId: adapter.actorId,
+        input,
+        estimatedResults: adapter.resultCap(settings, input),
+        pricePerResultUsd: adapter.pricePerResultUsd,
+      });
+      continue;
+    }
     const config = PORTAL_CONFIG[portal];
     if (!config) continue;
-    const actorId = portal === 'linkedin' ? settings.apify_actor_id : config.actorId;
-    specs.push({ portal, actorId, input: config.buildInput(settings) });
+    const input = config.buildInput(settings);
+    specs.push({
+      portal,
+      actorId: config.actorId,
+      input,
+      estimatedResults: config.resultCap(settings, input),
+      pricePerResultUsd: config.pricePerResultUsd,
+    });
   }
   return specs;
 }
-
-/** FREE-tier per-job prices (store headlines show the GOLD tier — always the free price here). */
-const PORTAL_PRICE_PER_JOB_USD: Record<string, number> = {
-  linkedin: 0.0007, // cheap_scraper
-  indeed: 0.003,
-  glassdoor: 0.003,
-  career_sites: 0.012, // fantastic.jobs on free/bronze
-};
 
 /**
  * Worst-case cost of one full fetch across the enabled portals (ADR 0059): each
@@ -347,8 +457,7 @@ const PORTAL_PRICE_PER_JOB_USD: Record<string, number> = {
 export function estimateRunCostUsd(settings: Settings): number {
   let usd = 0;
   for (const spec of planRuns(settings)) {
-    const cap = Number(spec.input.maxItems ?? spec.input.limit ?? 0) || 0;
-    usd += cap * (PORTAL_PRICE_PER_JOB_USD[spec.portal] ?? 0.001);
+    usd += spec.estimatedResults * spec.pricePerResultUsd;
   }
   return Math.max(0.75, Math.round(usd * 1.3 * 100) / 100);
 }
@@ -366,7 +475,7 @@ export async function startAllPortalRuns(settings: Settings, webhookUrl: string)
         webhooks: [
           {
             eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT', 'ACTOR.RUN.ABORTED'],
-            requestUrl: `${webhookUrl}&portal=${encodeURIComponent(spec.portal)}`,
+            requestUrl: `${webhookUrl}&portal=${encodeURIComponent(spec.portal)}&actor_id=${encodeURIComponent(spec.actorId)}`,
           },
         ],
       });
@@ -378,10 +487,11 @@ export async function startAllPortalRuns(settings: Settings, webhookUrl: string)
 
 /** @deprecated Use startAllPortalRuns. Left for tests that import it directly. */
 export async function startActorRun(settings: Settings, webhookUrl: string): Promise<StartedRun> {
+  const adapter = linkedInAdapter(settings.apify_actor_id);
   const { api, apiKeyId } = await client();
   const run = await api
-    .actor(settings.apify_actor_id)
-    .start(buildActorInput(settings), {
+    .actor(adapter.actorId)
+    .start(adapter.buildInput(settings), {
       webhooks: [
         {
           eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT', 'ACTOR.RUN.ABORTED'],
@@ -539,7 +649,13 @@ function aiSalary(item: Record<string, unknown>): string | null {
 }
 
 /** Map one dataset item to a job row. Returns null if it has no usable URL. */
-export function mapDatasetItemToJob(item: Record<string, unknown>, source: string): MappedJob | null {
+export function mapDatasetItemToJob(
+  item: Record<string, unknown>,
+  source: string,
+  actorId?: string | null,
+): MappedJob | null {
+  const normalizedItem = actorId ? linkedInAdapter(actorId).normalizeItem?.(item) ?? item : item;
+  item = normalizedItem;
   const url = firstString(item, ['url', 'jobUrl', 'link', 'jobPostingUrl', 'job_url']);
   if (!url) return null;
   const applyUrl = firstString(item, ['applyUrl', 'applicationUrl', 'externalApplyLink', 'companyApplyUrl', 'applyLink']);

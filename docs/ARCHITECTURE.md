@@ -225,8 +225,10 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.
-- `lib/apify.ts` — actor start + dataset→job mapping. The only place that knows actor
-  input schema; swapping actors touches only this file + the settings value. New fork
+- `lib/apify.ts` — actor start + dataset→job mapping. LinkedIn actors use an adapter
+  registry that owns each actor's input builder, result cap, price, and output
+  normalization; `lib/linkedinScrapers.ts` exposes URL validation and client-safe
+  Settings descriptors (ADR 0113). New fork
   accounts default to the pay-per-result `cheap_scraper` actor (ADR 0076); paid rental
   actors are explicit user choices. Each run pins its launching vault key because an
   Apify dataset is private to that account (ADR 0077).
@@ -494,13 +496,21 @@ net: for each user it revives a dead chain via the ADR 0028 stale-lock takeover 
 when the unscored queue is empty, finalizes idle 'running' runs (a 10-minute grace
 window protects runs whose Apify webhook hasn't landed yet).
 
-## LinkedIn fetch strategy
-The LinkedIn actor input is keyword-mode only (ADR 0110): one plain-keyword search per
-role × location with the actor's native in-search filters (`jobType`,
-`experienceLevel`, `publishedAt`, and `workType` when every saved location is
-remote). Boolean `"A" OR "B"` queries and `startUrls` are never sent — since
-cheap_scraper build 0.0.35 the actor crawls only the first page of a startUrl and
-never paginates quoted queries, which collapsed fetch volume to ~40 jobs/run.
+## LinkedIn scraper adapters
+LinkedIn orchestration is actor-scoped (ADR 0113). Every run plan resolves an adapter
+that owns its input schema, result cap, pay-per-result estimate, and optional dataset
+normalizer. The signed webhook URL carries the actor ID so ingestion applies the same
+adapter to output without adding actor branches to the route.
+
+The default `cheap_scraper` adapter remains keyword-mode (ADR 0110): one plain-keyword
+search per role × location with native `jobType`, `experienceLevel`, `publishedAt`, and
+remote-only `workType` filters. It never sends boolean queries or `startUrls`.
+
+The opt-in `curious_coder` adapter is URL-driven. It sends saved full LinkedIn Jobs
+search URLs, whose query parameters preserve LinkedIn's filter set, and maps the app's
+hard result cap to the actor's `count`. Settings accept only HTTPS `linkedin.com`
+search-results paths, de-duplicate them, and cap the list at 20. Existing accounts are
+not switched automatically.
 
 ## Jobs view semantics
 

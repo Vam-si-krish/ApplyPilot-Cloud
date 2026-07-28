@@ -72,13 +72,14 @@ export async function POST(req: Request) {
     const items = await fetchDatasetItems(datasetId, apifyApiKeyId);
     // ?portal= is set by startAllPortalRuns; defaults to 'linkedin' for backward compat.
     const portal = new URL(req.url).searchParams.get('portal') || 'linkedin';
+    const actorId = new URL(req.url).searchParams.get('actor_id');
     const source = `apify:${portal}`;
 
     // Resolve the internal run UUID so jobs can be grouped by run in the UI.
     const internalRunId = owningRun?.id ?? null;
 
     const mapped = items
-      .map((it) => mapDatasetItemToJob(it, source))
+      .map((it) => mapDatasetItemToJob(it, source, portal === 'linkedin' ? actorId : null))
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
     // Cheap, local ATS-style résumé↔job match score (ADR 0053), computed once over

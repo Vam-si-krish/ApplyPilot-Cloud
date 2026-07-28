@@ -5,6 +5,10 @@ import {
   normalizeEmploymentType,
 } from './apify';
 import type { Settings } from './types';
+import {
+  CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+  validateLinkedInSearchUrls,
+} from './linkedinScrapers';
 
 function makeSettings(over: Partial<Settings> = {}): Settings {
   return {
@@ -30,6 +34,7 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     resume_worker_url: null,
     resume_worker_secret: null,
     apify_actor_id: 'cheap_scraper~linkedin-job-scraper',
+    linkedin_search_urls: [],
     job_portals: ['linkedin'],
     auto_scrape_enabled: true,
     auto_tailor_enabled: false,
@@ -125,6 +130,68 @@ describe('planRuns — keyword-mode LinkedIn run with native filters (ADR 0110)'
   it('passes the user skills to the actor as resumeKeywords', () => {
     const input = planRuns(makeSettings())[0].input;
     expect(input.resumeKeywords).toEqual([{ keyword: 'React' }, { keyword: 'TypeScript' }]);
+  });
+});
+
+describe('LinkedIn scraper adapter registry (ADR 0113)', () => {
+  const filteredUrl = 'https://www.linkedin.com/jobs/search/?keywords=Platform%20Engineer&f_TPR=r86400&f_WT=2';
+
+  it('builds the Curious Coder URL contract instead of the criteria contract', () => {
+    const run = planRuns(makeSettings({
+      apify_actor_id: CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+      linkedin_search_urls: [filteredUrl],
+      max_jobs_per_run: 250,
+    }))[0];
+
+    expect(run.actorId).toBe(CURIOUS_CODER_LINKEDIN_ACTOR_ID);
+    expect(run.input).toMatchObject({
+      urls: [filteredUrl],
+      count: 250,
+      scrapeCompany: true,
+      useIncognitoMode: true,
+      splitByLocation: false,
+    });
+    expect(run.input.keyword).toBeUndefined();
+    expect(run.input.locations).toBeUndefined();
+    expect(run.estimatedResults).toBe(250);
+    expect(run.pricePerResultUsd).toBe(0.001);
+  });
+
+  it('requires a saved search URL before planning a URL-driven run', () => {
+    expect(() => planRuns(makeSettings({
+      apify_actor_id: CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+      linkedin_search_urls: [],
+    }))).toThrow(/requires at least one LinkedIn Jobs search URL/i);
+  });
+
+  it('validates reusable LinkedIn search URLs and rejects job-detail or lookalike hosts', () => {
+    const result = validateLinkedInSearchUrls([
+      filteredUrl,
+      filteredUrl,
+      'https://www.linkedin.com/jobs/view/123',
+      'https://linkedin.com.example.test/jobs/search/?keywords=x',
+    ]);
+    expect(result.urls).toEqual([filteredUrl]);
+    expect(result.invalid).toHaveLength(2);
+  });
+
+  it('uses the registered actor price in the preflight estimate', () => {
+    expect(estimateRunCostUsd(makeSettings({
+      apify_actor_id: CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+      linkedin_search_urls: [filteredUrl],
+      max_jobs_per_run: 1000,
+    }))).toBe(1.3);
+  });
+
+  it('normalizes Curious Coder salary arrays and apply methods', () => {
+    const job = mapDatasetItemToJob({
+      link: 'https://www.linkedin.com/jobs/view/123',
+      title: 'Platform Engineer',
+      salaryInfo: ['$150,000', '$180,000'],
+      applyMethod: { type: 'Easy Apply' },
+    }, 'apify:linkedin', CURIOUS_CODER_LINKEDIN_ACTOR_ID);
+    expect(job?.salary).toBe('$150,000 – $180,000');
+    expect(job?.easy_apply).toBe(true);
   });
 });
 

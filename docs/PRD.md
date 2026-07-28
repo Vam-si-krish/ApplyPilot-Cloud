@@ -218,7 +218,8 @@ current fork scope is instead the two-phase server-laptop plan at the top of thi
   `full_description` is missing. Verify for the chosen actor.
 
 ## Open questions / risks
-- Exact Apify actor input schema varies per actor — input mapping is abstracted and the
-  actor id is configurable (ADR 0005). The fork defaults to the pay-per-result
-  `cheap_scraper~linkedin-job-scraper` (ADR 0076); paid rental actors remain optional.
+- Exact Apify actor input/output schema and price vary per actor. LinkedIn integrations
+  are registered adapters that own those contracts and their cost estimate (ADR 0113).
+  The fork defaults to criteria-driven `cheap_scraper~linkedin-job-scraper` (ADR 0076);
+  the opt-in Curious Coder adapter accepts reusable filtered LinkedIn Jobs search URLs.
 - Re-trigger mechanism for chunked scoring (self-fetch vs. queue) — see ARCHITECTURE.

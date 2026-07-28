@@ -6,6 +6,10 @@ import {
   Search, Clock3, Sparkles, KeyRound, SlidersHorizontal, ArrowRight,
 } from 'lucide-react';
 import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/types';
+import {
+  CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+  LINKEDIN_SCRAPER_OPTIONS,
+} from '@/lib/linkedinScrapers';
 
 const PROVIDERS = [
   { id: 'gemini', label: 'Google Gemini', model: 'gemini-2.0-flash' },
@@ -58,12 +62,6 @@ const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
   { value: 'America/Anchorage', label: 'Alaska (America/Anchorage)' },
   { value: 'Pacific/Honolulu', label: 'Hawaii (Pacific/Honolulu)' },
   { value: 'UTC', label: 'UTC' },
-];
-
-const ACTORS = [
-  { id: 'cheap_scraper~linkedin-job-scraper', label: 'Pay per result — recommended (cheap_scraper)' },
-  { id: 'bebity~linkedin-jobs-scraper', label: 'Paid rental — $29.99/mo + usage (bebity)' },
-  { id: 'fascinating_lentil~linkedin-jobs-scraper', label: 'Alternative (fascinating_lentil)' },
 ];
 
 // LinkedIn f_E facet (ADR 0058). Mirrors LINKEDIN_EXPERIENCE_LEVELS in lib/apify.ts,
@@ -693,11 +691,11 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <select
-                  value={ACTORS.find((a) => a.id === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
+                  value={LINKEDIN_SCRAPER_OPTIONS.find((a) => a.actorId === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
                   onChange={(e) => { if (e.target.value !== 'custom') patch({ apify_actor_id: e.target.value }); }}
                   className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text"
                 >
-                  {ACTORS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  {LINKEDIN_SCRAPER_OPTIONS.map((a) => <option key={a.actorId} value={a.actorId}>{a.label}</option>)}
                   <option value="custom">Custom...</option>
                 </select>
               </div>
@@ -710,8 +708,32 @@ export default function SettingsPage() {
               />
             </div>
 
+            {s.apify_actor_id === CURIOUS_CODER_LINKEDIN_ACTOR_ID && (
+              <div className="mt-4 rounded-lg border border-sky/20 bg-sky/5 p-4">
+                <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-muted">
+                  LinkedIn Jobs search URLs
+                </p>
+                <textarea
+                  value={(s.linkedin_search_urls ?? []).join('\n')}
+                  onChange={(event) => patch({
+                    linkedin_search_urls: event.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
+                  })}
+                  rows={5}
+                  placeholder="https://www.linkedin.com/jobs/search/?keywords=Software%20Engineer&f_TPR=r86400..."
+                  className="w-full resize-y rounded-lg border border-ink bg-base/80 px-3 py-2 font-mono text-[12px] text-slate-text outline-none transition-colors placeholder:text-slate-muted focus:border-sky/50 focus:ring-1 focus:ring-sky/25"
+                />
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-muted">
+                  One URL per line. In LinkedIn Jobs, set all filters—including Past 24 hours—then copy the full
+                  search-results URL from the address bar. A public/incognito search URL is the most reliable.
+                  The same saved URL can run every day because LinkedIn keeps the filters in its query parameters.
+                </p>
+              </div>
+            )}
+
             {/* Experience-level facet (ADR 0058) — baked into the search URL (f_E),
                 so filtered-out jobs are never fetched or billed. */}
+            {s.apify_actor_id !== CURIOUS_CODER_LINKEDIN_ACTOR_ID && (
+            <>
             <p className="text-[11px] text-slate-muted mt-4 mb-2 font-medium uppercase tracking-wider">Experience Levels</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               {EXPERIENCE_LEVELS.map(({ value, label }) => {
@@ -738,6 +760,8 @@ export default function SettingsPage() {
               Filters inside LinkedIn&apos;s search, <span className="text-slate-text">before</span> the pay-per-result actor
               bills anything. None checked = no filter.
             </p>
+            </>
+            )}
           </div>
         )}
 
