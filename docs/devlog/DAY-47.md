@@ -35,3 +35,25 @@ documentation check passed. The complete 0001–0059 migration chain applied suc
 to a disposable PostgreSQL cluster; `settings.linkedin_search_urls` was verified as a
 non-null `text[]` with an empty-array default. The stopped disposable cluster was moved
 to Trash after verification.
+
+## ✅ URL-mode settings and actor-default pagination follow-up
+
+The first production URL-mode run returned exactly 10 rows even though the saved Total
+run cap was 800. Inspection confirmed ApplyPilot's plan already mapped that setting to
+`count: 800`; the 10-row result was therefore not caused by the displayed roles,
+locations, age, or per-role settings. Those controls were nevertheless misleading
+because Curious Coder ignores them.
+
+- URL mode now hides role, location, lookback, and per-role controls while preserving
+  their saved libraries, unless another enabled portal still needs those criteria.
+  Skills and local pre-scoring remain visible and active.
+- The URL editor and cap control show the exact next-run result request.
+- ApplyPilot no longer forces `useIncognitoMode` or `splitByLocation`; it sends only the
+  validated URLs, explicit `count`, and company-detail choice so maintained actor
+  defaults own pagination behavior.
+- No paid verification run was started. A result below the displayed request remains a
+  LinkedIn availability or actor-pagination outcome, not a hidden ApplyPilot limit.
+
+Follow-up verification: 269 app tests passed (16 eval cases intentionally skipped), 21
+backend/isolation tests passed, typecheck passed, production build passed, and
+documentation check passed.

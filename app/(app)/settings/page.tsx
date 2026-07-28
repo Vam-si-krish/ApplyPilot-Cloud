@@ -9,6 +9,7 @@ import type { Settings, ApiKeyMasked, ApiKeyProvider, GmailStatus } from '@/lib/
 import {
   CURIOUS_CODER_LINKEDIN_ACTOR_ID,
   LINKEDIN_SCRAPER_OPTIONS,
+  curiousCoderResultCap,
 } from '@/lib/linkedinScrapers';
 
 const PROVIDERS = [
@@ -233,6 +234,12 @@ export default function SettingsPage() {
   }
 
   const category = SETTINGS_CATEGORIES.find((item) => item.id === activeCategory) ?? SETTINGS_CATEGORIES[0];
+  const selectedJobPortals = s.job_portals ?? ['linkedin'];
+  const usesLinkedInUrlSearch = selectedJobPortals.includes('linkedin')
+    && s.apify_actor_id === CURIOUS_CODER_LINKEDIN_ACTOR_ID;
+  const hideCriteriaControls = usesLinkedInUrlSearch
+    && !selectedJobPortals.some((portal) => portal !== 'linkedin');
+  const linkedInUrlResultCap = curiousCoderResultCap(s);
 
   return (
     <div className="max-w-6xl p-4 sm:p-6 lg:p-8 animate-slide-up">
@@ -400,11 +407,24 @@ export default function SettingsPage() {
       {/* Search */}
       {activeCategory === 'search' && (
       <Section title="Search Criteria">
-        <p className="text-slate-muted text-[12px] mb-4">
-          Build a library of roles and locations once — they stay here. Each run searches only the ones you
-          <span className="text-sky"> select</span> (highlighted). Click to toggle; the × removes one from the library.
-        </p>
-
+        {usesLinkedInUrlSearch && (
+          <div className="mb-5 rounded-lg border border-sky/25 bg-sky/5 px-4 py-3">
+            <p className="text-[13px] font-medium text-slate-text">LinkedIn filters come from your saved search URLs</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-muted">
+              Roles, locations, job age, and LinkedIn facets are encoded in each URL.
+              {hideCriteriaControls
+                ? ' The criteria libraries are preserved but inactive for this scraper.'
+                : ' The criteria controls remain visible because another enabled portal still uses them.'}
+              {' '}Skills and pre-scoring below still run locally after jobs arrive.
+            </p>
+          </div>
+        )}
+        {!hideCriteriaControls && (
+          <>
+          <p className="text-slate-muted text-[12px] mb-4">
+            Build a library of roles and locations once — they stay here. Each run searches only the ones you
+            <span className="text-sky"> select</span> (highlighted). Click to toggle; the × removes one from the library.
+          </p>
         <LibraryPicker
           label="Roles / keywords"
           options={s.keyword_options ?? []}
@@ -449,6 +469,8 @@ export default function SettingsPage() {
             });
           }}
         />
+          </>
+        )}
 
         <SkillsEditor skills={s.skills ?? []} onChange={(v) => patch({ skills: v })} />
 
@@ -474,6 +496,18 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {hideCriteriaControls ? (
+          <div className="mt-2 max-w-sm">
+            <Field
+              label="LinkedIn URL result cap"
+              value={String(s.max_jobs_per_run ?? 0)}
+              onChange={(v) => patch({ max_jobs_per_run: Math.max(0, Number(v) || 0) })}
+              placeholder="100"
+              hint={`Curious Coder will receive count: ${linkedInUrlResultCap}. This is a maximum request, not a guarantee that LinkedIn or the actor will return that many jobs.`}
+            />
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
           <Field label="Job age lookback" value={String(s.hours_old)} onChange={(v) => patch({ hours_old: Number(v) || 24 })} hint="How many hours back each source should search. 24 means jobs posted in roughly the last day." />
           <Field label="Results per role" value={String(s.results_per_query)} onChange={(v) => patch({ results_per_query: Number(v) || 50 })} hint="Requested result count for each selected role. Sources may return fewer." />
@@ -493,6 +527,8 @@ export default function SettingsPage() {
           Each role is searched in every location with your filters applied in-search; results de-duplicate and obey{' '}
           <span className="font-mono">Total run cap</span> (min 150).
         </p>
+        </>
+        )}
       </Section>
       )}
 
@@ -692,7 +728,15 @@ export default function SettingsPage() {
               <div>
                 <select
                   value={LINKEDIN_SCRAPER_OPTIONS.find((a) => a.actorId === s.apify_actor_id) ? s.apify_actor_id : 'custom'}
-                  onChange={(e) => { if (e.target.value !== 'custom') patch({ apify_actor_id: e.target.value }); }}
+                  onChange={(e) => {
+                    if (e.target.value === 'custom') return;
+                    patch({
+                      apify_actor_id: e.target.value,
+                      ...(e.target.value === CURIOUS_CODER_LINKEDIN_ACTOR_ID && (s.max_jobs_per_run ?? 0) === 0
+                        ? { max_jobs_per_run: 100 }
+                        : {}),
+                    });
+                  }}
                   className="w-full bg-base/80 border border-ink focus:border-sky/50 focus:ring-1 focus:ring-sky/25 outline-none transition-colors px-3 py-2 rounded-lg text-[13px] text-slate-text"
                 >
                   {LINKEDIN_SCRAPER_OPTIONS.map((a) => <option key={a.actorId} value={a.actorId}>{a.label}</option>)}
@@ -726,6 +770,10 @@ export default function SettingsPage() {
                   One URL per line. In LinkedIn Jobs, set all filters—including Past 24 hours—then copy the full
                   search-results URL from the address bar. A public/incognito search URL is the most reliable.
                   The same saved URL can run every day because LinkedIn keeps the filters in its query parameters.
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-sky">
+                  Next run request: up to {linkedInUrlResultCap.toLocaleString()} jobs across{' '}
+                  {(s.linkedin_search_urls ?? []).length} saved URL{(s.linkedin_search_urls ?? []).length === 1 ? '' : 's'}.
                 </p>
               </div>
             )}

@@ -148,9 +148,9 @@ describe('LinkedIn scraper adapter registry (ADR 0113)', () => {
       urls: [filteredUrl],
       count: 250,
       scrapeCompany: true,
-      useIncognitoMode: true,
-      splitByLocation: false,
     });
+    expect(run.input.useIncognitoMode).toBeUndefined();
+    expect(run.input.splitByLocation).toBeUndefined();
     expect(run.input.keyword).toBeUndefined();
     expect(run.input.locations).toBeUndefined();
     expect(run.estimatedResults).toBe(250);

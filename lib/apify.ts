@@ -10,6 +10,7 @@ import { getActiveApiCredential, getApiCredentialById } from './credentials';
 import {
   CHEAP_LINKEDIN_ACTOR_ID,
   CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+  curiousCoderResultCap,
   validateLinkedInSearchUrls,
 } from './linkedinScrapers';
 
@@ -153,13 +154,6 @@ function buildLinkedInInput(settings: Settings): Record<string, unknown> {
   return input;
 }
 
-function curiousCoderResultCap(settings: Settings): number {
-  const configured = settings.max_jobs_per_run > 0
-    ? settings.max_jobs_per_run
-    : settings.results_per_query * Math.max(1, (settings.linkedin_search_urls ?? []).length);
-  return Math.max(configured, 10);
-}
-
 function buildCuriousCoderLinkedInInput(settings: Settings): Record<string, unknown> {
   const { urls, invalid } = validateLinkedInSearchUrls(settings.linkedin_search_urls ?? []);
   if (invalid.length) throw new Error(`Invalid LinkedIn Jobs search URL: ${invalid[0]}`);
@@ -170,8 +164,6 @@ function buildCuriousCoderLinkedInInput(settings: Settings): Record<string, unkn
     urls,
     count: curiousCoderResultCap(settings),
     scrapeCompany: true,
-    useIncognitoMode: true,
-    splitByLocation: false,
   };
 }
 

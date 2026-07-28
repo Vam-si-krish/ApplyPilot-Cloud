@@ -510,7 +510,11 @@ The opt-in `curious_coder` adapter is URL-driven. It sends saved full LinkedIn J
 search URLs, whose query parameters preserve LinkedIn's filter set, and maps the app's
 hard result cap to the actor's `count`. Settings accept only HTTPS `linkedin.com`
 search-results paths, de-duplicate them, and cap the list at 20. Existing accounts are
-not switched automatically.
+not switched automatically. URL mode hides criteria controls that do not feed this
+adapter when no other enabled portal needs them, preserves those libraries for later,
+and previews the exact planned `count`;
+skills and the local pre-scoring filter remain active after ingestion. Optional actor
+execution flags are left to actor defaults rather than being forced by ApplyPilot.
 
 ## Jobs view semantics
 

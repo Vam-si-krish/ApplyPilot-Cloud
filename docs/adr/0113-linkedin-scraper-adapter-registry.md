@@ -30,7 +30,8 @@ shape. Its pay-per-result price also differs from the existing default.
 - `cheap_scraper` remains the default and retains ADR 0110's criteria/keyword strategy.
 - `curious_coder` is an explicit Settings choice. It reads up to 20 persisted,
   de-duplicated HTTPS LinkedIn Jobs search URLs, sends them as `urls`, and applies the
-  configured hard cap as `count` (minimum 10).
+  configured hard cap as `count` (minimum 10). Optional actor execution flags are
+  omitted so the actor's maintained defaults control pagination behavior.
 - Search URLs must use a real `linkedin.com` host and the `/jobs/search` or
   `/jobs/search-results` path. Job-detail URLs and lookalike hosts are rejected before
   persistence.
@@ -51,4 +52,7 @@ shape. Its pay-per-result price also differs from the existing default.
 - Existing accounts and schedules do not change actor automatically. Selecting the new
   actor can incur Apify charges, so no live actor run is part of implementation
   verification.
-
+- In URL mode, Settings hides the inactive role, location, lookback, and per-role
+  controls when no other criteria-driven portal is enabled. It keeps local
+  skills/prefilter controls and shows the exact `count` planned for the next run beside
+  the saved URLs.

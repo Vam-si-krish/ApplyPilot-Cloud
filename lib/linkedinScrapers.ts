@@ -1,3 +1,5 @@
+import type { Settings } from './types';
+
 export const CHEAP_LINKEDIN_ACTOR_ID = 'cheap_scraper~linkedin-job-scraper';
 export const CURIOUS_CODER_LINKEDIN_ACTOR_ID = 'curious_coder~linkedin-jobs-scraper';
 
@@ -27,6 +29,16 @@ function isLinkedInHostname(hostname: string): boolean {
 export interface LinkedInUrlValidation {
   urls: string[];
   invalid: string[];
+}
+
+/** Effective Curious Coder `count`, shared by run planning and the Settings preview. */
+export function curiousCoderResultCap(
+  settings: Pick<Settings, 'max_jobs_per_run' | 'results_per_query' | 'linkedin_search_urls'>,
+): number {
+  const configured = settings.max_jobs_per_run > 0
+    ? settings.max_jobs_per_run
+    : settings.results_per_query * Math.max(1, (settings.linkedin_search_urls ?? []).length);
+  return Math.max(configured, 10);
 }
 
 /**
@@ -63,4 +75,3 @@ export function validateLinkedInSearchUrls(values: unknown[]): LinkedInUrlValida
   }
   return { urls, invalid };
 }
-
