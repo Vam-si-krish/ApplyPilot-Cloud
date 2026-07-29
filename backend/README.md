@@ -5,7 +5,7 @@ dependency on Supabase and no runtime access to the existing ApplyPilot producti
 The architecture decision and phase boundary are recorded in
 [ADR 0072](../docs/adr/0072-independent-multi-user-fork-foundation.md).
 
-Phase 2A supports four fixed production accounts with forced RLS ownership, user-namespaced files,
+Phase 2A supports five fixed production accounts with forced RLS ownership, user-namespaced files,
 and optional UUID-isolated Claude or ChatGPT subscription connections. Public signup remains
 deferred; credentials are configured only in Netlify.
 
@@ -131,7 +131,7 @@ BACKEND_URL=<PUBLIC_URL>
 BACKEND_SERVICE_KEY=<SERVICE_ROLE_KEY>
 RESUME_WORKER_URL=<PUBLIC_URL>/worker
 RESUME_WORKER_SECRET=<WORKER_SECRET>
-APP_USERS_JSON=<three baseline account objects plus the migration-0053 Rishab account in production>
+APP_USERS_JSON=<three baseline account objects plus the migration-0053 Rishab and migration-0060 Ruby accounts in production>
 AUTH_SECRET=<new random value>
 CRON_SECRET=<new random value>
 NEXT_PUBLIC_APP_URL=<new Netlify/custom-domain URL>

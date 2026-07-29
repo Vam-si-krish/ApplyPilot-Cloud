@@ -6,7 +6,7 @@ When adding a durable decision, add it to the appropriate row.
 
 | Surface | Current ADRs |
 |---|---|
-| Product fork, isolation, fixed-user ownership, gateway/RLS | [0072](adr/0072-independent-multi-user-fork-foundation.md), [0073](adr/0073-fixed-accounts-and-enforced-user-ownership.md), [0075](adr/0075-deployment-managed-worker-boundary.md), [0103](adr/0103-fourth-production-fixed-account.md) |
+| Product fork, isolation, fixed-user ownership, gateway/RLS | [0072](adr/0072-independent-multi-user-fork-foundation.md), [0073](adr/0073-fixed-accounts-and-enforced-user-ownership.md), [0075](adr/0075-deployment-managed-worker-boundary.md), [0103](adr/0103-fourth-production-fixed-account.md), [0115](adr/0115-fifth-production-fixed-account.md) |
 | Development/production branches and guarded personal-laptop operations | [0088](adr/0088-restricted-personal-laptop-server-control.md), [0089](adr/0089-isolated-development-environment.md), [0109](adr/0109-public-funnel-health-and-onboarding-failure-state.md) |
 | Authorized data-transfer exceptions | [0087](adr/0087-explicit-owner-snapshot-cutover.md), [0091](adr/0091-owner-authorized-development-seed-and-key-copy.md), [0097](adr/0097-owner-production-profile-development-transfer.md) |
 | Apify discovery, callbacks, key ownership, and deduplication | [0004](adr/0004-decouple-fetch-and-score.md), [0005](adr/0005-configurable-apify-actor.md), [0076](adr/0076-free-tier-linkedin-actor-default.md), [0077](adr/0077-pin-apify-callback-url-and-run-key.md), [0110](adr/0110-linkedin-keyword-mode-fetch.md), [0113](adr/0113-linkedin-scraper-adapter-registry.md) |

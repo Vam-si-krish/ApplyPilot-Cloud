@@ -21,7 +21,10 @@ export const FIXED_USER_IDS = [
   '00000000-0000-4000-8000-000000000002',
   '00000000-0000-4000-8000-000000000003',
   '578fcb56-5900-4d0d-be20-6b6c191554b7',
+  'e434e565-6be0-4c9e-b396-0f2323cf6045',
 ] as const;
+
+const RUBY_USER_ID = 'e434e565-6be0-4c9e-b396-0f2323cf6045';
 
 function secret(): string {
   const value = process.env.AUTH_SECRET;
@@ -70,7 +73,7 @@ export function configuredUsers(): FixedUser[] {
     throw new Error('APP_USERS_JSON must be valid JSON');
   }
   if (!Array.isArray(parsed) || parsed.length < 3 || parsed.length > FIXED_USER_IDS.length) {
-    throw new Error('APP_USERS_JSON must contain the three baseline accounts and may include Rishab');
+    throw new Error('APP_USERS_JSON must contain the three baseline accounts and may include provisioned optional accounts');
   }
   const users = parsed.map((entry): FixedUser => {
     const row = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
@@ -84,7 +87,10 @@ export function configuredUsers(): FixedUser[] {
     if (!/^[a-z0-9_.-]{3,32}$/.test(username)) {
       throw new Error('Every fixed account needs a 3–32 character username');
     }
-    if (password.length < 10) throw new Error('Every fixed account password must be at least 10 characters');
+    const minimumPasswordLength = id === RUBY_USER_ID ? 6 : 10;
+    if (password.length < minimumPasswordLength) {
+      throw new Error(`Fixed account password must be at least ${minimumPasswordLength} characters`);
+    }
     return { id, username, password, displayName };
   });
   if (new Set(users.map((user) => user.id)).size !== users.length
