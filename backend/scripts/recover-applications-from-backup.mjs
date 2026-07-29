@@ -40,7 +40,6 @@ async function backupContainsAll(filename, ids) {
   for await (const chunk of stream) {
     const text = carry + chunk.toString('utf8');
     for (const id of ids) if (!found.has(id) && text.includes(id)) found.add(id);
-    if (found.size === ids.length) return true;
     carry = text.slice(-40);
   }
   return found.size === ids.length;

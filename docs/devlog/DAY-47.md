@@ -95,3 +95,7 @@ gap: the forced-command environment did not inherit the server-managed Node path
 recovery command now executes through the same bounded login-shell pattern used by
 deployment, while preserving the already validated fixed script path, mode, and UUID
 arguments.
+
+The second preview likewise made no data changes. It found both UUIDs but returned before
+the gzip pipeline drained, surfacing an `EPIPE`. Backup discovery now scans each candidate
+archive to completion before choosing it, avoiding premature stream teardown.
