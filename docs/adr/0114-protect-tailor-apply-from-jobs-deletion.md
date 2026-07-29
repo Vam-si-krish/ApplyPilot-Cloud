@@ -21,8 +21,8 @@ CASCADE`, silently deleting the Tailor & Apply row and its résumé-generation s
   succeeded.
 - Keep a bounded production recovery command for one to ten application UUIDs. It
   validates every UUID, finds the newest retained backup containing all requested rows,
-  restores that dump only into a temporary database, previews by default, and writes
-  only after an explicit apply command.
+  extracts only the selected application and linked-job `COPY` records, previews by
+  default, and writes only after an explicit apply command.
 
 ## Consequences
 
@@ -35,5 +35,5 @@ Recovery remains an exceptional, audited operator action rather than an end-user
 
 Cover the initial hide state, `idsOnly` predicate application, delete-route guard ordering,
 restricted-command validation, app/backend tests, type checking, production build,
-documentation validation, production backup preview, exact two-row restore, and post-
-restore counts.
+documentation validation, production backup preview, exact two-row restore, and
+post-restore counts.

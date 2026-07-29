@@ -75,8 +75,8 @@ applied application rows remained present.
 - Bulk delete counts successful, protected, and failed responses instead of treating any
   HTTP response as success.
 - The restricted server operator surface gained a one-to-ten-UUID backup recovery path.
-  It searches retained backups, restores the selected dump into a disposable database,
-  previews non-sensitive row identity/state, and writes the exact job+application rows
+  It searches retained backups, extracts only the selected application and linked-job
+  `COPY` records, previews non-sensitive row identity/state, and writes the exact rows
   only with an explicit apply command.
 
 Data owner is the authenticated user's forced-RLS jobs/applications pair. The caller is
@@ -104,3 +104,9 @@ The third preview reached the isolated temporary restore, where `psql` closed it
 early and the decompressor's secondary `EPIPE` masked the primary database error. The
 recovery pipeline now handles only that expected pipe-close signal and preserves the
 actual PostgreSQL diagnostic. No live write path was reached.
+
+The full-database preview was terminated after five minutes without reaching apply.
+Recovery now parses PostgreSQL's text `COPY` sections directly in two bounded passes:
+first the requested application UUIDs, then only their linked job UUIDs. It also removes
+any stale `jobpilot_recovery_*` temporary database from the interrupted attempt before
+previewing. No production row or file was changed by the abandoned restore.

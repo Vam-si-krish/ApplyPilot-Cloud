@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { readFileSync as readFileSyncNative } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
+import { copyRows, decodeCopyField } from './scripts/recover-applications-from-backup.mjs';
 
 const backend = dirname(fileURLToPath(import.meta.url));
 const script = join(backend, 'scripts', 'remote-control.sh');
@@ -30,8 +34,8 @@ test('remote control documents only its bounded command surface', () => {
 });
 
 test('shared relay recovery reconnects Tailscale without resetting Funnel configuration', () => {
-  const remoteControl = readFileSync(script, 'utf8');
-  const recovery = readFileSync(join(backend, 'scripts', 'recover-funnel-relay.sh'), 'utf8');
+  const remoteControl = readFileSyncNative(script, 'utf8');
+  const recovery = readFileSyncNative(join(backend, 'scripts', 'recover-funnel-relay.sh'), 'utf8');
   assert.match(remoteControl, /shared Funnel relay recovery is production-only/);
   assert.match(recovery, /tailscale down --accept-risk=lose-ssh --reason/);
   assert.match(recovery, /tailscale up/);
@@ -39,9 +43,9 @@ test('shared relay recovery reconnects Tailscale without resetting Funnel config
 });
 
 test('Funnel repair is bounded to the selected instance path and externally verified', () => {
-  const remoteControl = readFileSync(script, 'utf8');
-  const watchdog = readFileSync(join(backend, 'scripts', 'watchdog.sh'), 'utf8');
-  const publicCheck = readFileSync(join(backend, 'scripts', 'check-public-funnel.sh'), 'utf8');
+  const remoteControl = readFileSyncNative(script, 'utf8');
+  const watchdog = readFileSyncNative(join(backend, 'scripts', 'watchdog.sh'), 'utf8');
+  const publicCheck = readFileSyncNative(join(backend, 'scripts', 'check-public-funnel.sh'), 'utf8');
   assert.match(remoteControl, /repair-funnel\)/);
   assert.match(remoteControl, /--set-path "\/\$\{APP_PATH\}"/);
   assert.match(remoteControl, /--set-path "\/\$\{APP_PATH\}" off/);
@@ -67,19 +71,47 @@ test('remote control rejects shell syntax and unapproved commands without evalua
 });
 
 test('application recovery is preview-first, UUID-bounded, and never a public endpoint', () => {
-  const remoteControl = readFileSync(script, 'utf8');
-  const recovery = readFileSync(join(backend, 'scripts', 'recover-applications-from-backup.mjs'), 'utf8');
+  const remoteControl = readFileSyncNative(script, 'utf8');
+  const recovery = readFileSyncNative(join(backend, 'scripts', 'recover-applications-from-backup.mjs'), 'utf8');
   assert.match(remoteControl, /recover-applications-preview <1-10 application UUIDs>/);
   assert.match(remoteControl, /IDS\[@\].*<= 10/);
   assert.match(remoteControl, /\/bin\/zsh -lc 'exec node "\$@"' jobpilot-recovery/);
   assert.match(recovery, /argv\[0\] === '--apply'/);
-  assert.match(recovery, /temporary backup restore failed/);
+  assert.match(recovery, /copyRows\(backup, 'applications'/);
+  assert.match(recovery, /copyRows\(backup, 'jobs'/);
   assert.match(recovery, /on conflict \(id\) do nothing/);
 });
 
+test('application recovery decodes only requested PostgreSQL COPY rows', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'jobpilot-recovery-test-'));
+  const backup = join(root, 'db-test.sql.gz');
+  const applicationId = '9231d556-ed75-429a-88ee-b1eb435c467e';
+  const otherId = '707b27ea-004b-452b-b534-1dd4428d0187';
+  const sql = [
+    'COPY public.applications (id, job_id, note, optional) FROM stdin;',
+    [applicationId, '11111111-1111-4111-8111-111111111111', String.raw`hello\tworld`, String.raw`\N`].join('\t'),
+    [otherId, '22222222-2222-4222-8222-222222222222', 'ignored', 'value'].join('\t'),
+    String.raw`\.`,
+    '',
+  ].join('\n');
+  await writeFile(backup, gzipSync(sql));
+  try {
+    const rows = await copyRows(backup, 'applications', new Set([applicationId]));
+    assert.deepEqual(rows, [{
+      id: applicationId,
+      job_id: '11111111-1111-4111-8111-111111111111',
+      note: 'hello\tworld',
+      optional: null,
+    }]);
+    assert.equal(decodeCopyField(String.raw`line\nnext\\value`), 'line\nnext\\value');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('deploy uses login-shell reconciliation after a partial checkout update', () => {
-  const remoteControl = readFileSync(script, 'utf8');
-  const autopull = readFileSync(join(backend, 'scripts', 'autopull.sh'), 'utf8');
+  const remoteControl = readFileSyncNative(script, 'utf8');
+  const autopull = readFileSyncNative(join(backend, 'scripts', 'autopull.sh'), 'utf8');
   assert.match(remoteControl, /\/bin\/zsh -lc .*--reconcile/);
   assert.match(autopull, /RECONCILE/);
   assert.match(autopull, /reconciling/);
@@ -92,7 +124,7 @@ test('remote control requires an explicit allowlisted environment target', () =>
 });
 
 test('development provisioning is a single bounded commit-addressed command', () => {
-  const remoteControl = readFileSync(script, 'utf8');
+  const remoteControl = readFileSyncNative(script, 'utf8');
   assert.match(remoteControl, /provision-development <7-40 character git commit>/);
   assert.match(remoteControl, /provision-development \[0-9a-f\]/);
   assert.doesNotMatch(remoteControl, /^\s*eval\b/m);

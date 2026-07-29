@@ -4,15 +4,16 @@
  * production backup containing all requested application UUIDs.
  *
  * The forced-command operator path validates every UUID and caps the request at ten.
- * This script still validates independently, restores the dump into an isolated
- * temporary database, previews only non-sensitive metadata by default, and writes to
- * the live database only with --apply.
+ * This script still validates independently, extracts only the requested COPY rows,
+ * previews non-sensitive metadata by default, and writes to the live database only
+ * with --apply.
  */
 import { createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGunzip } from 'node:zlib';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import pg from 'pg';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -63,31 +64,48 @@ function run(command, args, options = {}) {
   return result.stdout;
 }
 
-async function restoreDump(filename, database) {
-  const gunzip = spawn('gunzip', ['-c', filename], { stdio: ['ignore', 'pipe', 'pipe'] });
-  const psql = spawn(
-    'docker',
-    ['exec', '-i', 'applypilot-db', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', database],
-    { stdio: ['pipe', 'ignore', 'pipe'] },
-  );
-  gunzip.stdout.pipe(psql.stdin);
-  let errors = '';
-  // If psql rejects the dump, it closes stdin while gunzip is still producing data.
-  // Ignore that expected secondary EPIPE so the primary PostgreSQL error below is
-  // reported instead of crashing Node with an unhandled stream event.
-  gunzip.stdout.on('error', (error) => {
-    if (error?.code !== 'EPIPE') errors += String(error);
+export function decodeCopyField(value) {
+  if (value === String.raw`\N`) return null;
+  const escapes = { b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', '\\': '\\' };
+  return value.replace(/\\(?:([0-7]{1,3})|x([0-9a-fA-F]{2})|(.))/g, (match, octal, hex, other) => {
+    if (octal) return String.fromCharCode(Number.parseInt(octal, 8));
+    if (hex) return String.fromCharCode(Number.parseInt(hex, 16));
+    const key = other?.[0] ?? '';
+    return escapes[key] ?? key;
   });
-  psql.stdin.on('error', (error) => {
-    if (error?.code !== 'EPIPE') errors += String(error);
-  });
-  gunzip.stderr.on('data', (chunk) => { errors += chunk.toString(); });
-  psql.stderr.on('data', (chunk) => { errors += chunk.toString(); });
-  const [gunzipCode, psqlCode] = await Promise.all([
-    new Promise((resolve) => gunzip.on('close', resolve)),
-    new Promise((resolve) => psql.on('close', resolve)),
+}
+
+export async function copyRows(filename, table, wantedIds) {
+  const input = createReadStream(filename).pipe(createGunzip());
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  const rows = [];
+  let columns = null;
+  for await (const line of lines) {
+    if (!columns) {
+      const match = line.match(new RegExp(`^COPY public\\.${table} \\((.+)\\) FROM stdin;$`));
+      if (match) columns = match[1].split(', ').map((column) => column.replace(/^"|"$/g, ''));
+      continue;
+    }
+    if (line === String.raw`\.`) break;
+    const values = line.split('\t').map(decodeCopyField);
+    if (values.length !== columns.length) fail(`unexpected ${table} COPY column count`);
+    const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
+    if (wantedIds.has(row.id)) rows.push(row);
+  }
+  if (!columns) fail(`backup has no public.${table} COPY section`);
+  return rows;
+}
+
+function cleanupStaleRecoveryDatabases() {
+  const output = run('docker', [
+    'exec', 'applypilot-db', 'psql', '-U', 'postgres', '-d', 'postgres',
+    '-X', '-q', '-A', '-t', '-c',
+    "select datname from pg_database where datname like 'jobpilot_recovery_%'",
   ]);
-  if (gunzipCode !== 0 || psqlCode !== 0) fail(`temporary backup restore failed: ${errors.trim()}`);
+  for (const database of output.split('\n').map((value) => value.trim()).filter(Boolean)) {
+    if (!/^jobpilot_recovery_[a-zA-Z0-9_]+$/.test(database)) fail('refusing unexpected recovery database name');
+    run('docker', ['exec', 'applypilot-db', 'dropdb', '--if-exists', '-U', 'postgres', database]);
+  }
 }
 
 function quoteIdentifier(value) {
@@ -107,30 +125,17 @@ async function insertObject(client, table, value) {
 async function main() {
   const { apply, ids } = parseArgs(process.argv.slice(2));
   if (!process.env.DATABASE_URL) fail('DATABASE_URL is required');
+  cleanupStaleRecoveryDatabases();
   const backup = await findBackup(ids);
-  const tempDatabase = `jobpilot_recovery_${process.pid}_${Date.now()}`.slice(0, 63);
-  run('docker', ['exec', 'applypilot-db', 'createdb', '-U', 'postgres', tempDatabase]);
+  const applications = await copyRows(backup, 'applications', new Set(ids));
+  if (applications.length !== ids.length) fail(`backup contained ${applications.length} of ${ids.length} application rows`);
+  const jobs = await copyRows(backup, 'jobs', new Set(applications.map((application) => application.job_id)));
+  if (jobs.length !== applications.length) fail(`backup contained ${jobs.length} of ${applications.length} linked job rows`);
+  const jobsById = new Map(jobs.map((job) => [job.id, job]));
+  const recovered = applications.map((application) => ({ application, job: jobsById.get(application.job_id) }));
+  if (recovered.some(({ job }) => !job)) fail('backup application is missing its linked job');
 
-  try {
-    await restoreDump(backup, tempDatabase);
-    const list = ids.map((id) => `'${id}'`).join(',');
-    const sql = `
-      select coalesce(json_agg(json_build_object(
-        'application', to_jsonb(a),
-        'job', to_jsonb(j)
-      ) order by a.created_at)::text, '[]')
-      from public.applications a
-      join public.jobs j on j.user_id = a.user_id and j.id = a.job_id
-      where a.id = any(array[${list}]::uuid[])
-    `;
-    const raw = run('docker', [
-      'exec', 'applypilot-db', 'psql', '-U', 'postgres', '-d', tempDatabase,
-      '-X', '-q', '-A', '-t', '-c', sql,
-    ]).trim();
-    const recovered = JSON.parse(raw || '[]');
-    if (recovered.length !== ids.length) fail(`backup contained ${recovered.length} of ${ids.length} joined rows`);
-
-    const preview = recovered.map(({ application, job }) => ({
+  const preview = recovered.map(({ application, job }) => ({
       application_id: application.id,
       job_id: job.id,
       title: job.title,
@@ -140,53 +145,52 @@ async function main() {
       parked: application.parked,
       has_resume: Boolean(application.tailored_resume),
       has_pdf: Boolean(application.pdf_path),
-    }));
-    if (!apply) {
-      console.log(JSON.stringify({ mode: 'preview', backup: path.basename(backup), rows: preview }, null, 2));
-      return;
-    }
-
-    const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-    await client.connect();
-    try {
-      await client.query('begin');
-      for (const pair of recovered) {
-        const job = { ...pair.job };
-        const application = { ...pair.application };
-        delete application.has_resume;
-        delete application.has_cover_letter;
-
-        const existing = await client.query(
-          'select id from public.jobs where id=$1 or (user_id=$2 and url=$3) order by (id=$1) desc limit 1',
-          [job.id, job.user_id, job.url],
-        );
-        let jobId = existing.rows[0]?.id ?? null;
-        if (!jobId) {
-          if (job.duplicate_of) {
-            const parent = await client.query('select 1 from public.jobs where id=$1 and user_id=$2', [job.duplicate_of, job.user_id]);
-            if (parent.rowCount === 0) job.duplicate_of = null;
-          }
-          const inserted = await insertObject(client, 'jobs', job);
-          jobId = inserted.rows[0]?.id ?? job.id;
-        }
-        application.job_id = jobId;
-        await insertObject(client, 'applications', application);
-      }
-      await client.query("notify pgrst, 'reload schema'");
-      await client.query('commit');
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      await client.end();
-    }
-    console.log(JSON.stringify({ mode: 'applied', backup: path.basename(backup), rows: preview }, null, 2));
-  } finally {
-    run('docker', ['exec', 'applypilot-db', 'dropdb', '--if-exists', '-U', 'postgres', tempDatabase]);
+  }));
+  if (!apply) {
+    console.log(JSON.stringify({ mode: 'preview', backup: path.basename(backup), rows: preview }, null, 2));
+    return;
   }
+
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('begin');
+    for (const pair of recovered) {
+      const job = { ...pair.job };
+      const application = { ...pair.application };
+      delete application.has_resume;
+      delete application.has_cover_letter;
+
+      const existing = await client.query(
+        'select id from public.jobs where id=$1 or (user_id=$2 and url=$3) order by (id=$1) desc limit 1',
+        [job.id, job.user_id, job.url],
+      );
+      let jobId = existing.rows[0]?.id ?? null;
+      if (!jobId) {
+        if (job.duplicate_of) {
+          const parent = await client.query('select 1 from public.jobs where id=$1 and user_id=$2', [job.duplicate_of, job.user_id]);
+          if (parent.rowCount === 0) job.duplicate_of = null;
+        }
+        const inserted = await insertObject(client, 'jobs', job);
+        jobId = inserted.rows[0]?.id ?? job.id;
+      }
+      application.job_id = jobId;
+      await insertObject(client, 'applications', application);
+    }
+    await client.query("notify pgrst, 'reload schema'");
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    await client.end();
+  }
+  console.log(JSON.stringify({ mode: 'applied', backup: path.basename(backup), rows: preview }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
