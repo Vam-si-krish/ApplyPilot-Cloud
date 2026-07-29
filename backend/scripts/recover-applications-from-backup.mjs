@@ -72,6 +72,15 @@ async function restoreDump(filename, database) {
   );
   gunzip.stdout.pipe(psql.stdin);
   let errors = '';
+  // If psql rejects the dump, it closes stdin while gunzip is still producing data.
+  // Ignore that expected secondary EPIPE so the primary PostgreSQL error below is
+  // reported instead of crashing Node with an unhandled stream event.
+  gunzip.stdout.on('error', (error) => {
+    if (error?.code !== 'EPIPE') errors += String(error);
+  });
+  psql.stdin.on('error', (error) => {
+    if (error?.code !== 'EPIPE') errors += String(error);
+  });
   gunzip.stderr.on('data', (chunk) => { errors += chunk.toString(); });
   psql.stderr.on('data', (chunk) => { errors += chunk.toString(); });
   const [gunzipCode, psqlCode] = await Promise.all([

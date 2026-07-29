@@ -99,3 +99,8 @@ arguments.
 The second preview likewise made no data changes. It found both UUIDs but returned before
 the gzip pipeline drained, surfacing an `EPIPE`. Backup discovery now scans each candidate
 archive to completion before choosing it, avoiding premature stream teardown.
+
+The third preview reached the isolated temporary restore, where `psql` closed its input
+early and the decompressor's secondary `EPIPE` masked the primary database error. The
+recovery pipeline now handles only that expected pipe-close signal and preserves the
+actual PostgreSQL diagnostic. No live write path was reached.
