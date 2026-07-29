@@ -673,14 +673,21 @@ export default function JobsPage() {
     setBulkBusy(true);
     setBulkMsg('Deleting…');
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         ids.map((id) =>
           fetch(`/api/jobs/${id}`, {
             method: 'DELETE',
           }),
         ),
       );
-      setBulkMsg(`Deleted ${ids.length} jobs.`);
+      const deleted = responses.filter((response) => response.ok).length;
+      const protectedCount = responses.filter((response) => response.status === 409).length;
+      const failed = responses.length - deleted - protectedCount;
+      setBulkMsg(
+        protectedCount > 0 || failed > 0
+          ? `Deleted ${deleted} jobs. Kept ${protectedCount} protected Tailor & Apply job${protectedCount === 1 ? '' : 's'}${failed > 0 ? `; ${failed} failed` : ''}.`
+          : `Deleted ${deleted} jobs.`,
+      );
       setSelected(new Set());
       load(true);
       refreshStats();

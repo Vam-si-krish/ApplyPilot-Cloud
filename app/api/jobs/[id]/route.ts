@@ -50,6 +50,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  // A jobs delete cascades through applications_job_user_fkey. Never let the Jobs
+  // surface silently destroy Tailor & Apply state (tailored résumé, PDF pointers,
+  // status, and AI assignment) even if a stale bulk selection includes a hidden row.
+  const { count: applicationCount, error: applicationError } = await supabaseAdmin()
+    .from('applications')
+    .select('id', { count: 'exact', head: true })
+    .eq('job_id', params.id);
+  if (applicationError) {
+    return NextResponse.json({ error: applicationError.message }, { status: 500 });
+  }
+  if ((applicationCount ?? 0) > 0) {
+    return NextResponse.json(
+      { error: 'This job is protected because it is in Tailor & Apply. Remove the application there first.' },
+      { status: 409 },
+    );
+  }
+
   const { error } = await supabaseAdmin().from('jobs').delete().eq('id', params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

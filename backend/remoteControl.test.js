@@ -52,11 +52,28 @@ test('Funnel repair is bounded to the selected instance path and externally veri
 });
 
 test('remote control rejects shell syntax and unapproved commands without evaluating them', () => {
-  for (const command of ['deploy abc1234; id', 'production logs backend 501', 'bash', 'production status\nbackup']) {
+  for (const command of [
+    'deploy abc1234; id',
+    'production logs backend 501',
+    'production recover-applications not-a-uuid',
+    'production recover-applications-preview 9231d556-ed75-429a-88ee-b1eb435c467e;id',
+    'bash',
+    'production status\nbackup',
+  ]) {
     const result = run(command);
     assert.equal(result.status, 64, command);
     assert.match(result.stderr, /refused/i);
   }
+});
+
+test('application recovery is preview-first, UUID-bounded, and never a public endpoint', () => {
+  const remoteControl = readFileSync(script, 'utf8');
+  const recovery = readFileSync(join(backend, 'scripts', 'recover-applications-from-backup.mjs'), 'utf8');
+  assert.match(remoteControl, /recover-applications-preview <1-10 application UUIDs>/);
+  assert.match(remoteControl, /IDS\[@\].*<= 10/);
+  assert.match(recovery, /argv\[0\] === '--apply'/);
+  assert.match(recovery, /temporary backup restore failed/);
+  assert.match(recovery, /on conflict \(id\) do nothing/);
 });
 
 test('deploy uses login-shell reconciliation after a partial checkout update', () => {

@@ -185,7 +185,9 @@ must never be publicly readable — a single shared password gates everything (A
    visible without silently active score/company/run constraints. Applied jobs and jobs
    already in Tailor & Apply are hidden by default, posting-by-posting; an eligible
    duplicate location remains visible even when its original canonical row is hidden.
-   “Clear all” removes every filter. "Run now" button for manual runs.
+   “Select all matching” obeys the same hide rules, and Jobs deletion cannot remove a
+   linked Tailor & Apply row; that application must be removed deliberately from its own
+   surface first. “Clear all” removes every filter. "Run now" button for manual runs.
 5. **Maintain one complete résumé:** the Base résumé editor supports both the standard
    résumé fields and user-defined sections. Custom sections remain editable in a tailored
    copy, are included in AI/local scoring context, preserve user-entered facts during AI

@@ -57,3 +57,35 @@ because Curious Coder ignores them.
 Follow-up verification: 269 app tests passed (16 eval cases intentionally skipped), 21
 backend/isolation tests passed, typecheck passed, production build passed, and
 documentation check passed.
+
+## ✅ Tailor & Apply deletion boundary and bounded recovery (ADR 0114)
+
+Production diagnosis found that Jobs' paginated response correctly removed applied and
+Tailor & Apply rows, but its early `idsOnly` response did not. “Select all matching”
+therefore selected hidden UUIDs, and per-job deletion triggered the database's intentional
+application cascade. A before/after production comparison bounded the incident to two
+new queued applications—TalentAlly “Software Engineer” and Epic “Entry-Level Technical
+Solutions Engineer.” All 801 generated tailored résumés, 789 PDF pointers, and 752
+applied application rows remained present.
+
+- The `idsOnly` projection now carries `applied_at` and applies the exact shared hide
+  predicate before returning IDs.
+- The per-job delete route independently rejects every application-linked job with
+  `409`, so stale client state cannot destroy Tailor & Apply data.
+- Bulk delete counts successful, protected, and failed responses instead of treating any
+  HTTP response as success.
+- The restricted server operator surface gained a one-to-ten-UUID backup recovery path.
+  It searches retained backups, restores the selected dump into a disposable database,
+  previews non-sensitive row identity/state, and writes the exact job+application rows
+  only with an explicit apply command.
+
+Data owner is the authenticated user's forced-RLS jobs/applications pair. The caller is
+the signed-in Jobs UI; the trusted deletion boundary is the server route, not the
+browser's current filter state. Recovery is a separate owner-authorized production
+operator action through the pinned forced-command SSH key. It does not expose a public
+endpoint, cross user scope, or mutate storage files.
+
+Pre-deployment verification: 271 app tests passed (16 eval cases intentionally skipped),
+22 backend/isolation tests passed, typecheck passed, production build passed,
+documentation validation passed, and both operator shells plus the recovery script
+passed syntax validation. Production backup preview/restore remains pending.

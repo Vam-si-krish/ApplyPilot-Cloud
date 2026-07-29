@@ -47,6 +47,8 @@ Allowed commands:
   production|development restart all|backend|worker|rest
   production|development logs backend|worker|autopull|watchdog <1-500 lines>
   production|development backup
+  production|development recover-applications-preview <1-10 application UUIDs>
+  production|development recover-applications <1-10 application UUIDs>
   production|development dev-env
   provision-development <7-40 character git commit>
 EOF
@@ -139,6 +141,25 @@ case "$REQUEST" in
     log "backup"
     "$BACKEND/scripts/backup.sh"
     print -- "backup=complete"
+    ;;
+
+  recover-applications-preview\ *|recover-applications\ *)
+    if [[ "$REQUEST" == recover-applications-preview\ * ]]; then
+      ACTION="--preview"
+      RAW_IDS="${REQUEST#recover-applications-preview }"
+    else
+      ACTION="--apply"
+      RAW_IDS="${REQUEST#recover-applications }"
+    fi
+    IDS=("${(@s: :)RAW_IDS}")
+    (( ${#IDS[@]} >= 1 && ${#IDS[@]} <= 10 )) || fail "recovery accepts between one and ten application UUIDs"
+    for VALUE in "${IDS[@]}"; do
+      [[ "$VALUE" =~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$' ]] \
+        || fail "invalid application UUID"
+    done
+    log "${REQUEST%% *} count=${#IDS[@]}"
+    set -a; source "$BACKEND/.env"; set +a
+    node "$BACKEND/scripts/recover-applications-from-backup.mjs" "$ACTION" "${IDS[@]}"
     ;;
 
   dev-env)

@@ -222,6 +222,12 @@ is chunked so no invocation exceeds the limit, re-triggering until the queue dra
   the expanded details remain the owner of complete `score_reasoning` display. Desktop
   metadata uses stable semantic columns with empty cells for missing values, followed by
   a fixed-width action rail, so one absent badge cannot shift unrelated controls.
+- `app/api/jobs/route.ts` applies the same applied/Tailor & Apply exclusions to both
+  displayed rows and the `idsOnly` bulk-selection projection. `DELETE
+  /api/jobs/[id]` treats an application reference as a hard `409` boundary before touching
+  `jobs`, preventing the composite foreign key's cascade from destroying a hidden
+  Tailor & Apply row. Bounded backup recovery remains behind the restricted server-control
+  key and accepts at most ten validated application UUIDs (ADR 0114).
 - `lib/llm.ts` — provider abstraction + retry/back-off. Pure of business logic.
 - `lib/workerConfig.ts` — resolves the trusted résumé-worker endpoint. Managed forks use
   environment values only; legacy settings fallback is isolated here.

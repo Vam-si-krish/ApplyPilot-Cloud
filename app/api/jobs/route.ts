@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   const offset = Number(url.searchParams.get('offset')) || 0;
 
   let q = idsOnly
-    ? supabaseAdmin().from('jobs').select('id')
+    ? supabaseAdmin().from('jobs').select('id, applied_at')
     : supabaseAdmin().from('jobs').select('*', { count: 'exact' });
 
   // Default 'all' view hides archived and pre-filtered jobs; pick them explicitly to see them.
@@ -114,7 +114,13 @@ export async function GET(req: Request) {
   if (idsOnly) {
     const { data, error } = await q.limit(5000);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ids: (data ?? []).map((r) => (r as { id: string }).id) });
+    const ids = (data ?? [])
+      .filter((row) => duplicatePassesHideFilters(
+        row as { id: string; applied_at: string | null },
+        { excludeApplied, excludeInApplications, applicationJobIds },
+      ))
+      .map((row) => (row as { id: string }).id);
+    return NextResponse.json({ ids });
   }
 
   // Past view groups by date → order newest-first; 'match' sorts by the ATS match %

@@ -45,4 +45,28 @@ describe('Jobs hide filters across duplicate groups', () => {
     expect(duplicatePassesHideFilters({ id: 'tailored', applied_at: null }, options)).toBe(false);
     expect(duplicatePassesHideFilters({ id: 'applied', applied_at: '2026-07-16T00:00:00Z' }, options)).toBe(false);
   });
+
+  it('applies both hide rules before idsOnly powers Select all matching', () => {
+    const jobsRoute = readFileSync(
+      fileURLToPath(new URL('../app/api/jobs/route.ts', import.meta.url)),
+      'utf8',
+    );
+
+    expect(jobsRoute).toContain("supabaseAdmin().from('jobs').select('id, applied_at')");
+    expect(jobsRoute).toContain('.filter((row) => duplicatePassesHideFilters(');
+    expect(jobsRoute.indexOf('.filter((row) => duplicatePassesHideFilters('))
+      .toBeLessThan(jobsRoute.indexOf('return NextResponse.json({ ids });'));
+  });
+
+  it('protects Tailor & Apply rows at the delete boundary', () => {
+    const jobRoute = readFileSync(
+      fileURLToPath(new URL('../app/api/jobs/[id]/route.ts', import.meta.url)),
+      'utf8',
+    );
+
+    expect(jobRoute).toContain(".from('applications')");
+    expect(jobRoute).toContain('.eq(\'job_id\', params.id)');
+    expect(jobRoute).toContain('status: 409');
+    expect(jobRoute.indexOf(".from('applications')")).toBeLessThan(jobRoute.indexOf(".from('jobs').delete()"));
+  });
 });

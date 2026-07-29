@@ -34,6 +34,8 @@ Development/deployment:
   restart <target>       Restart all, backend, worker, or rest
   logs <service> [lines] Show backend, worker, autopull, or watchdog logs (maximum 500)
   backup                 Trigger the server's database/file backup job
+  recover-applications-preview <UUID...>  Preview up to 10 cascade-deleted applications from backup
+  recover-applications <UUID...>          Restore the previewed application+job rows
   provision-development <commit>  Create/reconcile the isolated development stack
 
 Environment overrides: JOBPILOT_SERVER_HOST, JOBPILOT_SERVER_USER,
@@ -289,6 +291,11 @@ case "$COMMAND" in
     [[ $# -eq 1 ]] || { usage; exit 64; }
     require_remote
     remote backup
+    ;;
+  recover-applications-preview|recover-applications)
+    [[ $# -ge 2 && $# -le 11 ]] || { usage; exit 64; }
+    require_remote
+    remote "$@"
     ;;
   provision-development)
     [[ $# -eq 2 && "$REMOTE_ENV" == "production" && "$2" =~ ^[0-9a-f]{7,40}$ ]] || { usage; exit 64; }
