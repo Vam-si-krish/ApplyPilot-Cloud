@@ -159,7 +159,8 @@ case "$REQUEST" in
     done
     log "${REQUEST%% *} count=${#IDS[@]}"
     set -a; source "$BACKEND/.env"; set +a
-    node "$BACKEND/scripts/recover-applications-from-backup.mjs" "$ACTION" "${IDS[@]}"
+    /bin/zsh -lc 'exec node "$@"' jobpilot-recovery \
+      "$BACKEND/scripts/recover-applications-from-backup.mjs" "$ACTION" "${IDS[@]}"
     ;;
 
   dev-env)

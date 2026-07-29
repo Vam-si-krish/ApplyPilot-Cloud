@@ -71,6 +71,7 @@ test('application recovery is preview-first, UUID-bounded, and never a public en
   const recovery = readFileSync(join(backend, 'scripts', 'recover-applications-from-backup.mjs'), 'utf8');
   assert.match(remoteControl, /recover-applications-preview <1-10 application UUIDs>/);
   assert.match(remoteControl, /IDS\[@\].*<= 10/);
+  assert.match(remoteControl, /\/bin\/zsh -lc 'exec node "\$@"' jobpilot-recovery/);
   assert.match(recovery, /argv\[0\] === '--apply'/);
   assert.match(recovery, /temporary backup restore failed/);
   assert.match(recovery, /on conflict \(id\) do nothing/);

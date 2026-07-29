@@ -89,3 +89,9 @@ Pre-deployment verification: 271 app tests passed (16 eval cases intentionally s
 22 backend/isolation tests passed, typecheck passed, production build passed,
 documentation validation passed, and both operator shells plus the recovery script
 passed syntax validation. Production backup preview/restore remains pending.
+
+The first production preview attempt made no data changes and exposed an operator-runtime
+gap: the forced-command environment did not inherit the server-managed Node path. The
+recovery command now executes through the same bounded login-shell pattern used by
+deployment, while preserving the already validated fixed script path, mode, and UUID
+arguments.
