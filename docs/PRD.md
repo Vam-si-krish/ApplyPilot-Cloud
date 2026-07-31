@@ -111,8 +111,12 @@ up to 30,000 characters pasted from another email account, SMS, or chat and uses
 existing per-user classification lane to extract grounded company, role, and schedule
 details without storing the raw paste. Connected or pasted recruiter outreach becomes a
 reply task but stays off the date grid unless it contains a confirmed interview time.
+Inbox Sync drains pending mail through provider-aware chunks and reports success only
+after the pending count reaches zero; slower subscription calls run one per web request
+so the browser receives progress before the serverless timeout.
 Calendar work forms a reversible Active/Done task ledger; explicit, safely matched
-completion emails may mark the source event done automatically (ADRs 0104–0106 and 0108).
+completion emails may mark the source event done automatically (ADRs 0104–0106, 0108,
+and 0116).
 Settings uses goal-oriented categories for Job Search, Automation, AI & Models,
 Connections & Keys, and Advanced; only the chosen group is shown, with mobile-specific
 navigation and plain-language effects/cost explanations (ADR 0082).

@@ -355,6 +355,11 @@ unknown ≠ suspicious).
 - Three independent task lanes resolve complete provider/model pairs: **AI Chat**, **Tailoring**, and
   **Everything else** (scoring + classification). Claude and ChatGPT subscription pseudo-providers run
   only on the authenticated always-on worker; neither stores nor silently falls back to an API key.
+- Gmail classification keeps direct API providers at eight messages per serverless
+  request, but runs Claude/ChatGPT subscription providers one message per request because
+  each completion crosses the always-on worker boundary. The client continues the
+  idempotent pending-row loop and reports completion only when the server returns zero
+  remaining messages (ADR 0116).
 - Stable cache prefixes are deliberate: scoring/tailoring keep system + résumé before the volatile job;
   ApplyBuddy keeps the cache-marked profile system block before conversation turns.
 - Claude subscription login is UUID-isolated. Settings brokers Claude Code's

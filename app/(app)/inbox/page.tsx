@@ -62,7 +62,23 @@ export default function InboxPage() {
     setSyncing(true);
     setMsg(null);
 
-    const postJson = (url: string) => fetch(url, { method: 'POST' }).then((r) => r.json());
+    const postJson = async (url: string) => {
+      const response = await fetch(url, { method: 'POST' });
+      const body = await response.json().catch(() => ({})) as {
+        ok?: boolean;
+        error?: string;
+        reason?: string;
+        done?: boolean;
+        found?: number;
+        pending?: number;
+        remaining?: number;
+      };
+      return {
+        ...body,
+        ok: response.ok && body.ok !== false,
+        error: body.error ?? (response.ok ? undefined : `Request failed (${response.status}).`),
+      };
+    };
 
     try {
       // Phase 1 — fetch all new mail into the inbox (appears as "Pending").
@@ -99,16 +115,23 @@ export default function InboxPage() {
       setProgress({ phase: 'classifying', done: 0, total });
       for (let i = 0; i < 200 && remaining > 0; i++) {
         const r = await postJson('/api/gmail/classify-batch');
-        if (!r.ok) break;
+        if (!r.ok) {
+          setMsg(`AI classification paused with ${remaining} email${remaining === 1 ? '' : 's'} remaining.${r.error ? ` ${r.error}` : ''} Try Sync now again.`);
+          return;
+        }
         remaining = r.remaining ?? 0;
         setProgress({ phase: 'classifying', done: total - remaining, total });
         await load(); // categories light up live as the AI works through them
         if (r.done) break;
       }
+      if (remaining > 0) {
+        setMsg(`AI classification paused with ${remaining} email${remaining === 1 ? '' : 's'} remaining. Try Sync now again.`);
+        return;
+      }
       setProgress({ phase: 'done', total });
       setMsg(`Done — classified ${total} new email${total === 1 ? '' : 's'}.`);
-    } catch {
-      setMsg('Sync failed.');
+    } catch (error) {
+      setMsg(error instanceof Error && error.message ? `Sync failed: ${error.message}` : 'Sync failed.');
     } finally {
       setSyncing(false);
       await load();

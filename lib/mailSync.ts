@@ -26,16 +26,27 @@ import {
 } from './db';
 import { getAccessToken, listAllMessageIds, getMessage, getMessageBodyText } from './gmail';
 import { classifyEmail, domainApplySource } from './mailClassify';
-import { buildScoringClient } from './scoreRunner';
-import { getClient } from './llm';
-import type { GmailConnection } from './types';
+import { buildScoringClient, taskProviderModel } from './scoreRunner';
+import { getClient, isSubscriptionProvider } from './llm';
+import type { GmailConnection, Settings } from './types';
 
 /** Messages whose metadata we pull per fetch invocation (cheap HTTP, no LLM). */
 export const MAIL_FETCH_BATCH = 25;
 /** Messages we AI-classify per classify invocation (one LLM call each). */
 export const MAIL_CLASSIFY_BATCH = 8;
+/**
+ * Subscription calls run on the server-laptop worker and can take several
+ * seconds each. Keep each serverless request to one such call so the browser
+ * receives a progress response before the hosting timeout.
+ */
+export const MAIL_SUBSCRIPTION_CLASSIFY_BATCH = 1;
 /** Hard ceiling on ids pulled for one look-back window (≈5 Gmail pages). */
 export const MAIL_LIST_CAP = 500;
+
+export function mailClassifyBatchSize(settings: Settings): number {
+  const { provider } = taskProviderModel(settings, 'score');
+  return isSubscriptionProvider(provider) ? MAIL_SUBSCRIPTION_CLASSIFY_BATCH : MAIL_CLASSIFY_BATCH;
+}
 
 export interface GmailContext {
   conn: GmailConnection;
@@ -118,10 +129,10 @@ export interface ClassifyResult {
 
 /** AI-classify one chunk of pending messages. One LLM call per message. */
 export async function classifyChunk(): Promise<ClassifyResult> {
-  const batch = await getPendingMailBatch(MAIL_CLASSIFY_BATCH);
+  const settings = await getSettings();
+  const batch = await getPendingMailBatch(mailClassifyBatchSize(settings));
   if (batch.length === 0) return { classified: 0, remaining: 0, done: true };
 
-  const settings = await getSettings();
   const client = (await buildScoringClient(settings)) ?? getClient();
   const resolved = await resolveGmailContext().catch(() => ({ ctx: undefined }));
 
