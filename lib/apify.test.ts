@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   planRuns, mapDatasetItemToJob, parseLinkedInLocation, linkedInKeywordLocations,
-  titleSearchTerms, careerSiteLocations, estimateRunCostUsd,
+  mapDatasetItemsToJobs, titleSearchTerms, careerSiteLocations, estimateRunCostUsd,
   normalizeEmploymentType,
 } from './apify';
 import type { Settings } from './types';
 import {
   CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+  validateLinkedInSearchUrlLibrary,
   validateLinkedInSearchUrls,
 } from './linkedinScrapers';
 
@@ -35,6 +36,7 @@ function makeSettings(over: Partial<Settings> = {}): Settings {
     resume_worker_secret: null,
     apify_actor_id: 'cheap_scraper~linkedin-job-scraper',
     linkedin_search_urls: [],
+    linkedin_search_url_options: [],
     job_portals: ['linkedin'],
     auto_scrape_enabled: true,
     auto_tailor_enabled: false,
@@ -175,6 +177,34 @@ describe('LinkedIn scraper adapter registry (ADR 0113)', () => {
     expect(result.invalid).toHaveLength(2);
   });
 
+  it('keeps a saved URL library while sending only its active de-duplicated subset', () => {
+    const secondUrl = 'https://www.linkedin.com/jobs/search/?keywords=Data%20Engineer&f_TPR=r86400';
+    const library = validateLinkedInSearchUrlLibrary(
+      [filteredUrl, secondUrl, filteredUrl],
+      [secondUrl, secondUrl],
+    );
+    expect(library).toEqual({
+      savedUrls: [filteredUrl, secondUrl],
+      activeUrls: [secondUrl],
+      invalid: [],
+    });
+
+    const run = planRuns(makeSettings({
+      apify_actor_id: CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+      linkedin_search_url_options: library.savedUrls,
+      linkedin_search_urls: library.activeUrls,
+      max_jobs_per_run: 250,
+    }))[0];
+    expect(run.input.urls).toEqual([secondUrl]);
+  });
+
+  it('promotes a newly active URL into the saved library for deployment compatibility', () => {
+    const secondUrl = 'https://www.linkedin.com/jobs/search/?keywords=Data%20Engineer&f_TPR=r86400';
+    const library = validateLinkedInSearchUrlLibrary([filteredUrl], [secondUrl]);
+    expect(library.savedUrls).toEqual([filteredUrl, secondUrl]);
+    expect(library.activeUrls).toEqual([secondUrl]);
+  });
+
   it('uses the registered actor price in the preflight estimate', () => {
     expect(estimateRunCostUsd(makeSettings({
       apify_actor_id: CURIOUS_CODER_LINKEDIN_ACTOR_ID,
@@ -192,6 +222,19 @@ describe('LinkedIn scraper adapter registry (ADR 0113)', () => {
     }, 'apify:linkedin', CURIOUS_CODER_LINKEDIN_ACTOR_ID);
     expect(job?.salary).toBe('$150,000 – $180,000');
     expect(job?.easy_apply).toBe(true);
+  });
+
+  it('discards exact job-URL duplicates returned by overlapping active searches', () => {
+    const jobs = mapDatasetItemsToJobs([
+      { link: 'https://www.linkedin.com/jobs/view/123', title: 'Platform Engineer' },
+      { link: 'https://www.linkedin.com/jobs/view/123', title: 'Repeated copy' },
+      { link: 'https://www.linkedin.com/jobs/view/456', title: 'Data Engineer' },
+    ], 'apify:linkedin', CURIOUS_CODER_LINKEDIN_ACTOR_ID);
+    expect(jobs.map((job) => job.url)).toEqual([
+      'https://www.linkedin.com/jobs/view/123',
+      'https://www.linkedin.com/jobs/view/456',
+    ]);
+    expect(jobs[0].title).toBe('Platform Engineer');
   });
 });
 

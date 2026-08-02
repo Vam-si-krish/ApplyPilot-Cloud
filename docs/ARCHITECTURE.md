@@ -150,7 +150,7 @@ Netlify scheduled function (daily, UTC)
    │   Bearer CRON_SECRET
    ▼
 POST /api/run
-   │  • read settings (keywords, locations, hours_old, actor id)
+   │  • read settings (criteria or active saved URLs, hours_old, actor id)
    │  • start Apify actor run ASYNC → returns runId immediately
    │  • validate a real public callback URL before starting a billable actor
    │  • register a webhook so Apify calls us back on terminal events
@@ -159,7 +159,8 @@ POST /api/run
 Apify runs the scrape (minutes) … then calls:
 POST /api/apify-webhook
    │  • fetch the run's dataset with the same user-owned key that launched it
-   │  • map → job rows, de-dupe by url, insert with status='unscored'
+   │  • map → job rows, discard repeated dataset URLs, then insert idempotently
+   │    under the per-user URL unique key with status='unscored'
    │  • enrich only missing Easy Apply/External metadata when a known URL reappears
    │  • update the `runs` row (jobs_found)
    │  • kick off /api/score-batch
@@ -398,6 +399,9 @@ Field names derived from the Lite `/api/jobs` SELECT. See `supabase/migrations/`
   boundary normalizes older documents. Custom content stays inside the same forced-RLS row.
 - **settings**: one row per user — schedule/search configuration plus legacy `llm_*` and the three task pairs:
   `chat_provider/model`, `tailor_provider/model`, `score_provider/model` (Everything else).
+  URL-driven LinkedIn discovery stores a validated library in
+  `linkedin_search_url_options`; `linkedin_search_urls` is its independently active
+  subset and is the only list passed to the actor.
 - **runs / applications / mail / messages / scoring_state**: user-owned pipeline,
   tailoring, inbox, assistant, and continuation state.
 - **mail_messages.assessment_start_at / assessment_end_at**: compatibility fields for
@@ -517,15 +521,21 @@ The default `cheap_scraper` adapter remains keyword-mode (ADR 0110): one plain-k
 search per role × location with native `jobType`, `experienceLevel`, `publishedAt`, and
 remote-only `workType` filters. It never sends boolean queries or `startUrls`.
 
-The opt-in `curious_coder` adapter is URL-driven. It sends saved full LinkedIn Jobs
-search URLs, whose query parameters preserve LinkedIn's filter set, and maps the app's
-hard result cap to the actor's `count`. Settings accept only HTTPS `linkedin.com`
-search-results paths, de-duplicate them, and cap the list at 20. Existing accounts are
-not switched automatically. URL mode hides criteria controls that do not feed this
-adapter when no other enabled portal needs them, preserves those libraries for later,
-and previews the exact planned `count`;
+The opt-in `curious_coder` adapter is URL-driven. Settings provides a row-based library:
+each full LinkedIn Jobs search URL remains saved until removed and has an independent
+active toggle, so any subset can feed one run without newline-delimited editing. The
+active URLs preserve LinkedIn's filter set in their query parameters, and the adapter
+maps the app's hard result cap to the actor's `count`. Settings accept only HTTPS
+`linkedin.com` search-results paths, de-duplicate them, promote any newly active URL into
+the saved library, and cap the library at 20. Existing URL settings migrate as both saved
+and active; existing accounts are not switched automatically. URL mode hides criteria
+controls that do not feed this adapter when no other enabled portal needs them,
+preserves those libraries for later, and previews the exact planned `count`;
 skills and the local pre-scoring filter remain active after ingestion. Optional actor
 execution flags are left to actor defaults rather than being forced by ApplyPilot.
+Overlapping URL results are collapsed by exact job URL before local matching; the
+database's per-user URL key remains the idempotency guard, and ADRs 0057/0071 retain
+same-day content-group collapsing for different URLs that represent one posting.
 
 ## Jobs view semantics
 

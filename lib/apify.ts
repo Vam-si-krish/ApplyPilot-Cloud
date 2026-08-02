@@ -680,3 +680,21 @@ export function mapDatasetItemToJob(
     source,
   };
 }
+
+/**
+ * Normalize one actor dataset and discard exact repeated posting URLs before local
+ * matching or persistence. Overlapping active search URLs commonly return the same
+ * job; the database unique key remains the final idempotency guard.
+ */
+export function mapDatasetItemsToJobs(
+  items: Record<string, unknown>[],
+  source: string,
+  actorId?: string | null,
+): MappedJob[] {
+  const byUrl = new Map<string, MappedJob>();
+  for (const item of items) {
+    const mapped = mapDatasetItemToJob(item, source, actorId);
+    if (mapped && !byUrl.has(mapped.url)) byUrl.set(mapped.url, mapped);
+  }
+  return [...byUrl.values()];
+}

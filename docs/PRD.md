@@ -180,7 +180,10 @@ must never be publicly readable — a single shared password gates everything (A
 1. **Daily scheduled run** (default 06:00 in the user's timezone, configurable).
    A Netlify scheduled function (UTC) triggers `/api/run`.
 2. On each run, **fetch the last 24h** of postings matching saved keywords × locations,
-   via Apify (not local scraping). `hours_old` defaults to 24, configurable.
+   via Apify (not local scraping). `hours_old` defaults to 24, configurable. The
+   URL-driven LinkedIn actor keeps up to 20 searches in a saved library and fetches any
+   user-selected active subset together; overlapping searches do not create repeated
+   job-URL rows, and same-day duplicate postings remain collapsed under one Jobs row.
 3. **Score every fetched job 1–10** for shortlist fit using the current weighted rubric
    and parser in `lib/scoring.ts` against that account's Base résumé and explicit
    eligibility/avoidance/scoring-preference facts (see ARCHITECTURE §Scoring).

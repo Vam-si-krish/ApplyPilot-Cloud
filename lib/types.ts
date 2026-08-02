@@ -289,8 +289,10 @@ export interface Settings {
   tailor_provider: string; // default 'anthropic'
   tailor_model: string; // default 'claude-sonnet-4-6'
   apify_actor_id: string; // LinkedIn actor variant (others use PORTAL_CONFIG defaults)
-  /** Reusable filtered LinkedIn Jobs result URLs for URL-driven scraper adapters. */
+  /** ACTIVE reusable LinkedIn Jobs result URLs sent to URL-driven scraper adapters. */
   linkedin_search_urls: string[];
+  /** Saved LinkedIn Jobs URL library; active URLs are a subset of this list. */
+  linkedin_search_url_options: string[];
   job_portals: string[]; // e.g. ['linkedin', 'indeed', 'glassdoor']
   auto_scrape_enabled: boolean;
   /** When true, a nightly cron drains the Tailor & Apply queue (status 'queued') on the

@@ -7,6 +7,7 @@ import { SUPPORTED_PORTALS } from '@/lib/apify';
 import { hasManagedWorker } from '@/lib/workerConfig';
 import {
   CURIOUS_CODER_LINKEDIN_ACTOR_ID,
+  validateLinkedInSearchUrlLibrary,
   validateLinkedInSearchUrls,
 } from '@/lib/linkedinScrapers';
 
@@ -79,8 +80,30 @@ export async function PUT(req: Request) {
   if (typeof body.tailor_provider === 'string' && body.tailor_provider) patch.tailor_provider = body.tailor_provider;
   if (typeof body.tailor_model === 'string' && body.tailor_model) patch.tailor_model = body.tailor_model;
   if (typeof body.apify_actor_id === 'string' && body.apify_actor_id) patch.apify_actor_id = body.apify_actor_id.replace(/\//g, '~');
-  if (Array.isArray(body.linkedin_search_urls)) {
-    const { urls, invalid } = validateLinkedInSearchUrls(body.linkedin_search_urls);
+  const hasLinkedInUrlOptions = Array.isArray(body.linkedin_search_url_options);
+  const hasActiveLinkedInUrls = Array.isArray(body.linkedin_search_urls);
+  let activeLinkedInUrls: string[] | null = null;
+  if (hasLinkedInUrlOptions && hasActiveLinkedInUrls) {
+    const { savedUrls, activeUrls, invalid } = validateLinkedInSearchUrlLibrary(
+      body.linkedin_search_url_options as unknown[],
+      body.linkedin_search_urls as unknown[],
+    );
+    if (invalid.length) {
+      return NextResponse.json(
+        { error: `Use a full LinkedIn Jobs search-results URL. Invalid value: ${invalid[0]}` },
+        { status: 400 },
+      );
+    }
+    if (savedUrls.length > 20) {
+      return NextResponse.json({ error: 'Save at most 20 LinkedIn Jobs search URLs.' }, { status: 400 });
+    }
+    patch.linkedin_search_url_options = savedUrls;
+    patch.linkedin_search_urls = activeUrls;
+    activeLinkedInUrls = activeUrls;
+  } else if (hasActiveLinkedInUrls) {
+    // Backward compatibility for the former newline editor: every URL it sends is
+    // both saved and active, so a frontend/backend deployment overlap cannot lose it.
+    const { urls, invalid } = validateLinkedInSearchUrls(body.linkedin_search_urls as unknown[]);
     if (invalid.length) {
       return NextResponse.json(
         { error: `Use a full LinkedIn Jobs search-results URL. Invalid value: ${invalid[0]}` },
@@ -90,11 +113,25 @@ export async function PUT(req: Request) {
     if (urls.length > 20) {
       return NextResponse.json({ error: 'Save at most 20 LinkedIn Jobs search URLs.' }, { status: 400 });
     }
+    patch.linkedin_search_url_options = urls;
     patch.linkedin_search_urls = urls;
+    activeLinkedInUrls = urls;
+  } else if (hasLinkedInUrlOptions) {
+    const { urls, invalid } = validateLinkedInSearchUrls(body.linkedin_search_url_options as unknown[]);
+    if (invalid.length) {
+      return NextResponse.json(
+        { error: `Use a full LinkedIn Jobs search-results URL. Invalid value: ${invalid[0]}` },
+        { status: 400 },
+      );
+    }
+    if (urls.length > 20) {
+      return NextResponse.json({ error: 'Save at most 20 LinkedIn Jobs search URLs.' }, { status: 400 });
+    }
+    patch.linkedin_search_url_options = urls;
   }
   if (
     body.apify_actor_id === CURIOUS_CODER_LINKEDIN_ACTOR_ID
-    && (!Array.isArray(body.linkedin_search_urls) || (patch.linkedin_search_urls as string[]).length === 0)
+    && (!activeLinkedInUrls || activeLinkedInUrls.length === 0)
   ) {
     return NextResponse.json(
       { error: 'Add at least one LinkedIn Jobs search URL before selecting Curious Coder.' },

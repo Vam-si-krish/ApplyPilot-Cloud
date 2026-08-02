@@ -10,6 +10,7 @@ import {
   CURIOUS_CODER_LINKEDIN_ACTOR_ID,
   LINKEDIN_SCRAPER_OPTIONS,
   curiousCoderResultCap,
+  validateLinkedInSearchUrls,
 } from '@/lib/linkedinScrapers';
 
 const PROVIDERS = [
@@ -138,6 +139,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [newLinkedInSearchUrl, setNewLinkedInSearchUrl] = useState('');
   // New worker secret to set (write-only). Empty = leave the saved one unchanged;
   // s.resume_worker_secret holds only a masked preview from the GET.
   const [workerSecret, setWorkerSecret] = useState('');
@@ -153,6 +155,28 @@ export default function SettingsPage() {
 
   function patch(p: Partial<Settings>) {
     setS((prev) => (prev ? { ...prev, ...p } : prev));
+  }
+
+  function addLinkedInSearchUrl() {
+    if (!s) return;
+    const { urls, invalid } = validateLinkedInSearchUrls([newLinkedInSearchUrl]);
+    if (invalid.length || urls.length === 0) {
+      setSaveError('Paste a full LinkedIn Jobs search-results URL before adding it.');
+      return;
+    }
+    const url = urls[0];
+    const savedUrls = s.linkedin_search_url_options ?? s.linkedin_search_urls ?? [];
+    const activeUrls = s.linkedin_search_urls ?? [];
+    if (!savedUrls.includes(url) && savedUrls.length >= 20) {
+      setSaveError('Save at most 20 LinkedIn Jobs search URLs.');
+      return;
+    }
+    patch({
+      linkedin_search_url_options: savedUrls.includes(url) ? savedUrls : [...savedUrls, url],
+      linkedin_search_urls: activeUrls.includes(url) ? activeUrls : [...activeUrls, url],
+    });
+    setNewLinkedInSearchUrl('');
+    setSaveError(null);
   }
 
   function selectCategory(category: SettingsCategory) {
@@ -240,6 +264,8 @@ export default function SettingsPage() {
   const hideCriteriaControls = usesLinkedInUrlSearch
     && !selectedJobPortals.some((portal) => portal !== 'linkedin');
   const linkedInUrlResultCap = curiousCoderResultCap(s);
+  const linkedInUrlOptions = s.linkedin_search_url_options ?? s.linkedin_search_urls ?? [];
+  const activeLinkedInUrls = s.linkedin_search_urls ?? [];
 
   return (
     <div className="max-w-6xl p-4 sm:p-6 lg:p-8 animate-slide-up">
@@ -757,23 +783,109 @@ export default function SettingsPage() {
                 <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-muted">
                   LinkedIn Jobs search URLs
                 </p>
-                <textarea
-                  value={(s.linkedin_search_urls ?? []).join('\n')}
-                  onChange={(event) => patch({
-                    linkedin_search_urls: event.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
-                  })}
-                  rows={5}
-                  placeholder="https://www.linkedin.com/jobs/search/?keywords=Software%20Engineer&f_TPR=r86400..."
-                  className="w-full resize-y rounded-lg border border-ink bg-base/80 px-3 py-2 font-mono text-[12px] text-slate-text outline-none transition-colors placeholder:text-slate-muted focus:border-sky/50 focus:ring-1 focus:ring-sky/25"
-                />
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-muted">
-                  One URL per line. In LinkedIn Jobs, set all filters—including Past 24 hours—then copy the full
-                  search-results URL from the address bar. A public/incognito search URL is the most reliable.
-                  The same saved URL can run every day because LinkedIn keeps the filters in its query parameters.
+                <p className="mb-3 text-[11px] leading-relaxed text-slate-muted">
+                  Set all filters in LinkedIn Jobs—including Past 24 hours—then add the full search-results URL.
+                  Each URL stays saved until you remove it. Turn on any combination you want included in the next fetch.
                 </p>
-                <p className="mt-2 text-[11px] font-medium text-sky">
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={newLinkedInSearchUrl}
+                    onChange={(event) => setNewLinkedInSearchUrl(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        addLinkedInSearchUrl();
+                      }
+                    }}
+                    placeholder="https://www.linkedin.com/jobs/search/?keywords=Software%20Engineer..."
+                    aria-label="LinkedIn Jobs search URL"
+                    className="min-w-0 flex-1 rounded-lg border border-ink bg-base/80 px-3 py-2 font-mono text-[12px] text-slate-text outline-none transition-colors placeholder:text-slate-muted focus:border-sky/50 focus:ring-1 focus:ring-sky/25"
+                  />
+                  <button
+                    type="button"
+                    onClick={addLinkedInSearchUrl}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky/30 bg-sky/10 px-3 py-2 text-[12px] font-medium text-sky transition-colors hover:bg-sky/20"
+                  >
+                    <Plus size={13} /> Add URL
+                  </button>
+                </div>
+
+                <div className="mt-4 overflow-x-auto rounded-lg border border-ink bg-base/40">
+                  <table className="w-full min-w-[560px] border-collapse text-left">
+                    <thead>
+                      <tr className="border-b border-ink bg-raised/60 text-[10px] uppercase tracking-wider text-slate-muted">
+                        <th className="w-24 px-3 py-2 font-medium">Active</th>
+                        <th className="px-3 py-2 font-medium">Saved search URL</th>
+                        <th className="w-16 px-3 py-2 text-right font-medium">Remove</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linkedInUrlOptions.map((url) => {
+                        const active = activeLinkedInUrls.includes(url);
+                        return (
+                          <tr key={url} className="border-b border-ink/70 last:border-b-0">
+                            <td className="px-3 py-2.5">
+                              <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-slate-text">
+                                <input
+                                  type="checkbox"
+                                  checked={active}
+                                  onChange={(event) => patch({
+                                    linkedin_search_urls: event.target.checked
+                                      ? [...activeLinkedInUrls, url]
+                                      : activeLinkedInUrls.filter((value) => value !== url),
+                                  })}
+                                  className="h-4 w-4 rounded accent-sky"
+                                />
+                                {active ? 'On' : 'Off'}
+                              </label>
+                            </td>
+                            <td className="max-w-0 px-3 py-2.5">
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={url}
+                                className="flex items-center gap-1.5 font-mono text-[11px] text-sky hover:underline"
+                              >
+                                <span className="truncate">{url}</span>
+                                <ExternalLink size={11} className="shrink-0" />
+                              </a>
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => patch({
+                                  linkedin_search_url_options: linkedInUrlOptions.filter((value) => value !== url),
+                                  linkedin_search_urls: activeLinkedInUrls.filter((value) => value !== url),
+                                })}
+                                title="Remove saved URL"
+                                aria-label="Remove saved LinkedIn search URL"
+                                className="inline-flex rounded-md p-1.5 text-slate-muted transition-colors hover:bg-rose/10 hover:text-rose"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {linkedInUrlOptions.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-5 text-center text-[11px] text-slate-muted">
+                            No URLs saved yet. Add your first LinkedIn search above.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="mt-3 text-[11px] font-medium text-sky">
                   Next run request: up to {linkedInUrlResultCap.toLocaleString()} jobs across{' '}
-                  {(s.linkedin_search_urls ?? []).length} saved URL{(s.linkedin_search_urls ?? []).length === 1 ? '' : 's'}.
+                  {activeLinkedInUrls.length} active URL{activeLinkedInUrls.length === 1 ? '' : 's'}.
+                </p>
+                <p className="mt-1 text-[10px] leading-relaxed text-slate-muted">
+                  Repeated search URLs are saved once. After fetch, repeated job URLs are discarded and same-day duplicate postings are collapsed under one Jobs row.
                 </p>
               </div>
             )}

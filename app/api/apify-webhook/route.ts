@@ -7,7 +7,7 @@
  */
 import { NextResponse } from 'next/server';
 import { checkCronAuth } from '@/lib/auth';
-import { fetchDatasetItems, getRunDatasetId, mapDatasetItemToJob } from '@/lib/apify';
+import { fetchDatasetItems, getRunDatasetId, mapDatasetItemsToJobs } from '@/lib/apify';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   updateRunByApifyId, finalizeRun, getRunByApifyId,
@@ -78,9 +78,7 @@ export async function POST(req: Request) {
     // Resolve the internal run UUID so jobs can be grouped by run in the UI.
     const internalRunId = owningRun?.id ?? null;
 
-    const mapped = items
-      .map((it) => mapDatasetItemToJob(it, source, portal === 'linkedin' ? actorId : null))
-      .filter((r): r is NonNullable<typeof r> => r !== null);
+    const mapped = mapDatasetItemsToJobs(items, source, portal === 'linkedin' ? actorId : null);
 
     // Cheap, local ATS-style résumé↔job match score (ADR 0053), computed once over
     // this batch. Stored on every row (even when the filter is off) — it's the

@@ -31,6 +31,12 @@ export interface LinkedInUrlValidation {
   invalid: string[];
 }
 
+export interface LinkedInUrlLibraryValidation {
+  savedUrls: string[];
+  activeUrls: string[];
+  invalid: string[];
+}
+
 /** Effective Curious Coder `count`, shared by run planning and the Settings preview. */
 export function curiousCoderResultCap(
   settings: Pick<Settings, 'max_jobs_per_run' | 'results_per_query' | 'linkedin_search_urls'>,
@@ -74,4 +80,25 @@ export function validateLinkedInSearchUrls(values: unknown[]): LinkedInUrlValida
     }
   }
   return { urls, invalid };
+}
+
+/**
+ * Normalize a saved URL library and its independently active subset. The API uses
+ * this at the persistence boundary so a caller cannot activate an unpersisted URL.
+ */
+export function validateLinkedInSearchUrlLibrary(
+  savedValues: unknown[],
+  activeValues: unknown[],
+): LinkedInUrlLibraryValidation {
+  const saved = validateLinkedInSearchUrls(savedValues);
+  const active = validateLinkedInSearchUrls(activeValues);
+  const savedSet = new Set(saved.urls);
+  const newlySavedActiveUrls = active.urls.filter((url) => !savedSet.has(url));
+  return {
+    // Promoting a newly active URL into the library keeps an older frontend safe
+    // during deployment overlap and makes the persisted active-is-saved invariant.
+    savedUrls: [...saved.urls, ...newlySavedActiveUrls],
+    activeUrls: active.urls,
+    invalid: [...saved.invalid, ...active.invalid],
+  };
 }
